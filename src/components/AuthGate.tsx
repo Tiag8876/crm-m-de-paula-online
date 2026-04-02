@@ -19,9 +19,13 @@ export function AuthGate() {
 
       try {
         const health = await fetch(`${apiBase}/api/health`);
-        if (!health.ok) {
+        const contentType = health.headers.get('content-type') || '';
+        const payload = contentType.toLowerCase().includes('application/json')
+          ? await health.json().catch(() => null)
+          : null;
+
+        if (!health.ok || !payload?.ok) {
           throw new Error('API indisponivel');
-          return;
         }
       } catch {
         throw new Error('API indisponivel');

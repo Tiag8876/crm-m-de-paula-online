@@ -19,7 +19,12 @@ export function LoginPage() {
     const check = async () => {
       try {
         const health = await fetch(`${getApiBase()}/api/health`);
-        if (!health.ok) {
+        const contentType = health.headers.get('content-type') || '';
+        const payload = contentType.toLowerCase().includes('application/json')
+          ? await health.json().catch(() => null)
+          : null;
+
+        if (!health.ok || !payload?.ok) {
           if (mounted) {
             setConnectionError('Nao foi possivel conectar ao servidor do sistema.');
             setCheckingSetup(false);

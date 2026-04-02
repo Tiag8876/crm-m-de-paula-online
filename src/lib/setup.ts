@@ -17,6 +17,10 @@ export const fetchSetupStatus = async (): Promise<SetupStatusResponse> => {
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error('Resposta invalida da API de setup');
+  }
   return response.json();
 };
 
