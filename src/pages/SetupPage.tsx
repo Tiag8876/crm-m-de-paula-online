@@ -12,7 +12,7 @@ export function SetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('tiagogomesqueiroz@outlook.com');
   const [password, setPassword] = useState('');
 
   useEffect(() => {

@@ -10,7 +10,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
-  const [needsConnection, setNeedsConnection] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -20,14 +20,14 @@ export function LoginPage() {
         const health = await fetch(`${getApiBase()}/api/health`);
         if (!health.ok) {
           if (mounted) {
-            setNeedsConnection(true);
+            setConnectionError('Nao foi possivel conectar ao servidor do sistema.');
             setCheckingSetup(false);
           }
           return;
         }
       } catch {
         if (mounted) {
-          setNeedsConnection(true);
+          setConnectionError('Nao foi possivel conectar ao servidor do sistema.');
           setCheckingSetup(false);
         }
         return;
@@ -40,7 +40,7 @@ export function LoginPage() {
         })
         .catch(() => {
           if (!mounted) return;
-          setNeedsConnection(true);
+          setConnectionError('Falha ao validar o ambiente do sistema.');
         })
         .finally(() => {
           if (!mounted) return;
@@ -71,10 +71,6 @@ export function LoginPage() {
     return <Navigate to="/setup" replace />;
   }
 
-  if (needsConnection) {
-    return <Navigate to="/connection" replace />;
-  }
-
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -89,9 +85,14 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
         <h1 className="text-3xl font-serif font-bold gold-text-gradient mb-2">CRM M de Paula</h1>
-        <p className="text-sm text-muted-foreground mb-8">Acesse com seu usuário e senha.</p>
+        <p className="text-sm text-muted-foreground mb-8">Acesse com seu usuario e senha.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {connectionError && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {connectionError}
+            </div>
+          )}
           <div>
             <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-2">Email</label>
             <input
@@ -130,12 +131,6 @@ export function LoginPage() {
             className="block w-full rounded-lg border border-border px-4 py-3 text-center text-xs uppercase tracking-widest text-muted-foreground hover:border-primary hover:text-primary transition-colors"
           >
             Primeiro acesso
-          </Link>
-          <Link
-            to="/connection"
-            className="block w-full rounded-lg border border-border px-4 py-3 text-center text-xs uppercase tracking-widest text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-          >
-            Configurar conexão
           </Link>
         </div>
       </div>

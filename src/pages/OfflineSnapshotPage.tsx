@@ -5,7 +5,7 @@ import type { Lead } from '@/types/crm';
 export function OfflineSnapshotPage() {
   const snapshot = getOfflineSnapshot();
   if (!snapshot) {
-    return <Navigate to="/connection" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   const state = snapshot.state as {
@@ -31,8 +31,8 @@ export function OfflineSnapshotPage() {
           </p>
           <p className="text-xs text-muted-foreground mt-2">Servidor de origem: {snapshot.apiBase}</p>
           <div className="mt-4">
-            <Link to="/connection" className="rounded-lg border border-border px-4 py-2 text-xs uppercase tracking-widest hover:bg-accent inline-flex">
-              Voltar para Conexao
+            <Link to="/login" className="rounded-lg border border-border px-4 py-2 text-xs uppercase tracking-widest hover:bg-accent inline-flex">
+              Voltar para Login
             </Link>
           </div>
         </header>
@@ -88,4 +88,3 @@ export function OfflineSnapshotPage() {
     </div>
   );
 }
-

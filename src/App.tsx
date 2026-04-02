@@ -16,7 +16,6 @@ import { TrafficAnalytics } from "./pages/TrafficAnalytics";
 import { SalesReports } from "./pages/SalesReports";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
-import { ConnectionPage } from "./pages/ConnectionPage";
 import { OfflineSnapshotPage } from "./pages/OfflineSnapshotPage";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
 import { ProspectingDashboard } from "./pages/ProspectingDashboard";
@@ -36,7 +35,6 @@ const App = () => (
       <Sonner />
       <Router>
         <Routes>
-          <Route path="/connection" element={<ConnectionPage />} />
           <Route path="/offline" element={<OfflineSnapshotPage />} />
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
