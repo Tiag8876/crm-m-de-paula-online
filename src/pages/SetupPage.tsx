@@ -8,6 +8,8 @@ export function SetupPage() {
   const [checking, setChecking] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(true);
   const [backendReachable, setBackendReachable] = useState(false);
+  const [publicSetupAllowed, setPublicSetupAllowed] = useState(false);
+  const [bootstrapConfigured, setBootstrapConfigured] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +33,8 @@ export function SetupPage() {
         const status = await statusResponse.json();
         if (!mounted) return;
         setNeedsSetup(Boolean(status?.needsSetup));
+        setPublicSetupAllowed(Boolean(status?.publicSetupAllowed));
+        setBootstrapConfigured(Boolean(status?.bootstrapConfigured));
       } catch {
         if (!mounted) return;
         setBackendReachable(false);
@@ -82,13 +86,29 @@ export function SetupPage() {
     <div className="min-h-screen bg-background p-6 flex items-center justify-center">
       <div className="w-full max-w-3xl grid gap-6">
         <section className="rounded-2xl border border-primary/30 bg-card p-8">
-          <p className="text-xs uppercase tracking-[0.22em] text-primary mb-3">Primeiro Acesso</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-primary mb-3">Provisionamento Inicial</p>
           <h1 className="text-4xl font-serif font-bold gold-text-gradient mb-4">CRM M de Paula</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Crie a conta administradora inicial para começar a usar esta instância do sistema, seja local ou online.
+            Esta tela existe apenas para provisionamento controlado da instancia. Em ambiente profissional, o recomendado e criar o administrador inicial por variaveis seguras do servidor.
           </p>
         </section>
 
+        {!publicSetupAllowed && (
+          <section className="rounded-2xl border border-amber-500/30 bg-card p-8">
+            <h2 className="text-xl font-serif font-bold mb-3">Provisionamento Publico Desabilitado</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Esta instancia nao permite criar administrador pela interface publica. Configure `ADMIN_BOOTSTRAP_NAME`,
+              `ADMIN_BOOTSTRAP_EMAIL` e `ADMIN_BOOTSTRAP_PASSWORD` no ambiente do servidor e faca um novo deploy.
+            </p>
+            {bootstrapConfigured && (
+              <p className="mt-4 text-sm text-emerald-300">
+                As credenciais de provisionamento ja estao configuradas no ambiente. Basta publicar o deploy atualizado para concluir a criacao do administrador.
+              </p>
+            )}
+          </section>
+        )}
+
+        {publicSetupAllowed && (
         <section className="rounded-2xl border border-border bg-card p-8">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-xl font-serif font-bold">Criar Administrador Inicial</h2>
@@ -146,6 +166,7 @@ export function SetupPage() {
             </button>
           </form>
         </section>
+        )}
       </div>
     </div>
   );

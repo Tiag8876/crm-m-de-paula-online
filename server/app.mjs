@@ -10,6 +10,12 @@ const port = Number(process.env.API_PORT || 3001);
 const jwtSecret = process.env.JWT_SECRET || "lawcrm-dev-secret-change-this";
 const tokenExpiresIn = "12h";
 const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || "";
+const allowPublicSetup = process.env.ALLOW_PUBLIC_SETUP === "true";
+const bootstrapAdmin = {
+  name: (process.env.ADMIN_BOOTSTRAP_NAME || "").trim(),
+  email: (process.env.ADMIN_BOOTSTRAP_EMAIL || "").trim().toLowerCase(),
+  password: (process.env.ADMIN_BOOTSTRAP_PASSWORD || "").trim(),
+};
 
 let pool = null;
 let databaseReadyPromise = null;
@@ -149,13 +155,50 @@ const runMigrations = async () => {
   );
 };
 
+const shouldBootstrapAdmin = () =>
+  Boolean(bootstrapAdmin.name && bootstrapAdmin.email && bootstrapAdmin.password);
+
+const seedInitialAdminIfConfigured = async () => {
+  if (!shouldBootstrapAdmin()) return false;
+
+  const existingUsers = await query("SELECT COUNT(*)::int AS count FROM users");
+  if (Number(existingUsers.rows[0]?.count || 0) > 0) {
+    return false;
+  }
+
+  const now = new Date().toISOString();
+  const adminId = randomUUID();
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `INSERT INTO users (id, name, email, password_hash, role, sector, active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'admin', 'Diretoria', TRUE, $5, $6)`,
+      [adminId, bootstrapAdmin.name, bootstrapAdmin.email, bcrypt.hashSync(bootstrapAdmin.password, 10), now, now]
+    );
+
+    await client.query(
+      `INSERT INTO app_state (id, state_json, updated_at, updated_by)
+       VALUES (1, $1::jsonb, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+      [JSON.stringify(buildDefaultState()), now, adminId]
+    );
+
+    await audit(adminId, "bootstrap_admin_created", "Administrador inicial provisionado por ambiente", client.query.bind(client));
+  });
+
+  return true;
+};
+
 const ensureDatabaseReady = async () => {
   if (!isDatabaseConfigured()) {
     throw new Error("DATABASE_URL nao configurada.");
   }
 
   if (!databaseReadyPromise) {
-    databaseReadyPromise = runMigrations().catch((error) => {
+    databaseReadyPromise = (async () => {
+      await runMigrations();
+      await seedInitialAdminIfConfigured();
+    })().catch((error) => {
       databaseReadyPromise = null;
       throw error;
     });
@@ -363,10 +406,21 @@ const adminRequired = (req, res, next) => {
 app.get("/api/setup/status", async (_req, res) => {
   const result = await query("SELECT COUNT(*)::int AS count FROM users");
   const initialized = Number(result.rows[0]?.count || 0) > 0;
-  res.json({ initialized, needsSetup: !initialized });
+  res.json({
+    initialized,
+    needsSetup: !initialized,
+    publicSetupAllowed: allowPublicSetup,
+    bootstrapConfigured: shouldBootstrapAdmin(),
+  });
 });
 
 app.post("/api/setup/initialize", async (req, res) => {
+  if (!allowPublicSetup) {
+    return res.status(403).json({
+      message: "Provisionamento publico desabilitado nesta instancia.",
+    });
+  }
+
   const status = await query("SELECT COUNT(*)::int AS count FROM users");
   if (Number(status.rows[0]?.count || 0) > 0) {
     return res.status(409).json({ message: "Setup inicial ja foi concluido" });

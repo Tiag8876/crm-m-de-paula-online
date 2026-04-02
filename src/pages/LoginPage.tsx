@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { fetchSetupStatus } from '@/lib/setup';
 import { getApiBase } from '@/lib/apiConfig';
@@ -11,6 +11,7 @@ export function LoginPage() {
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [provisioningMessage, setProvisioningMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -37,6 +38,15 @@ export function LoginPage() {
         .then((status) => {
           if (!mounted) return;
           setNeedsSetup(status.needsSetup);
+          if (status.needsSetup) {
+            setProvisioningMessage(
+              status.publicSetupAllowed
+                ? 'Esta instancia ainda nao foi provisionada. Utilize a rota protegida de setup apenas pela equipe responsavel.'
+                : 'Esta instancia ainda nao foi provisionada. O administrador deve concluir o provisionamento interno antes do primeiro acesso.'
+            );
+          } else {
+            setProvisioningMessage(null);
+          }
         })
         .catch(() => {
           if (!mounted) return;
@@ -67,10 +77,6 @@ export function LoginPage() {
     );
   }
 
-  if (needsSetup) {
-    return <Navigate to="/setup" replace />;
-  }
-
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -91,6 +97,11 @@ export function LoginPage() {
           {connectionError && (
             <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
               {connectionError}
+            </div>
+          )}
+          {provisioningMessage && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              {provisioningMessage}
             </div>
           )}
           <div>
@@ -119,20 +130,12 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || needsSetup}
             className="w-full rounded-lg bg-primary px-4 py-3 text-primary-foreground font-bold uppercase tracking-widest disabled:opacity-60"
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-        <div className="mt-4 grid gap-2">
-          <Link
-            to="/setup"
-            className="block w-full rounded-lg border border-border px-4 py-3 text-center text-xs uppercase tracking-widest text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-          >
-            Primeiro acesso
-          </Link>
-        </div>
       </div>
     </div>
   );

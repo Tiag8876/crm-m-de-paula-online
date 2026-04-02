@@ -3,6 +3,8 @@ import { getApiBase } from '@/lib/apiConfig';
 export interface SetupStatusResponse {
   initialized: boolean;
   needsSetup: boolean;
+  publicSetupAllowed?: boolean;
+  bootstrapConfigured?: boolean;
 }
 
 const getErrorMessage = async (response: Response): Promise<string> => {
