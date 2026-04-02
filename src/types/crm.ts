@@ -1,0 +1,182 @@
+export interface KanbanStage {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+}
+
+export type LeadStatus = string;
+
+export interface AreaOfLaw {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface Service {
+  id: string;
+  areaOfLawId: string;
+  name: string;
+  description?: string;
+  price?: number;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: 'active' | 'paused';
+  areaOfLawId?: string;
+  serviceId?: string;
+}
+
+export interface AdGroup {
+  id: string;
+  campaignId: string;
+  name: string;
+}
+
+export interface Ad {
+  id: string;
+  adGroupId: string;
+  name: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
+}
+
+export interface LeadNote {
+  id: string;
+  type: 'message' | 'call' | 'meeting' | 'other';
+  content: string;
+  createdAt: string;
+}
+
+export interface FollowUp {
+  id: string;
+  date: string;
+  type: 'whatsapp' | 'ligacao' | 'email';
+  status: 'pendente' | 'concluido';
+  notes?: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;
+  leadId?: string;
+  status: 'pendente' | 'concluida';
+  isStandard?: boolean;
+  source?: 'manual' | 'system_inactivity';
+}
+
+export interface LeadLog {
+  id: string;
+  type: 'status_change' | 'note_added' | 'followup_scheduled' | 'followup_completed' | 'lead_created' | 'task_added' | 'task_completed';
+  content: string;
+  timestamp: string;
+}
+
+export interface LeadDocument {
+  id: string;
+  name: string;
+  url?: string;
+  fileData?: string;
+  type: 'pdf' | 'image' | 'doc' | 'other';
+  createdAt: string;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  cpf?: string;
+  status: LeadStatus;
+  ownerUserId?: string;
+  lossReasonCode?: string;
+  lossReasonDetail?: string;
+  campaignId?: string;
+  adGroupId?: string;
+  adId?: string;
+  areaOfLawId?: string;
+  serviceId?: string;
+  notes: LeadNote[];
+  followUps: FollowUp[];
+  tasks: Task[];
+  logs: LeadLog[];
+  documents: LeadDocument[];
+  createdAt: string;
+  lastInteractionAt?: string;
+  estimatedValue?: number;
+  legalArea?: string;
+  aiInsight?: string;
+}
+
+export interface ProspectLead {
+  id: string;
+  clinicName: string;
+  contactName: string;
+  receptionistName?: string;
+  phone: string;
+  email?: string;
+  cnpj?: string;
+  city?: string;
+  neighborhood?: string;
+  status: LeadStatus;
+  ownerUserId?: string;
+  serviceId?: string;
+  objectionReason?: string;
+  notes: LeadNote[];
+  followUps: FollowUp[];
+  tasks: Task[];
+  logs: LeadLog[];
+  createdAt: string;
+  lastInteractionAt?: string;
+}
+
+export interface SystemNotification {
+  id: string;
+  key: string;
+  title: string;
+  description: string;
+  category: 'idle' | 'followup' | 'recovery';
+  leadId?: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface WeeklyCampaignRow {
+  id: string;
+  name: string;
+  entries: number;
+  closed: number;
+  conversionRate: number;
+}
+
+export interface WeeklyCreativeRow {
+  adId: string;
+  adName: string;
+  campaignName: string;
+  leads: number;
+}
+
+export interface WeeklySnapshot {
+  id: string;
+  weekKey: string;
+  generatedAt: string;
+  commercial: {
+    total: number;
+    won: number;
+    lost: number;
+    conversion: number;
+    rows: WeeklyCampaignRow[];
+  };
+  traffic: {
+    total: number;
+    closed: number;
+    lost: number;
+    conversion: number;
+    campaignRows: WeeklyCampaignRow[];
+    topCreative: WeeklyCreativeRow[];
+  };
+}

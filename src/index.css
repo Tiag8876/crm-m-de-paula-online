@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 30 10% 85%;
+    --card: 0 0% 7%;
+    --card-foreground: 30 10% 85%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 30 10% 85%;
+    --primary: 43 72% 52%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 43 20% 15%;
+    --secondary-foreground: 43 72% 52%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 30 5% 45%;
+    --accent: 43 20% 10%;
+    --accent-foreground: 43 72% 52%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 43 15% 15%;
+    --input: 43 15% 15%;
+    --ring: 43 72% 52%;
+    --radius: 0.75rem;
+
+    --gold-50: 42 75% 97%;
+    --gold-100: 42 75% 90%;
+    --gold-200: 42 70% 82%;
+    --gold-300: 42 65% 68%;
+    --gold-400: 42 60% 55%;
+    --gold-500: 43 72% 52%;
+    --gold-600: 40 63% 44%;
+    --gold-700: 38 59% 37%;
+    --gold-800: 35 55% 31%;
+    --gold-900: 33 52% 27%;
+    --gold-950: 30 60% 15%;
+
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 30 10% 85%;
+    --sidebar-primary: 43 72% 52%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 43 20% 10%;
+    --sidebar-accent-foreground: 43 72% 52%;
+    --sidebar-border: 43 15% 15%;
+    --sidebar-ring: 43 72% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: "Lora", serif;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--gold-500));
+    border-radius: 20px;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .gold-gradient {
+    background: linear-gradient(135deg, hsl(var(--gold-500)) 0%, hsl(var(--gold-200)) 50%, hsl(var(--gold-600)) 100%);
+  }
+
+  .gold-text-gradient {
+    background: linear-gradient(135deg, hsl(var(--gold-500)) 0%, hsl(var(--gold-200)) 50%, hsl(var(--gold-600)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+    color: hsl(var(--gold-200));
+    font-family: "Lora", serif;
+    font-weight: 700;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+  .markdown-body h1 { font-size: 1.5em; }
+  .markdown-body h2 { font-size: 1.25em; }
+  .markdown-body h3 { font-size: 1.1em; }
+  .markdown-body p { margin-bottom: 1em; }
+  .markdown-body ul, .markdown-body ol { margin-bottom: 1em; padding-left: 1.5em; }
+  .markdown-body ul { list-style-type: disc; }
+  .markdown-body ol { list-style-type: decimal; }
+  .markdown-body li { margin-bottom: 0.25em; }
+  .markdown-body strong {
+    color: hsl(var(--gold-500));
+    font-weight: 600;
+  }
+}
