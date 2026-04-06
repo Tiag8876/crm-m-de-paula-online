@@ -403,7 +403,7 @@ const adminRequired = (req, res, next) => {
   return next();
 };
 
-app.get(["/api/setup/status", "/setup/status"], async (_req, res) => {
+app.get(["/api/setup/status", "/setup/status", "/api/setup-status", "/setup-status"], async (_req, res) => {
   const result = await query("SELECT COUNT(*)::int AS count FROM users");
   const initialized = Number(result.rows[0]?.count || 0) > 0;
   res.json({
@@ -414,7 +414,7 @@ app.get(["/api/setup/status", "/setup/status"], async (_req, res) => {
   });
 });
 
-app.post(["/api/setup/initialize", "/setup/initialize"], async (req, res) => {
+app.post(["/api/setup/initialize", "/setup/initialize", "/api/setup-initialize", "/setup-initialize"], async (req, res) => {
   if (!allowPublicSetup) {
     return res.status(403).json({
       message: "Provisionamento publico desabilitado nesta instancia.",
@@ -461,7 +461,7 @@ app.post(["/api/setup/initialize", "/setup/initialize"], async (req, res) => {
   return res.status(201).json({ ok: true });
 });
 
-app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
+app.post(["/api/auth/login", "/auth/login", "/api/auth-login", "/auth-login"], async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ message: "Email e senha sao obrigatorios" });
@@ -488,7 +488,7 @@ app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
   return res.json({ token, user: publicUser });
 });
 
-app.get(["/api/auth/me", "/auth/me"], authRequired, (req, res) => {
+app.get(["/api/auth/me", "/auth/me", "/api/auth-me", "/auth-me"], authRequired, (req, res) => {
   res.json({ user: req.user });
 });
 
@@ -655,7 +655,7 @@ app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   return res.json({ ok: true, updatedAt: now });
 });
 
-app.get(["/api/audit-logs", "/audit-logs"], authRequired, adminRequired, async (_req, res) => {
+app.get(["/api/audit-logs", "/audit-logs", "/api/auditlogs", "/auditlogs"], authRequired, adminRequired, async (_req, res) => {
   const result = await query(
     `SELECT a.id, a.action, a.details, a.created_at, u.name AS user_name, u.email AS user_email
      FROM audit_logs a
@@ -666,7 +666,7 @@ app.get(["/api/audit-logs", "/audit-logs"], authRequired, adminRequired, async (
   res.json({ logs: result.rows });
 });
 
-app.post(["/api/backup/now", "/backup/now"], authRequired, adminRequired, async (req, res) => {
+app.post(["/api/backup/now", "/backup/now", "/api/backup-now", "/backup-now"], authRequired, adminRequired, async (req, res) => {
   await audit(req.user.id, "backup_guidance", "Backup deve ser feito pelo provedor PostgreSQL");
   return res.json({
     ok: true,

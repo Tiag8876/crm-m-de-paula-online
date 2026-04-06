@@ -28,7 +28,7 @@ export function SetupPage() {
         if (!mounted) return;
         setBackendReachable(true);
 
-        const statusResponse = await fetch(`${apiBase}/api/setup/status`);
+        const statusResponse = await fetch(`${apiBase}/api/setup-status`);
         if (!statusResponse.ok) throw new Error('Falha ao consultar setup');
         const status = await statusResponse.json();
         if (!mounted) return;

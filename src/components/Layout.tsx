@@ -49,7 +49,7 @@ export function Layout() {
   useEffect(() => {
     const onBeforeUnload = () => {
       if (!localStorage.getItem('lawcrm-token')) return;
-      api.post('/api/backup/now').catch(() => null);
+        api.post('/api/backup-now').catch(() => null);
     };
 
     window.addEventListener('beforeunload', onBeforeUnload);

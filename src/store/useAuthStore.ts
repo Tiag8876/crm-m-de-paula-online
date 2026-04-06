@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
       login: async (email, password) => {
         set({ loading: true, error: null });
         try {
-          const data = await api.post<LoginResponse>('/api/auth/login', { email, password });
+          const data = await api.post<LoginResponse>('/api/auth-login', { email, password });
           localStorage.setItem('lawcrm-token', data.token);
           set({ token: data.token, user: data.user, loading: false });
         } catch (error) {
@@ -74,7 +74,7 @@ export const useAuthStore = create<AuthState>()(
 
         set({ loading: true, error: null, token });
         try {
-          const data = await api.get<{ user: AppUser }>('/api/auth/me');
+          const data = await api.get<{ user: AppUser }>('/api/auth-me');
           set({ user: data.user, loading: false });
         } catch (error) {
           localStorage.removeItem('lawcrm-token');
