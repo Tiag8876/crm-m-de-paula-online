@@ -350,7 +350,7 @@ const signToken = (user) => jwt.sign(
   { expiresIn: tokenExpiresIn }
 );
 
-app.get("/api/health", async (_req, res) => {
+app.get(["/api/health", "/health"], async (_req, res) => {
   if (!isDatabaseConfigured()) {
     return res.status(503).json({ ok: false, message: "DATABASE_URL nao configurada" });
   }
@@ -403,7 +403,7 @@ const adminRequired = (req, res, next) => {
   return next();
 };
 
-app.get("/api/setup/status", async (_req, res) => {
+app.get(["/api/setup/status", "/setup/status"], async (_req, res) => {
   const result = await query("SELECT COUNT(*)::int AS count FROM users");
   const initialized = Number(result.rows[0]?.count || 0) > 0;
   res.json({
@@ -414,7 +414,7 @@ app.get("/api/setup/status", async (_req, res) => {
   });
 });
 
-app.post("/api/setup/initialize", async (req, res) => {
+app.post(["/api/setup/initialize", "/setup/initialize"], async (req, res) => {
   if (!allowPublicSetup) {
     return res.status(403).json({
       message: "Provisionamento publico desabilitado nesta instancia.",
@@ -461,7 +461,7 @@ app.post("/api/setup/initialize", async (req, res) => {
   return res.status(201).json({ ok: true });
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ message: "Email e senha sao obrigatorios" });
@@ -488,16 +488,16 @@ app.post("/api/auth/login", async (req, res) => {
   return res.json({ token, user: publicUser });
 });
 
-app.get("/api/auth/me", authRequired, (req, res) => {
+app.get(["/api/auth/me", "/auth/me"], authRequired, (req, res) => {
   res.json({ user: req.user });
 });
 
-app.get("/api/users", authRequired, adminRequired, async (_req, res) => {
+app.get(["/api/users", "/users"], authRequired, adminRequired, async (_req, res) => {
   const result = await query("SELECT * FROM users ORDER BY created_at DESC");
   res.json({ users: result.rows.map(toPublicUser) });
 });
 
-app.post("/api/users", authRequired, adminRequired, async (req, res) => {
+app.post(["/api/users", "/users"], authRequired, adminRequired, async (req, res) => {
   const { name, email, password, role, sector, active } = req.body || {};
   if (!name || !email || !password || !role || !sector) {
     return res.status(400).json({ message: "name, email, password, role e sector sao obrigatorios" });
@@ -525,7 +525,7 @@ app.post("/api/users", authRequired, adminRequired, async (req, res) => {
   return res.status(201).json({ user: toPublicUser(created.rows[0]) });
 });
 
-app.put("/api/users/:id", authRequired, adminRequired, async (req, res) => {
+app.put(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (req, res) => {
   const { id } = req.params;
   const currentResult = await query("SELECT * FROM users WHERE id = $1", [id]);
   const current = currentResult.rows[0];
@@ -564,7 +564,7 @@ app.put("/api/users/:id", authRequired, adminRequired, async (req, res) => {
   return res.json({ user: toPublicUser(updated.rows[0]) });
 });
 
-app.delete("/api/users/:id", authRequired, adminRequired, async (req, res) => {
+app.delete(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (req, res) => {
   const { id } = req.params;
   const currentResult = await query("SELECT * FROM users WHERE id = $1", [id]);
   const current = currentResult.rows[0];
@@ -608,7 +608,7 @@ app.delete("/api/users/:id", authRequired, adminRequired, async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.get("/api/state", authRequired, async (req, res) => {
+app.get(["/api/state", "/state"], authRequired, async (req, res) => {
   const result = await query("SELECT state_json, updated_at FROM app_state WHERE id = 1");
   const row = result.rows[0];
   if (!row) {
@@ -620,7 +620,7 @@ app.get("/api/state", authRequired, async (req, res) => {
   return res.json({ state: scoped, updatedAt: row.updated_at });
 });
 
-app.put("/api/state", authRequired, async (req, res) => {
+app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   const { state, clientUpdatedAt } = req.body || {};
   if (!state || typeof state !== "object") {
     return res.status(400).json({ message: "Campo state invalido" });
@@ -655,7 +655,7 @@ app.put("/api/state", authRequired, async (req, res) => {
   return res.json({ ok: true, updatedAt: now });
 });
 
-app.get("/api/audit-logs", authRequired, adminRequired, async (_req, res) => {
+app.get(["/api/audit-logs", "/audit-logs"], authRequired, adminRequired, async (_req, res) => {
   const result = await query(
     `SELECT a.id, a.action, a.details, a.created_at, u.name AS user_name, u.email AS user_email
      FROM audit_logs a
@@ -666,7 +666,7 @@ app.get("/api/audit-logs", authRequired, adminRequired, async (_req, res) => {
   res.json({ logs: result.rows });
 });
 
-app.post("/api/backup/now", authRequired, adminRequired, async (req, res) => {
+app.post(["/api/backup/now", "/backup/now"], authRequired, adminRequired, async (req, res) => {
   await audit(req.user.id, "backup_guidance", "Backup deve ser feito pelo provedor PostgreSQL");
   return res.json({
     ok: true,
