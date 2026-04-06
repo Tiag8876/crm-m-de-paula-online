@@ -8,12 +8,17 @@ import { isAdminUser } from '@/lib/access';
 
 export function ProspectingLeads() {
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
-  const { prospectLeads, prospectKanbanStages, addProspectLead, services } = useStore();
+  const { prospectLeads, funnels, prospectingDefaultFunnelId, addProspectLead, services } = useStore();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [openModal, setOpenModal] = useState(false);
+  const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const prospectingFunnels = (funnels || []).filter((funnel) => funnel.operation === 'prospecting');
+  const activeFunnel = prospectingFunnels.find((funnel) => funnel.id === selectedFunnelId)
+    || prospectingFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
+    || prospectingFunnels[0];
   const isAdmin = isAdminUser(user);
   const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
   const scopedLeads = isAdmin
@@ -24,10 +29,17 @@ export function ProspectingLeads() {
     fetchAssignableUsers().catch(() => null);
   }, [fetchAssignableUsers]);
 
-  const sortedStages = [...(prospectKanbanStages || [])].sort((a, b) => a.order - b.order);
+  useEffect(() => {
+    if (activeFunnel?.id && activeFunnel.id !== selectedFunnelId) {
+      setSelectedFunnelId(activeFunnel.id);
+    }
+  }, [activeFunnel?.id, selectedFunnelId]);
+
+  const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const filteredLeads = scopedLeads.filter((lead) => {
+    const funnelId = lead.funnelId || prospectingDefaultFunnelId;
     const term = search.toLowerCase();
-    return (
+    return funnelId === activeFunnel?.id && (
       lead.clinicName.toLowerCase().includes(term) ||
       lead.contactName.toLowerCase().includes(term) ||
       lead.phone.includes(search) ||
@@ -48,6 +60,7 @@ export function ProspectingLeads() {
       city: String(form.get('city') || ''),
       neighborhood: String(form.get('neighborhood') || '') || undefined,
       serviceId: String(form.get('serviceId') || '') || undefined,
+      funnelId: String(form.get('funnelId') || '') || activeFunnel?.id,
       status: sortedStages[0]?.id || 'p_novo',
       ownerUserId: String(form.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
     });
@@ -68,6 +81,15 @@ export function ProspectingLeads() {
           </p>
         </div>
         <div className="flex gap-3">
+          <select
+            value={selectedFunnelId}
+            onChange={(event) => setSelectedFunnelId(event.target.value)}
+            className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground"
+          >
+            {prospectingFunnels.map((funnel) => (
+              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+            ))}
+          </select>
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
               <LayoutGrid className="w-5 h-5" />
@@ -206,6 +228,11 @@ export function ProspectingLeads() {
                 <option value="">Serviço ofertado (opcional)</option>
                 {(services || []).map((service) => (
                   <option key={service.id} value={service.id}>{service.name}</option>
+                ))}
+              </select>
+              <select name="funnelId" defaultValue={activeFunnel?.id || ''} className="px-3 py-2 rounded-lg bg-background border border-border md:col-span-2">
+                {prospectingFunnels.map((funnel) => (
+                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
                 ))}
               </select>
               <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="px-3 py-2 rounded-lg bg-background border border-border md:col-span-2">

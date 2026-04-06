@@ -1,29 +1,31 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
-  Plus,
-  Trash2,
-  Edit2,
-  ArrowUp,
   ArrowDown,
+  ArrowUp,
+  Copy,
+  Plus,
   Shield,
+  Star,
+  Trash2,
   UserCircle2,
   Workflow,
 } from 'lucide-react';
 import { isAdminUser } from '@/lib/access';
 import { UsersAdminPage } from '@/pages/UsersAdminPage';
-import { ProspectingSettings } from '@/pages/ProspectingSettings';
+import type { FunnelConfig } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'team' | 'operations';
+type StageDraft = { name: string; color: string };
+type FunnelDraft = { name: string; description: string };
 
 const ADMIN_SECTION_LINKS = [
+  { id: 'funnels', label: 'Funis' },
   { id: 'areas', label: 'Areas de atuacao' },
   { id: 'services', label: 'Servicos' },
   { id: 'tasks', label: 'Tarefas padrao' },
-  { id: 'kanban', label: 'Funil comercial' },
-  { id: 'prospecting', label: 'Prospeccao' },
 ] as const;
 
 export function Settings() {
@@ -37,17 +39,27 @@ export function Settings() {
     areasOfLaw,
     services,
     standardTasks,
-    kanbanStages,
+    funnels,
+    commercialDefaultFunnelId,
+    prospectingDefaultFunnelId,
     addAreaOfLaw,
     deleteAreaOfLaw,
     addService,
     deleteService,
     addStandardTask,
     deleteStandardTask,
-    addKanbanStage,
-    updateKanbanStage,
-    deleteKanbanStage,
-    reorderKanbanStages,
+    addFunnel,
+    updateFunnel,
+    duplicateFunnel,
+    deleteFunnel,
+    setDefaultFunnel,
+    addFunnelStage,
+    updateFunnelStage,
+    deleteFunnelStage,
+    reorderFunnelStages,
+    addFunnelObjection,
+    removeFunnelObjection,
+    setFunnelPlaybook,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
@@ -59,9 +71,12 @@ export function Settings() {
   const [selectedAreaForService, setSelectedAreaForService] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
-  const [newStageName, setNewStageName] = useState('');
-  const [newStageColor, setNewStageColor] = useState('#D4AF37');
-  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [newFunnelName, setNewFunnelName] = useState('');
+  const [newFunnelDescription, setNewFunnelDescription] = useState('');
+  const [newFunnelOperation, setNewFunnelOperation] = useState<FunnelConfig['operation']>('commercial');
+  const [stageDrafts, setStageDrafts] = useState<Record<string, StageDraft>>({});
+  const [objectionDrafts, setObjectionDrafts] = useState<Record<string, string>>({});
+  const [funnelDrafts, setFunnelDrafts] = useState<Record<string, FunnelDraft>>({});
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
@@ -71,11 +86,31 @@ export function Settings() {
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  const sortedFunnels = useMemo(
+    () =>
+      [...(funnels || [])].sort((a, b) => {
+        if (a.operation !== b.operation) return a.operation.localeCompare(b.operation);
+        return a.name.localeCompare(b.name);
+      }),
+    [funnels],
+  );
+
   useEffect(() => {
     setProfileName(user?.name || '');
     setProfileEmail(user?.email || '');
     setProfileAvatarUrl(user?.avatarUrl || '');
   }, [user]);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, FunnelDraft> = {};
+    for (const funnel of sortedFunnels) {
+      nextDrafts[funnel.id] = {
+        name: funnel.name,
+        description: funnel.description || '',
+      };
+    }
+    setFunnelDrafts(nextDrafts);
+  }, [sortedFunnels]);
 
   useEffect(() => {
     if (!isAdmin && activeTab !== 'profile') {
@@ -121,6 +156,16 @@ export function Settings() {
     setActiveTab('operations');
   };
 
+  const getStageDraft = (funnelId: string) => stageDrafts[funnelId] || { name: '', color: '#D4AF37' };
+  const getObjectionDraft = (funnelId: string) => objectionDrafts[funnelId] || '';
+
+  const updateStageDraft = (funnelId: string, patch: Partial<StageDraft>) => {
+    setStageDrafts((current) => ({
+      ...current,
+      [funnelId]: { ...getStageDraft(funnelId), ...patch },
+    }));
+  };
+
   const handleAddArea = () => {
     if (!newAreaName.trim()) return;
     addAreaOfLaw(newAreaName, newAreaDesc);
@@ -130,12 +175,7 @@ export function Settings() {
 
   const handleAddService = () => {
     if (!newServiceName.trim() || !selectedAreaForService) return;
-    addService(
-      selectedAreaForService,
-      newServiceName,
-      newServiceDesc,
-      newServicePrice ? Number(newServicePrice) : undefined,
-    );
+    addService(selectedAreaForService, newServiceName, newServiceDesc, newServicePrice ? Number(newServicePrice) : undefined);
     setNewServiceName('');
     setNewServiceDesc('');
     setNewServicePrice('');
@@ -148,24 +188,16 @@ export function Settings() {
     setNewTaskDesc('');
   };
 
-  const handleAddStage = () => {
-    if (!newStageName.trim()) return;
-    addKanbanStage(newStageName, newStageColor);
-    setNewStageName('');
-    setNewStageColor('#D4AF37');
-  };
-
-  const moveStage = (id: string, direction: 'up' | 'down') => {
-    const sorted = [...kanbanStages].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex((stage) => stage.id === id);
-
-    if (direction === 'up' && index > 0) {
-      [sorted[index - 1], sorted[index]] = [sorted[index], sorted[index - 1]];
-    } else if (direction === 'down' && index < sorted.length - 1) {
-      [sorted[index], sorted[index + 1]] = [sorted[index + 1], sorted[index]];
-    }
-
-    reorderKanbanStages(sorted.map((stage, order) => ({ ...stage, order })));
+  const handleAddFunnel = () => {
+    if (!newFunnelName.trim()) return;
+    addFunnel({
+      name: newFunnelName.trim(),
+      description: newFunnelDescription.trim() || undefined,
+      operation: newFunnelOperation,
+    });
+    setNewFunnelName('');
+    setNewFunnelDescription('');
+    setNewFunnelOperation('commercial');
   };
 
   const handleUpdateOwnProfile = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -217,7 +249,7 @@ export function Settings() {
       <div className="mb-8">
         <h1 className="mb-2 text-4xl font-serif font-bold text-primary">Configuracoes</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Organize seu perfil, equipe e a estrutura operacional do CRM em um unico lugar, com menos menus e mais previsibilidade.
+          Organize perfil, equipe e estrutura operacional do CRM em um unico lugar, com menos menus e mais clareza para a equipe.
         </p>
       </div>
 
@@ -226,18 +258,13 @@ export function Settings() {
           <button
             key={tab.key}
             onClick={() => setTab(tab.key)}
-            className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-gold-400'
-            }`}
+            className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-3 text-sm font-semibold uppercase tracking-wider transition-all ${activeTab === tab.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-gold-400'}`}
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
           </button>
         ))}
       </div>
-
       {activeTab === 'profile' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6">
@@ -245,7 +272,7 @@ export function Settings() {
               <div>
                 <h2 className="text-2xl font-serif text-gold-400">Meu perfil</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Atualize seus dados de acesso, foto e senha sem precisar navegar por telas tecnicas.
+                  Atualize seus dados de acesso, foto e senha sem navegar por blocos tecnicos que nao ajudam no seu trabalho.
                 </p>
               </div>
               <div className="rounded-full border border-border bg-background/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -260,23 +287,13 @@ export function Settings() {
                     <img src={profileAvatarUrl} alt={profileName || user?.name || 'Perfil'} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs font-black uppercase tracking-widest text-primary">
-                      {(profileName || user?.name || 'U')
-                        .split(' ')
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .map((part) => part[0]?.toUpperCase() || '')
-                        .join('')}
+                      {(profileName || user?.name || 'U').split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('')}
                     </div>
                   )}
                 </div>
                 <div className="flex-1">
                   <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Foto de perfil</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleProfileAvatarFile}
-                    className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground hover:file:bg-gold-400"
-                  />
+                  <input type="file" accept="image/*" onChange={handleProfileAvatarFile} className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground hover:file:bg-gold-400" />
                   <p className="mt-2 text-xs text-muted-foreground">Use uma imagem nitida. O arquivo fica salvo no seu perfil.</p>
                 </div>
               </div>
@@ -285,50 +302,26 @@ export function Settings() {
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Nome exibido</label>
                 <input value={profileName} onChange={(event) => setProfileName(event.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
-
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Email de acesso</label>
                 <input value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} type="email" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
-
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Senha atual</label>
-                <input
-                  value={profileCurrentPassword}
-                  onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                  type="password"
-                  placeholder="Obrigatoria para trocar email ou senha"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                />
+                <input value={profileCurrentPassword} onChange={(event) => setProfileCurrentPassword(event.target.value)} type="password" placeholder="Obrigatoria para trocar email ou senha" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
-
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Nova senha</label>
-                <input
-                  value={profileNewPassword}
-                  onChange={(event) => setProfileNewPassword(event.target.value)}
-                  type="password"
-                  placeholder="Deixe em branco para manter"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                />
+                <input value={profileNewPassword} onChange={(event) => setProfileNewPassword(event.target.value)} type="password" placeholder="Deixe em branco para manter" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
-
               <div className="md:col-span-2">
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Confirmar nova senha</label>
-                <input
-                  value={profileConfirmPassword}
-                  onChange={(event) => setProfileConfirmPassword(event.target.value)}
-                  type="password"
-                  placeholder="Repita a nova senha"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                />
+                <input value={profileConfirmPassword} onChange={(event) => setProfileConfirmPassword(event.target.value)} type="password" placeholder="Repita a nova senha" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
 
               <div className="md:col-span-2 flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                <p>Alteracoes sensiveis pedem sua senha atual para evitar erro e manter sua conta protegida.</p>
-                <button type="submit" className="rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
-                  Salvar perfil
-                </button>
+                <p>Alteracoes sensiveis pedem sua senha atual para reduzir erro e manter a conta protegida.</p>
+                <button type="submit" className="rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">Salvar perfil</button>
               </div>
 
               {profileMessage && <p className="md:col-span-2 text-sm text-emerald-400">{profileMessage}</p>}
@@ -343,7 +336,7 @@ export function Settings() {
           <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-2xl font-serif text-gold-400">Equipe</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Cadastre pessoas, perfis de acesso e mantenha a operacao do escritorio organizada no mesmo ponto de administracao.
+              Cadastre pessoas, niveis de acesso e mantenha a operacao do escritorio no mesmo ponto de administracao.
             </p>
           </div>
           <UsersAdminPage embedded />
@@ -355,48 +348,182 @@ export function Settings() {
           <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-2xl font-serif text-gold-400">Operacao do CRM</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Aqui ficam os cadastros estruturais do sistema. Em vez de espalhar regras por varios menus, a operacao passa a ser configurada em um unico fluxo previsivel.
+              Aqui ficam os cadastros estruturais do sistema. Funis, areas, servicos e tarefas passam a viver no mesmo contexto operacional.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               {ADMIN_SECTION_LINKS.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => jumpToSection(section.id)}
-                  className="rounded-full border border-border bg-background/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                >
+                <button key={section.id} type="button" onClick={() => jumpToSection(section.id)} className="rounded-full border border-border bg-background/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                   {section.label}
                 </button>
               ))}
             </div>
           </div>
 
+          <section id="settings-section-funnels" className="space-y-6 rounded-xl border border-border bg-card p-6">
+            <div>
+              <h3 className="text-xl font-serif text-gold-400">Funis</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Em vez de um funil fixo para cada area do sistema, voce pode criar, duplicar e manter varios funis por operacao.
+              </p>
+            </div>
+
+            <div className="grid gap-4 rounded-xl border border-border bg-background/40 p-4 md:grid-cols-2 xl:grid-cols-4">
+              <input type="text" placeholder="Nome do novo funil" value={newFunnelName} onChange={(event) => setNewFunnelName(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
+              <select value={newFunnelOperation} onChange={(event) => setNewFunnelOperation(event.target.value as FunnelConfig['operation'])} className="rounded-lg border border-border bg-background px-4 py-2">
+                <option value="commercial">Comercial</option>
+                <option value="prospecting">Prospeccao</option>
+              </select>
+              <input type="text" placeholder="Descricao curta" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2 xl:col-span-2" />
+              <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+                <button onClick={handleAddFunnel} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
+                  <Plus className="h-4 w-4" /> Criar funil
+                </button>
+              </div>
+            </div>
+            <div className="space-y-6">
+              {sortedFunnels.map((funnel) => {
+                const isDefault = funnel.operation === 'commercial' ? funnel.id === commercialDefaultFunnelId : funnel.id === prospectingDefaultFunnelId;
+                const sortedStages = [...(funnel.stages || [])].sort((a, b) => a.order - b.order);
+                const draft = funnelDrafts[funnel.id] || { name: funnel.name, description: funnel.description || '' };
+                const stageDraft = getStageDraft(funnel.id);
+                const objectionDraft = getObjectionDraft(funnel.id);
+
+                return (
+                  <div key={funnel.id} className="rounded-2xl border border-border bg-background/30 p-5">
+                    <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="grid flex-1 gap-3 md:grid-cols-2">
+                        <input value={draft.name} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, name: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { name: draft.name.trim() || funnel.name })} className="rounded-lg border border-border bg-card px-4 py-2 font-semibold" />
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          <span className="rounded-full border border-border px-3 py-2">{funnel.operation === 'commercial' ? 'Comercial' : 'Prospeccao'}</span>
+                          {isDefault && <span className="rounded-full bg-primary px-3 py-2 text-primary-foreground">Principal</span>}
+                        </div>
+                        <input value={draft.description} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, description: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { description: draft.description.trim() || undefined })} placeholder="Descricao do funil" className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2" />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {!isDefault && (
+                          <button type="button" onClick={() => setDefaultFunnel(funnel.operation, funnel.id)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary">
+                            <Star className="h-4 w-4" /> Definir principal
+                          </button>
+                        )}
+                        <button type="button" onClick={() => duplicateFunnel(funnel.id)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary">
+                          <Copy className="h-4 w-4" /> Duplicar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Excluir o funil \"${funnel.name}\"?`)) {
+                              deleteFunnel(funnel.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-4 w-4" /> Excluir
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Etapas</h4>
+                        <span className="text-xs text-muted-foreground">{sortedStages.length} etapa(s)</span>
+                      </div>
+                      {sortedStages.map((stage, index) => (
+                        <div key={stage.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:flex-row lg:items-center">
+                          <div className="flex items-center gap-2">
+                            <button disabled={index === 0} onClick={() => {
+                              const reordered = [...sortedStages];
+                              [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+                              reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
+                            }} className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30">
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button disabled={index === sortedStages.length - 1} onClick={() => {
+                              const reordered = [...sortedStages];
+                              [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
+                              reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
+                            }} className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30">
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <div className="h-8 w-3 rounded-full" style={{ backgroundColor: stage.color }} />
+                          </div>
+                          <input value={stage.name} onChange={(event) => updateFunnelStage(funnel.id, stage.id, { name: event.target.value })} className="flex-1 rounded-lg border border-border bg-background px-3 py-2" />
+                          <input type="color" value={stage.color} onChange={(event) => updateFunnelStage(funnel.id, stage.id, { color: event.target.value })} className="h-10 w-12 rounded-lg border border-border bg-background" />
+                          <button onClick={() => deleteFunnelStage(funnel.id, stage.id)} className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background/40 p-3 md:grid-cols-[1fr_auto_auto]">
+                        <input value={stageDraft.name} onChange={(event) => updateStageDraft(funnel.id, { name: event.target.value })} placeholder="Nova etapa" className="rounded-lg border border-border bg-background px-3 py-2" />
+                        <input type="color" value={stageDraft.color} onChange={(event) => updateStageDraft(funnel.id, { color: event.target.value })} className="h-10 w-12 rounded-lg border border-border bg-background" />
+                        <button
+                          onClick={() => {
+                            if (!stageDraft.name.trim()) return;
+                            addFunnelStage(funnel.id, stageDraft.name.trim(), stageDraft.color);
+                            setStageDrafts((current) => ({ ...current, [funnel.id]: { name: '', color: '#D4AF37' } }));
+                          }}
+                          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+                        >
+                          <Plus className="h-4 w-4" /> Adicionar
+                        </button>
+                      </div>
+                    </div>
+
+                    {funnel.operation === 'prospecting' && (
+                      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Objecoes</h4>
+                            <p className="mt-1 text-sm text-muted-foreground">Use objecoes padrao quando o funil exigir abordagem comercial consultiva.</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <input value={objectionDraft} onChange={(event) => setObjectionDrafts((current) => ({ ...current, [funnel.id]: event.target.value }))} placeholder="Nova objecao" className="flex-1 rounded-lg border border-border bg-background px-3 py-2" />
+                            <button
+                              onClick={() => {
+                                if (!objectionDraft.trim()) return;
+                                addFunnelObjection(funnel.id, objectionDraft.trim());
+                                setObjectionDrafts((current) => ({ ...current, [funnel.id]: '' }));
+                              }}
+                              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {(funnel.objections || []).map((item) => (
+                              <div key={item} className="flex items-center justify-between rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
+                                <span>{item}</span>
+                                <button onClick={() => removeFunnelObjection(funnel.id, item)} className="text-red-400 hover:text-red-300">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Playbook</h4>
+                            <p className="mt-1 text-sm text-muted-foreground">Esse roteiro acompanha o funil e deixa a operacao replicavel.</p>
+                          </div>
+                          <textarea value={funnel.playbook || ''} onChange={(event) => setFunnelPlaybook(funnel.id, event.target.value)} className="h-56 w-full rounded-xl border border-border bg-background p-3 text-sm" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
           <section id="settings-section-areas" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Areas de atuacao</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Defina as especialidades do escritorio. Elas organizam servicos, funis e leitura do negocio.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Defina as especialidades do escritorio para organizar servicos e contexto comercial.</p>
             </div>
             <div className="flex flex-col gap-4 xl:flex-row">
-              <input
-                type="text"
-                placeholder="Nome da area"
-                value={newAreaName}
-                onChange={(e) => setNewAreaName(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder="Descricao curta"
-                value={newAreaDesc}
-                onChange={(e) => setNewAreaDesc(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <button
-                onClick={handleAddArea}
-                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
-              >
+              <input type="text" placeholder="Nome da area" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-4 py-2" />
+              <input type="text" placeholder="Descricao curta" value={newAreaDesc} onChange={(e) => setNewAreaDesc(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-4 py-2" />
+              <button onClick={handleAddArea} className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
                 <Plus className="h-4 w-4" /> Adicionar
               </button>
             </div>
@@ -419,51 +546,21 @@ export function Settings() {
           <section id="settings-section-services" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Servicos</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Monte o catalogo comercial da operacao para padronizar propostas, qualificacao e contexto dos leads.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Monte o catalogo comercial para padronizar propostas e contexto dos leads.</p>
             </div>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <select
-                value={selectedAreaForService}
-                onChange={(e) => setSelectedAreaForService(e.target.value)}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              >
+              <select value={selectedAreaForService} onChange={(e) => setSelectedAreaForService(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2">
                 <option value="">Selecione a area de atuacao</option>
                 {areasOfLaw.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
+                  <option key={area.id} value={area.id}>{area.name}</option>
                 ))}
               </select>
-              <input
-                type="text"
-                placeholder="Nome do servico"
-                value={newServiceName}
-                onChange={(e) => setNewServiceName(e.target.value)}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder="Descricao curta"
-                value={newServiceDesc}
-                onChange={(e) => setNewServiceDesc(e.target.value)}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <input
-                type="number"
-                placeholder="Valor estimado"
-                value={newServicePrice}
-                onChange={(e) => setNewServicePrice(e.target.value)}
-                className="rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
+              <input type="text" placeholder="Nome do servico" value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
+              <input type="text" placeholder="Descricao curta" value={newServiceDesc} onChange={(e) => setNewServiceDesc(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
+              <input type="number" placeholder="Valor estimado" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
             </div>
             <div className="flex justify-end">
-              <button
-                onClick={handleAddService}
-                disabled={!selectedAreaForService || !newServiceName}
-                className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <button onClick={handleAddService} disabled={!selectedAreaForService || !newServiceName} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-50">
                 <Plus className="h-4 w-4" /> Adicionar servico
               </button>
             </div>
@@ -474,14 +571,8 @@ export function Settings() {
                   <div key={service.id} className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
                     <div>
                       <div className="mb-1 flex items-center gap-2">
-                        <span className="rounded bg-accent px-2 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-                          {area?.name || 'Area nao vinculada'}
-                        </span>
-                        {service.price && (
-                          <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-mono text-emerald-400">
-                            R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </span>
-                        )}
+                        <span className="rounded bg-accent px-2 py-1 text-xs font-bold uppercase tracking-wider text-primary">{area?.name || 'Area nao vinculada'}</span>
+                        {service.price && <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-mono text-emerald-400">R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                       </div>
                       <h4 className="text-lg font-bold text-gold-100">{service.name}</h4>
                       {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
@@ -499,29 +590,12 @@ export function Settings() {
           <section id="settings-section-tasks" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Tarefas padrao</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Padronize as proximas acoes mais comuns da equipe para ganhar consistencia e reduzir retrabalho.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Padronize as proximas acoes mais comuns da equipe para reduzir retrabalho.</p>
             </div>
             <div className="flex flex-col gap-4 xl:flex-row">
-              <input
-                type="text"
-                placeholder="Titulo da tarefa"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder="Descricao curta"
-                value={newTaskDesc}
-                onChange={(e) => setNewTaskDesc(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <button
-                onClick={handleAddTask}
-                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
-              >
+              <input type="text" placeholder="Titulo da tarefa" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-4 py-2" />
+              <input type="text" placeholder="Descricao curta" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-4 py-2" />
+              <button onClick={handleAddTask} className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
                 <Plus className="h-4 w-4" /> Adicionar
               </button>
             </div>
@@ -539,102 +613,6 @@ export function Settings() {
               ))}
               {standardTasks.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhuma tarefa padrao cadastrada.</p>}
             </div>
-          </section>
-
-          <section id="settings-section-kanban" className="space-y-6 rounded-xl border border-border bg-card p-6">
-            <div>
-              <h3 className="text-xl font-serif text-gold-400">Funil comercial</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Ajuste as etapas do Kanban principal do escritorio. Esse funil representa o trabalho comercial recorrente.
-              </p>
-            </div>
-            <div className="flex flex-col gap-4 xl:flex-row">
-              <input
-                type="text"
-                placeholder="Nome da etapa"
-                value={newStageName}
-                onChange={(e) => setNewStageName(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:border-primary focus:outline-none"
-              />
-              <input
-                type="color"
-                value={newStageColor}
-                onChange={(e) => setNewStageColor(e.target.value)}
-                className="h-10 w-12 cursor-pointer rounded-lg border border-border bg-background p-1"
-              />
-              <button
-                onClick={handleAddStage}
-                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
-              >
-                <Plus className="h-4 w-4" /> Adicionar
-              </button>
-            </div>
-            <div className="grid gap-4">
-              {[...kanbanStages].sort((a, b) => a.order - b.order).map((stage, index, orderedStages) => (
-                <div key={stage.id} className="group flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col gap-1">
-                      <button disabled={index === 0} onClick={() => moveStage(stage.id, 'up')} className="p-1 text-muted-foreground transition-all hover:text-primary disabled:opacity-0">
-                        <ArrowUp className="h-4 w-4" />
-                      </button>
-                      <button disabled={index === orderedStages.length - 1} onClick={() => moveStage(stage.id, 'down')} className="p-1 text-muted-foreground transition-all hover:text-primary disabled:opacity-0">
-                        <ArrowDown className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="h-10 w-3 rounded-full" style={{ backgroundColor: stage.color }} />
-                    {editingStageId === stage.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          defaultValue={stage.name}
-                          onBlur={(e) => {
-                            updateKanbanStage(stage.id, { name: e.target.value });
-                            setEditingStageId(null);
-                          }}
-                          autoFocus
-                          className="rounded border border-primary bg-background px-2 py-1 text-foreground"
-                        />
-                        <input
-                          type="color"
-                          defaultValue={stage.color}
-                          onChange={(e) => updateKanbanStage(stage.id, { color: e.target.value })}
-                          className="h-8 w-8 cursor-pointer rounded border border-border bg-background"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <h4 className="flex items-center gap-2 text-lg font-bold text-gold-100">
-                          {stage.name}
-                          <button onClick={() => setEditingStageId(stage.id)} className="p-1 text-muted-foreground opacity-0 transition-all hover:text-primary group-hover:opacity-100">
-                            <Edit2 className="h-3 w-3" />
-                          </button>
-                        </h4>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (confirm('Tem certeza que deseja excluir esta etapa?')) {
-                        deleteKanbanStage(stage.id);
-                      }
-                    }}
-                    className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section id="settings-section-prospecting" className="space-y-6 rounded-xl border border-border bg-card p-6">
-            <div>
-              <h3 className="text-xl font-serif text-gold-400">Prospeccao</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Traga a configuracao da prospeccao para o mesmo contexto operacional do CRM, evitando um menu tecnico separado.
-              </p>
-            </div>
-            <ProspectingSettings embedded />
           </section>
         </div>
       )}

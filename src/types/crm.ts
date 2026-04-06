@@ -5,6 +5,18 @@ export interface KanbanStage {
   order: number;
 }
 
+export interface FunnelConfig {
+  id: string;
+  name: string;
+  description?: string;
+  operation: 'commercial' | 'prospecting';
+  stages: KanbanStage[];
+  objections?: string[];
+  playbook?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type LeadStatus = string;
 
 export interface AreaOfLaw {
@@ -100,6 +112,7 @@ export interface Lead {
   adId?: string;
   areaOfLawId?: string;
   serviceId?: string;
+  funnelId?: string;
   notes: LeadNote[];
   followUps: FollowUp[];
   tasks: Task[];
@@ -125,6 +138,7 @@ export interface ProspectLead {
   status: LeadStatus;
   ownerUserId?: string;
   serviceId?: string;
+  funnelId?: string;
   objectionReason?: string;
   notes: LeadNote[];
   followUps: FollowUp[];

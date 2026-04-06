@@ -9,7 +9,7 @@ import { isAdminUser } from '@/lib/access';
 
 export function Leads() {
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
-  const { leads, campaigns, addLead, updateLead, kanbanStages, areasOfLaw, services } = useStore();
+  const { leads, campaigns, addLead, updateLead, funnels, commercialDefaultFunnelId, areasOfLaw, services } = useStore();
   const isAdmin = isAdminUser(user);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,23 +23,35 @@ export function Leads() {
   const [filterAreaId, setFilterAreaId] = useState('');
   const [filterServiceId, setFilterServiceId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const [selectedArea, setSelectedArea] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
 
-  const sortedStages = [...kanbanStages].sort((a, b) => a.order - b.order);
+  const commercialFunnels = (funnels || []).filter((funnel) => funnel.operation === 'commercial');
+  const activeFunnel = commercialFunnels.find((funnel) => funnel.id === selectedFunnelId)
+    || commercialFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
+    || commercialFunnels[0];
+  const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
   useEffect(() => {
     fetchAssignableUsers().catch(() => null);
   }, [fetchAssignableUsers]);
 
+  useEffect(() => {
+    if (activeFunnel?.id && activeFunnel.id !== selectedFunnelId) {
+      setSelectedFunnelId(activeFunnel.id);
+    }
+  }, [activeFunnel?.id, selectedFunnelId]);
+
   const scopedLeads = isAdmin
     ? (leads || [])
     : (leads || []).filter((lead) => !lead.ownerUserId || lead.ownerUserId === user?.id);
 
   const filteredLeads = scopedLeads.filter((lead) => {
+    const funnelId = lead.funnelId || commercialDefaultFunnelId;
     const bySearch =
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.phone.includes(searchTerm) ||
@@ -49,8 +61,9 @@ export function Leads() {
     const byArea = !filterAreaId || lead.areaOfLawId === filterAreaId;
     const byService = !filterServiceId || lead.serviceId === filterServiceId;
     const byStatus = !filterStatus || lead.status === filterStatus;
+    const byFunnel = !activeFunnel || funnelId === activeFunnel.id;
 
-    return bySearch && byCampaign && byArea && byService && byStatus;
+    return bySearch && byCampaign && byArea && byService && byStatus && byFunnel;
   });
 
   const handleAddLead = (e: React.FormEvent<HTMLFormElement>) => {
@@ -69,6 +82,7 @@ export function Leads() {
         legalArea: formData.get('legalArea') as string,
         areaOfLawId: formData.get('areaOfLawId') as string,
         serviceId: formData.get('serviceId') as string,
+        funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
         estimatedValue: Number(formData.get('estimatedValue')) || 0,
         status: sortedStages[0]?.id || 'novo',
         ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
@@ -183,6 +197,15 @@ export function Leads() {
           <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-xs">Pipeline de Vendas & Conversão</p>
         </div>
         <div className="flex gap-4">
+          <select
+            value={selectedFunnelId}
+            onChange={(e) => setSelectedFunnelId(e.target.value)}
+            className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground"
+          >
+            {commercialFunnels.map((funnel) => (
+              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+            ))}
+          </select>
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button
               onClick={() => setViewMode('kanban')}
@@ -449,6 +472,14 @@ export function Leads() {
                     <option value="">Selecione o Serviço</option>
                     {services.filter((s) => s.areaOfLawId === selectedArea).map((service) => (
                       <option key={service.id} value={service.id}>{service.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
+                  <select name="funnelId" defaultValue={activeFunnel?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all">
+                    {commercialFunnels.map((funnel) => (
+                      <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
                     ))}
                   </select>
                 </div>

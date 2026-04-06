@@ -18,7 +18,7 @@ export function LeadDetails() {
   const navigate = useNavigate();
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
-    leads, campaigns, adGroups, ads, areasOfLaw, services, standardTasks, kanbanStages,
+    leads, campaigns, adGroups, ads, areasOfLaw, services, standardTasks, funnels, commercialDefaultFunnelId,
     updateLead, deleteLead, addNoteToLead, updateNoteInLead, deleteNoteFromLead,
     addDocumentToLead, updateDocumentInLead, deleteDocumentFromLead,
     addFollowUpToLead, updateFollowUpInLead, deleteFollowUpFromLead, updateFollowUpStatus,
@@ -48,6 +48,7 @@ export function LeadDetails() {
     estimatedValue: '',
     areaOfLawId: '',
     serviceId: '',
+    funnelId: '',
     campaignId: '',
     ownerUserId: '',
   });
@@ -72,6 +73,7 @@ export function LeadDetails() {
       estimatedValue: lead.estimatedValue ? String(lead.estimatedValue) : '',
       areaOfLawId: lead.areaOfLawId || '',
       serviceId: lead.serviceId || '',
+      funnelId: lead.funnelId || '',
       campaignId: lead.campaignId || '',
       ownerUserId: lead.ownerUserId || '',
     });
@@ -108,11 +110,15 @@ export function LeadDetails() {
     );
   }
 
+  const commercialFunnels = (funnels || []).filter((funnel) => funnel.operation === 'commercial');
+  const currentFunnel = commercialFunnels.find((funnel) => funnel.id === (lead.funnelId || commercialDefaultFunnelId))
+    || commercialFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
+    || commercialFunnels[0];
   const sortedLogs = (lead.logs || []).slice().reverse();
   const visibleLogs = sortedLogs.slice(0, 5);
   const hasMoreLogs = sortedLogs.length > 5;
-  const sortedStages = [...kanbanStages].sort((a, b) => a.order - b.order);
-  const currentStage = kanbanStages.find(s => s.id === lead.status);
+  const sortedStages = [...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+  const currentStage = sortedStages.find(s => s.id === lead.status);
   const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
   const handleDeleteLead = () => {
@@ -133,6 +139,7 @@ export function LeadDetails() {
       estimatedValue: editForm.estimatedValue ? Number(editForm.estimatedValue) : undefined,
       areaOfLawId: editForm.areaOfLawId || undefined,
       serviceId: editForm.serviceId || undefined,
+      funnelId: editForm.funnelId || undefined,
       campaignId: editForm.campaignId || undefined,
       ownerUserId: editForm.ownerUserId || undefined,
     });
@@ -889,7 +896,20 @@ export function LeadDetails() {
                     .filter((service) => !editForm.areaOfLawId || service.areaOfLawId === editForm.areaOfLawId)
                     .map((service) => (
                       <option key={service.id} value={service.id}>{service.name}</option>
-                    ))}
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
+                <select
+                  value={editForm.funnelId}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, funnelId: e.target.value, status: commercialFunnels.find((funnel) => funnel.id === e.target.value)?.stages?.[0]?.id || prev.status }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  <option value="">Selecione o funil</option>
+                  {commercialFunnels.map((funnel) => (
+                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                  ))}
                 </select>
               </div>
               <div>

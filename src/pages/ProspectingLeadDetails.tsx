@@ -11,9 +11,8 @@ export function ProspectingLeadDetails() {
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
     prospectLeads,
-    prospectKanbanStages,
-    prospectObjections,
-    prospectPlaybook,
+    funnels,
+    prospectingDefaultFunnelId,
     services,
     updateProspectLead,
     deleteProspectLead,
@@ -49,6 +48,7 @@ export function ProspectingLeadDetails() {
     neighborhood: '',
     status: '',
     serviceId: '',
+    funnelId: '',
     objectionReason: '',
     ownerUserId: '',
   });
@@ -70,14 +70,25 @@ export function ProspectingLeadDetails() {
       neighborhood: lead.neighborhood || '',
       status: lead.status || '',
       serviceId: lead.serviceId || '',
+      funnelId: lead.funnelId || '',
       objectionReason: lead.objectionReason || '',
       ownerUserId: lead.ownerUserId || '',
     });
   }, [lead]);
 
+  const prospectingFunnels = useMemo(
+    () => (funnels || []).filter((funnel) => funnel.operation === 'prospecting'),
+    [funnels],
+  );
+  const currentFunnel = useMemo(
+    () => prospectingFunnels.find((funnel) => funnel.id === (lead?.funnelId || prospectingDefaultFunnelId))
+      || prospectingFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
+      || prospectingFunnels[0],
+    [lead?.funnelId, prospectingDefaultFunnelId, prospectingFunnels],
+  );
   const stage = useMemo(
-    () => (prospectKanbanStages || []).find((item) => item.id === lead?.status),
-    [prospectKanbanStages, lead?.status]
+    () => (currentFunnel?.stages || []).find((item) => item.id === lead?.status),
+    [currentFunnel?.stages, lead?.status]
   );
   const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
@@ -129,6 +140,7 @@ export function ProspectingLeadDetails() {
       neighborhood: editForm.neighborhood.trim() || undefined,
       status: editForm.status || lead.status,
       serviceId: editForm.serviceId || undefined,
+      funnelId: editForm.funnelId || undefined,
       objectionReason: editForm.objectionReason || undefined,
       ownerUserId: editForm.ownerUserId || undefined,
     });
@@ -219,7 +231,7 @@ export function ProspectingLeadDetails() {
             onChange={(e) => updateProspectLead(lead.id, { status: e.target.value })}
             className="px-4 py-2 rounded-lg border border-border bg-card text-xs uppercase tracking-widest"
           >
-            {[...(prospectKanbanStages || [])].sort((a, b) => a.order - b.order).map((item) => (
+            {[...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order).map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
@@ -318,7 +330,7 @@ export function ProspectingLeadDetails() {
               className="w-full rounded-lg border border-border bg-background p-2 text-sm"
             >
               <option value="">Selecione uma objeção</option>
-              {(prospectObjections || []).map((item) => (
+              {(currentFunnel?.objections || []).map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
@@ -362,7 +374,7 @@ export function ProspectingLeadDetails() {
         <div className="space-y-6">
           <section className="bg-card border border-border rounded-2xl p-6">
             <h3 className="font-serif font-bold text-xl mb-3">Playbook de Ligação</h3>
-            <p className="text-sm text-muted-foreground whitespace-pre-line">{prospectPlaybook}</p>
+            <p className="text-sm text-muted-foreground whitespace-pre-line">{currentFunnel?.playbook || 'Nenhum playbook configurado para este funil.'}</p>
           </section>
 
           <section className="bg-card border border-border rounded-2xl p-6 space-y-3">
@@ -546,8 +558,21 @@ export function ProspectingLeadDetails() {
                   onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
-                  {[...(prospectKanbanStages || [])].sort((a, b) => a.order - b.order).map((item) => (
+                  {[...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order).map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
+                <select
+                  value={editForm.funnelId}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, funnelId: e.target.value, status: prospectingFunnels.find((funnel) => funnel.id === e.target.value)?.stages?.[0]?.id || prev.status }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  <option value="">Selecione o funil</option>
+                  {prospectingFunnels.map((funnel) => (
+                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
                   ))}
                 </select>
               </div>
@@ -572,7 +597,7 @@ export function ProspectingLeadDetails() {
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
                   <option value="">Selecione uma objeção</option>
-                  {(prospectObjections || []).map((item) => (
+                  {(currentFunnel?.objections || []).map((item) => (
                     <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
