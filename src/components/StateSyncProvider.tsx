@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useStore } from '@/store/useStore';
+import { useSystemStore } from '@/store/useSystemStore';
 import { normalizePtBrDeep } from '@/lib/text';
 import { saveOfflineSnapshot } from '@/lib/offlineSnapshot';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
@@ -30,9 +31,40 @@ export function StateSyncProvider() {
   const syncingRef = useRef(false);
   const skipNextRef = useRef(false);
   const lastServerUpdatedAtRef = useRef<string | null>(null);
+  const pendingStateRef = useRef<ReturnType<typeof pickState> | null>(null);
   const timerRef = useRef<number | undefined>(undefined);
   const inactivityTimerRef = useRef<number | undefined>(undefined);
   const pullTimerRef = useRef<number | undefined>(undefined);
+  const setRuntimeInfo = useSystemStore((state) => state.setRuntimeInfo);
+  const setSyncState = useSystemStore((state) => state.setSyncState);
+
+  const flushPendingState = async () => {
+    if (!loadedRef.current || syncingRef.current || !pendingStateRef.current) return;
+
+    syncingRef.current = true;
+    setSyncState({ syncState: 'syncing', syncError: null });
+    try {
+      const response = await api.put<{ updatedAt?: string }>('/api/state', {
+        state: pendingStateRef.current,
+        clientUpdatedAt: lastServerUpdatedAtRef.current,
+      });
+      if (response?.updatedAt) {
+        lastServerUpdatedAtRef.current = response.updatedAt;
+        setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: response.updatedAt });
+      } else {
+        setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: new Date().toISOString() });
+      }
+      pendingStateRef.current = null;
+    } catch (error) {
+      setSyncState({
+        syncState: 'error',
+        syncError: error instanceof Error ? error.message : 'Falha ao sincronizar dados',
+      });
+      await pullLatestState();
+    } finally {
+      syncingRef.current = false;
+    }
+  };
 
   const pullLatestState = async () => {
     if (!loadedRef.current || syncingRef.current) return;
@@ -46,6 +78,7 @@ export function StateSyncProvider() {
       useStore.setState((current) => ({ ...current, ...normalizedState }));
       saveOfflineSnapshot(normalizedState as unknown as Record<string, unknown>);
       lastServerUpdatedAtRef.current = data.updatedAt;
+      setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
     } catch {
       // keep local state and retry
     }
@@ -56,13 +89,24 @@ export function StateSyncProvider() {
 
     const load = async () => {
       try {
+        const health = await fetch('/api/health', { cache: 'no-store' });
+        const healthJson = await health.json().catch(() => ({}));
+        setRuntimeInfo({
+          apiBase: window.location.origin,
+          backendReachable: health.ok,
+          mode: String(healthJson?.mode || 'online'),
+          database: String(healthJson?.database || 'unknown'),
+        });
+
         const data = await api.get<{ state: ReturnType<typeof pickState>; updatedAt?: string }>('/api/state');
         const normalizedState = normalizePtBrDeep(data.state);
         skipNextRef.current = true;
         useStore.setState((current) => ({ ...current, ...normalizedState }));
         saveOfflineSnapshot(normalizedState as unknown as Record<string, unknown>);
         lastServerUpdatedAtRef.current = data.updatedAt || null;
+        setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
       } catch {
+        setSyncState({ syncState: 'error', syncError: 'Falha ao carregar dados iniciais do servidor' });
         // fallback: keep local state
       } finally {
         loadedRef.current = true;
@@ -98,25 +142,9 @@ export function StateSyncProvider() {
       }
 
       timerRef.current = window.setTimeout(async () => {
-        if (syncingRef.current) {
-          return;
-        }
         saveOfflineSnapshot(pickState(state) as unknown as Record<string, unknown>);
-        syncingRef.current = true;
-        try {
-          const response = await api.put<{ updatedAt?: string }>('/api/state', {
-            state: pickState(state),
-            clientUpdatedAt: lastServerUpdatedAtRef.current,
-          });
-          if (response?.updatedAt) {
-            lastServerUpdatedAtRef.current = response.updatedAt;
-          }
-        } catch {
-          await pullLatestState();
-          // keep local changes and retry on next mutation
-        } finally {
-          syncingRef.current = false;
-        }
+        pendingStateRef.current = pickState(state);
+        await flushPendingState();
       }, 500);
     });
 
@@ -131,6 +159,7 @@ export function StateSyncProvider() {
   useEffect(() => {
     pullTimerRef.current = window.setInterval(() => {
       pullLatestState();
+      flushPendingState();
     }, 2000);
 
     const onVisibility = () => {

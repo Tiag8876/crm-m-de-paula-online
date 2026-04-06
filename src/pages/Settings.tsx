@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useSystemStore } from '@/store/useSystemStore';
 import {
   Plus,
   Trash2,
@@ -14,9 +15,23 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { getUserAccessProfile, isAdminUser } from '@/lib/access';
+import { getApiBase } from '@/lib/apiConfig';
 
 export function Settings() {
   const { user, logout } = useAuthStore();
+  const {
+    mode,
+    database,
+    apiBase,
+    backendReachable,
+    publicSetupAllowed,
+    bootstrapConfigured,
+    initialized,
+    syncState,
+    syncError,
+    lastSyncAt,
+    setRuntimeInfo,
+  } = useSystemStore();
   const isAdmin = isAdminUser(user);
   const accessProfile = getUserAccessProfile(user);
   const {
@@ -48,6 +63,48 @@ export function Settings() {
   const [newStageName, setNewStageName] = useState('');
   const [newStageColor, setNewStageColor] = useState('#D4AF37');
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRuntime = async () => {
+      try {
+        const base = getApiBase();
+        const [healthResponse, setupResponse] = await Promise.all([
+          fetch(`${base}/api/health`, { cache: 'no-store' }),
+          fetch(`${base}/api/setup-status`, { cache: 'no-store' }),
+        ]);
+
+        const health = await healthResponse.json().catch(() => ({}));
+        const setup = await setupResponse.json().catch(() => ({}));
+
+        if (!mounted) return;
+        setRuntimeInfo({
+          apiBase: base || window.location.origin,
+          backendReachable: healthResponse.ok,
+          mode: String(health?.mode || 'online'),
+          database: String(health?.database || 'unknown'),
+          publicSetupAllowed: Boolean(setup?.publicSetupAllowed),
+          bootstrapConfigured: Boolean(setup?.bootstrapConfigured),
+          initialized: Boolean(setup?.initialized),
+        });
+      } catch {
+        if (!mounted) return;
+        setRuntimeInfo({
+          apiBase: getApiBase() || window.location.origin,
+          backendReachable: false,
+          mode: 'online',
+          database: 'unavailable',
+        });
+      }
+    };
+
+    loadRuntime();
+
+    return () => {
+      mounted = false;
+    };
+  }, [setRuntimeInfo]);
 
   const handleAddArea = () => {
     if (!newAreaName.trim()) return;
@@ -156,6 +213,25 @@ export function Settings() {
             >
               Sair da Conta
             </button>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h2 className="mb-4 text-xl font-serif text-gold-400">Diagnostico Online</h2>
+            <div className="space-y-1 rounded-lg border border-border bg-background/40 p-3 text-xs text-muted-foreground">
+              <p>modo real: <span className="text-gold-100">{mode}</span></p>
+              <p>api ativa: <span className="text-gold-100">{apiBase || '-'}</span></p>
+              <p>banco de dados: <span className="text-gold-100">{database}</span></p>
+              <p>backend acessivel: <span className="text-gold-100">{backendReachable ? 'sim' : 'nao'}</span></p>
+              <p>provisionamento concluido: <span className="text-gold-100">{initialized ? 'sim' : 'nao'}</span></p>
+              <p>bootstrap configurado: <span className="text-gold-100">{bootstrapConfigured ? 'sim' : 'nao'}</span></p>
+              <p>setup publico: <span className="text-gold-100">{publicSetupAllowed ? 'habilitado' : 'desabilitado'}</span></p>
+              <p>sincronizacao: <span className="text-gold-100">{syncState}</span></p>
+              <p>ultimo sync: <span className="text-gold-100">{lastSyncAt ? new Date(lastSyncAt).toLocaleString('pt-BR') : '-'}</span></p>
+              <p>erro de sync: <span className="text-gold-100">{syncError || '-'}</span></p>
+            </div>
+            <div className="mt-4 rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
+              Este bloco e alimentado pelo backend online e pelo estado real de sincronizacao. Ele serve para validar se os dados estao indo para o servidor.
+            </div>
           </div>
 
           {!isAdmin && (
