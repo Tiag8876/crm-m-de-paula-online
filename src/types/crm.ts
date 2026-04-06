@@ -30,6 +30,7 @@ export interface FunnelConfig {
   name: string;
   description?: string;
   operation: 'commercial' | 'prospecting';
+  areaOfLawId?: string;
   stages: KanbanStage[];
   fieldSchema?: FunnelFieldConfig[];
   objections?: string[];

@@ -22,6 +22,7 @@ import { UsersAdminPage } from '@/pages/UsersAdminPage';
 import type { FunnelConfig, FunnelFieldType } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'team' | 'operations';
+type OperationsSection = 'funnels' | 'areas' | 'services' | 'tasks';
 type StageDraft = { name: string; color: string };
 type FunnelDraft = { name: string; description: string };
 type FieldDraft = {
@@ -83,7 +84,12 @@ export function Settings() {
   const isAdmin = isAdminUser(user);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
+  const requestedSection = searchParams.get('section');
   const initialTab: SettingsTab = requestedTab === 'team' || requestedTab === 'operations' ? requestedTab : 'profile';
+  const validOperationSections = ADMIN_SECTION_LINKS.map((section) => section.id);
+  const initialOperationSection: OperationsSection = validOperationSections.includes((requestedSection || '') as OperationsSection)
+    ? (requestedSection as OperationsSection)
+    : 'funnels';
 
   const {
     areasOfLaw,
@@ -117,6 +123,7 @@ export function Settings() {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [activeOperationSection, setActiveOperationSection] = useState<OperationsSection>(initialOperationSection);
   const [newAreaName, setNewAreaName] = useState('');
   const [newAreaDesc, setNewAreaDesc] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
@@ -128,6 +135,7 @@ export function Settings() {
   const [newFunnelName, setNewFunnelName] = useState('');
   const [newFunnelDescription, setNewFunnelDescription] = useState('');
   const [newFunnelOperation, setNewFunnelOperation] = useState<FunnelConfig['operation']>('commercial');
+  const [newFunnelAreaId, setNewFunnelAreaId] = useState('');
   const [stageDrafts, setStageDrafts] = useState<Record<string, StageDraft>>({});
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, FieldDraft>>({});
   const [objectionDrafts, setObjectionDrafts] = useState<Record<string, string>>({});
@@ -145,9 +153,12 @@ export function Settings() {
     () =>
       [...(funnels || [])].sort((a, b) => {
         if (a.operation !== b.operation) return a.operation.localeCompare(b.operation);
+        const areaA = areasOfLaw.find((area) => area.id === a.areaOfLawId)?.name || '';
+        const areaB = areasOfLaw.find((area) => area.id === b.areaOfLawId)?.name || '';
+        if (areaA !== areaB) return areaA.localeCompare(areaB, 'pt-BR');
         return a.name.localeCompare(b.name);
       }),
-    [funnels],
+    [areasOfLaw, funnels],
   );
 
   useEffect(() => {
@@ -181,17 +192,13 @@ export function Settings() {
   }, [activeTab, isAdmin, requestedTab, setSearchParams]);
 
   useEffect(() => {
-    if (activeTab !== 'operations') return;
-    const section = searchParams.get('section');
-    if (!section) return;
-
-    const timer = window.setTimeout(() => {
-      const element = document.getElementById(`settings-section-${section}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
-
-    return () => window.clearTimeout(timer);
-  }, [activeTab, searchParams]);
+    const nextSection: OperationsSection = validOperationSections.includes((requestedSection || '') as OperationsSection)
+      ? (requestedSection as OperationsSection)
+      : 'funnels';
+    if (nextSection !== activeOperationSection) {
+      setActiveOperationSection(nextSection);
+    }
+  }, [activeOperationSection, requestedSection, validOperationSections]);
 
   const setTab = (tab: SettingsTab) => {
     const next = new URLSearchParams(searchParams);
@@ -209,6 +216,7 @@ export function Settings() {
     next.set('section', sectionId);
     setSearchParams(next, { replace: true });
     setActiveTab('operations');
+    setActiveOperationSection(sectionId);
   };
 
   const getStageDraft = (funnelId: string) => stageDrafts[funnelId] || { name: '', color: '#D4AF37' };
@@ -265,10 +273,12 @@ export function Settings() {
       name: newFunnelName.trim(),
       description: newFunnelDescription.trim() || undefined,
       operation: newFunnelOperation,
+      areaOfLawId: newFunnelAreaId || undefined,
     });
     setNewFunnelName('');
     setNewFunnelDescription('');
     setNewFunnelOperation('commercial');
+    setNewFunnelAreaId('');
   };
 
   const handleUpdateOwnProfile = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -416,24 +426,31 @@ export function Settings() {
 
       {isAdmin && activeTab === 'operations' && (
         <div className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-2xl font-serif text-gold-400">Operação do CRM</h2>
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Centralize a estrutura do sistema num só lugar: funis, formulários, catálogo comercial e rotinas da equipe.
-              </p>
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <aside className="space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <div className="flex items-center gap-3">
+                  <BadgeHelp className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-serif font-bold text-gold-400">Operação do CRM</h2>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  Abra uma frente de configuração por vez. A intenção aqui é tirar a sensação de página infinita e deixar claro onde cada decisão mora.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
                 {ADMIN_SECTION_LINKS.map((section) => {
                   const Icon = section.icon;
+                  const isActive = activeOperationSection === section.id;
                   return (
                     <button
                       key={section.id}
                       type="button"
                       onClick={() => jumpToSection(section.id)}
-                      className="rounded-2xl border border-border bg-background/40 p-4 text-left transition-all hover:border-primary/60 hover:bg-accent/40"
+                      className={`rounded-2xl border p-4 text-left transition-all ${isActive ? 'border-primary bg-primary/10 shadow-[0_0_18px_rgba(212,175,55,0.12)]' : 'border-border bg-card hover:border-primary/60 hover:bg-accent/40'}`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-primary">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${isActive ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-background/40 text-primary'}`}>
                           <Icon className="h-5 w-5" />
                         </div>
                         <div>
@@ -445,37 +462,11 @@ export function Settings() {
                   );
                 })}
               </div>
-            </div>
+            </aside>
 
-            <div className="grid gap-3">
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <div className="flex items-center gap-3">
-                  <BadgeHelp className="h-5 w-5 text-primary" />
-                  <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Leitura rápida</h3>
-                </div>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  Esta área foi organizada para mostrar só o que ajuda a decidir. Menos ruído, menos menus paralelos e mais previsibilidade para a equipe.
-                </p>
-              </div>
+            <div className="space-y-6">
 
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Regra de experiência</h3>
-                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  <li>Os funis definem como o cadastro se comporta.</li>
-                  <li>Áreas, serviços e tarefas apoiam a operação, não concorrem com ela.</li>
-                  <li>Quando a equipe procurar algo, deve existir um único lugar óbvio para encontrar.</li>
-                </ul>
-              </div>
-
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
-                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-primary">Objetivo desta camada</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  Deixar o CRM configurável o suficiente para operar vários contextos sem virar um sistema confuso ou cheio de áreas duplicadas.
-                </p>
-              </div>
-            </div>
-          </div>
-
+          {activeOperationSection === 'funnels' && (
           <section id="settings-section-funnels" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
@@ -489,14 +480,20 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="grid gap-4 rounded-xl border border-border bg-background/40 p-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 rounded-xl border border-border bg-background/40 p-4 md:grid-cols-2 xl:grid-cols-5">
               <input type="text" placeholder="Nome do novo funil" value={newFunnelName} onChange={(event) => setNewFunnelName(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
               <select value={newFunnelOperation} onChange={(event) => setNewFunnelOperation(event.target.value as FunnelConfig['operation'])} className="rounded-lg border border-border bg-background px-4 py-2">
                 <option value="commercial">Comercial</option>
                 <option value="prospecting">Prospecção</option>
               </select>
+              <select value={newFunnelAreaId} onChange={(event) => setNewFunnelAreaId(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2">
+                <option value="">Área de atuação vinculada</option>
+                {areasOfLaw.map((area) => (
+                  <option key={area.id} value={area.id}>{area.name}</option>
+                ))}
+              </select>
               <input type="text" placeholder="Descrição curta" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2 xl:col-span-2" />
-              <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+              <div className="md:col-span-2 xl:col-span-5 flex justify-end">
                 <button onClick={handleAddFunnel} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
                   <Plus className="h-4 w-4" /> Criar funil
                 </button>
@@ -517,9 +514,20 @@ export function Settings() {
                         <input value={draft.name} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, name: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { name: draft.name.trim() || funnel.name })} className="rounded-lg border border-border bg-card px-4 py-2 font-semibold" />
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                           <span className="rounded-full border border-border px-3 py-2">{funnel.operation === 'commercial' ? 'Comercial' : 'Prospecção'}</span>
+                          {funnel.areaOfLawId && (
+                            <span className="rounded-full border border-border px-3 py-2">
+                              {areasOfLaw.find((area) => area.id === funnel.areaOfLawId)?.name || 'Área vinculada'}
+                            </span>
+                          )}
                           {isDefault && <span className="rounded-full bg-primary px-3 py-2 text-primary-foreground">Principal</span>}
                         </div>
                         <input value={draft.description} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, description: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { description: draft.description.trim() || undefined })} placeholder="Descricao do funil" className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2" />
+                        <select value={funnel.areaOfLawId || ''} onChange={(event) => updateFunnel(funnel.id, { areaOfLawId: event.target.value || undefined })} className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2">
+                          <option value="">Sem área vinculada</option>
+                          {areasOfLaw.map((area) => (
+                            <option key={area.id} value={area.id}>{area.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {!isDefault && (
@@ -823,6 +831,8 @@ export function Settings() {
               })}
             </div>
           </section>
+          )}
+          {activeOperationSection === 'areas' && (
           <section id="settings-section-areas" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Áreas de atuação</h3>
@@ -850,7 +860,9 @@ export function Settings() {
               {areasOfLaw.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhuma área cadastrada.</p>}
             </div>
           </section>
+          )}
 
+          {activeOperationSection === 'services' && (
           <section id="settings-section-services" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Serviços</h3>
@@ -894,7 +906,9 @@ export function Settings() {
               {services.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhum serviço cadastrado.</p>}
             </div>
           </section>
+          )}
 
+          {activeOperationSection === 'tasks' && (
           <section id="settings-section-tasks" className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <h3 className="text-xl font-serif text-gold-400">Tarefas padrão</h3>
@@ -922,6 +936,9 @@ export function Settings() {
               {standardTasks.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhuma tarefa padrão cadastrada.</p>}
             </div>
           </section>
+          )}
+            </div>
+          </div>
         </div>
       )}
     </div>

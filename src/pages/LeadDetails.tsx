@@ -118,8 +118,17 @@ export function LeadDetails() {
   const visibleLogs = sortedLogs.slice(0, 5);
   const hasMoreLogs = sortedLogs.length > 5;
   const sortedStages = [...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+  const currentFieldSchema = [...(currentFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
   const currentStage = sortedStages.find(s => s.id === lead.status);
   const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
+  const updateCustomField = (key: string, value: string) => {
+    updateLead(lead.id, {
+      customFields: {
+        ...(lead.customFields || {}),
+        [key]: value,
+      },
+    });
+  };
 
   const handleDeleteLead = () => {
     const confirmed = window.confirm(`Deseja realmente excluir o lead "${lead.name}"?`);
@@ -454,6 +463,44 @@ export function LeadDetails() {
           </div>
         </div>
       </section>
+
+      {currentFieldSchema.length > 0 && (
+        <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
+          <div className="border-b border-border bg-accent px-8 py-5">
+            <h2 className="text-lg font-serif font-bold">Campos específicos do funil</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Estes campos acompanham o funil atual e deixam o cadastro aderente ao contexto dele.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-5 p-8 md:grid-cols-2">
+            {currentFieldSchema.map((field) => (
+              <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2 space-y-2' : 'space-y-2'}>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                  {field.label}
+                </label>
+                {field.type === 'textarea' ? (
+                  <textarea
+                    value={lead.customFields?.[field.key] || ''}
+                    onChange={(e) => updateCustomField(field.key, e.target.value)}
+                    placeholder={field.placeholder || field.helpText || ''}
+                    className="min-h-[120px] w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
+                  />
+                ) : (
+                  <input
+                    value={lead.customFields?.[field.key] || ''}
+                    onChange={(e) => updateCustomField(field.key, e.target.value)}
+                    type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                    inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                    placeholder={field.placeholder || field.helpText || ''}
+                    className="w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
+                  />
+                )}
+                {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Left Column: Follow-ups & Actions */}

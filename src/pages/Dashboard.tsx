@@ -1,13 +1,11 @@
-﻿import { useMemo, useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CheckCircle2, FileText, GitBranchPlus, KanbanSquare, LayoutDashboard, Settings } from 'lucide-react';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, FileText, KanbanSquare, LayoutDashboard, Megaphone, Settings } from 'lucide-react';
 import { isToday, format } from 'date-fns';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getLeadIdleHours } from '@/lib/leadMetrics';
 import type { FunnelConfig } from '@/types/crm';
-
-const ALL_SCOPE = '__all__';
 
 const sortFunnels = (items: FunnelConfig[]) =>
   [...items].sort((a, b) => {
@@ -37,34 +35,14 @@ const getProspectIdleHours = (
 };
 
 export function Dashboard() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { funnels, leads, prospectLeads } = useStore();
-  const [selectedScope, setSelectedScope] = useState<string>(ALL_SCOPE);
-
-  const allFunnels = sortFunnels(funnels || []);
-
-  useEffect(() => {
-    const funnelParam = searchParams.get('funnel');
-    const operationParam = searchParams.get('operation');
-    if (funnelParam && allFunnels.some((funnel) => funnel.id === funnelParam)) {
-      setSelectedScope(funnelParam);
-      return;
-    }
-    if (operationParam === 'prospecting') {
-      setSelectedScope(allFunnels.find((funnel) => funnel.operation === 'prospecting')?.id || ALL_SCOPE);
-      return;
-    }
-    setSelectedScope(ALL_SCOPE);
-  }, [allFunnels, searchParams]);
-
-  const activeFunnel = allFunnels.find((funnel) => funnel.id === selectedScope);
   const now = Date.now();
+  const allFunnels = sortFunnels(funnels || []);
 
   const records = useMemo(() => {
     const commercial = (leads || []).map((lead) => ({
       id: lead.id,
-      kind: 'commercial' as const,
       name: lead.name,
       subtitle: lead.phone,
       status: lead.status,
@@ -82,7 +60,6 @@ export function Dashboard() {
 
     const prospecting = (prospectLeads || []).map((lead) => ({
       id: lead.id,
-      kind: 'prospecting' as const,
       name: lead.clinicName,
       subtitle: lead.contactName,
       status: lead.status,
@@ -98,10 +75,8 @@ export function Dashboard() {
       lost: lead.status === 'p_perdida',
     }));
 
-    const base = [...commercial, ...prospecting].filter((item) => !item.ownerUserId || item.ownerUserId === user?.id || user?.role === 'admin');
-    if (selectedScope === ALL_SCOPE) return base;
-    return base.filter((item) => item.funnelId === selectedScope);
-  }, [leads, prospectLeads, now, selectedScope, user?.id, user?.role]);
+    return [...commercial, ...prospecting].filter((item) => !item.ownerUserId || item.ownerUserId === user?.id || user?.role === 'admin');
+  }, [leads, prospectLeads, now, user?.id, user?.role]);
 
   const metrics = useMemo(() => {
     const total = records.length;
@@ -111,21 +86,25 @@ export function Dashboard() {
     return { total, won, stalled, dueToday, conversion: total > 0 ? (won / total) * 100 : 0 };
   }, [records]);
 
-  const stageSummary = useMemo(() => {
-    if (activeFunnel) {
-      return activeFunnel.stages.map((stage) => ({
-        id: stage.id,
-        name: stage.name,
-        total: records.filter((item) => item.status === stage.id).length,
-      }));
-    }
-
-    return allFunnels.map((funnel) => ({
-      id: funnel.id,
-      name: funnel.name,
-      total: records.filter((item) => item.funnelId === funnel.id).length,
-    }));
-  }, [activeFunnel, allFunnels, records]);
+  const priorityQueue = useMemo(
+    () =>
+      records
+        .filter((item) => !item.closed && !item.lost)
+        .map((item) => {
+          const nextFollowUp = item.followUps
+            .filter((followUp) => followUp.status === 'pendente')
+            .sort((a, b) => a.date.localeCompare(b.date))[0];
+          const overdue = nextFollowUp ? Date.parse(nextFollowUp.date) < now : item.idleHours >= 48;
+          return { ...item, nextFollowUp, overdue };
+        })
+        .sort((a, b) => {
+          if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+          if (Boolean(a.nextFollowUp) !== Boolean(b.nextFollowUp)) return a.nextFollowUp ? -1 : 1;
+          return b.idleHours - a.idleHours;
+        })
+        .slice(0, 6),
+    [now, records],
+  );
 
   const agenda = useMemo(
     () =>
@@ -159,28 +138,8 @@ export function Dashboard() {
           timestamp: log.timestamp,
         })))
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-        .slice(0, 10),
+        .slice(0, 8),
     [records],
-  );
-
-  const priorityQueue = useMemo(
-    () =>
-      records
-        .filter((item) => !item.closed && !item.lost)
-        .map((item) => {
-          const nextFollowUp = item.followUps
-            .filter((followUp) => followUp.status === 'pendente')
-            .sort((a, b) => a.date.localeCompare(b.date))[0];
-          const overdue = nextFollowUp ? Date.parse(nextFollowUp.date) < now : item.idleHours >= 48;
-          return { ...item, nextFollowUp, overdue };
-        })
-        .sort((a, b) => {
-          if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-          if (Boolean(a.nextFollowUp) !== Boolean(b.nextFollowUp)) return a.nextFollowUp ? -1 : 1;
-          return b.idleHours - a.idleHours;
-        })
-        .slice(0, 6),
-    [now, records],
   );
 
   const funnelHighlights = useMemo(
@@ -199,91 +158,36 @@ export function Dashboard() {
         })
         .filter((item) => item.total > 0)
         .sort((a, b) => b.total - a.total)
-        .slice(0, selectedScope === ALL_SCOPE ? 5 : 3),
-    [allFunnels, records, selectedScope],
+        .slice(0, 6),
+    [allFunnels, records],
   );
-
-  const handleScopeChange = (value: string) => {
-    setSelectedScope(value);
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
-      if (value === ALL_SCOPE) {
-        params.delete('funnel');
-        params.delete('operation');
-        return params;
-      }
-      const nextFunnel = allFunnels.find((funnel) => funnel.id === value);
-      if (nextFunnel) {
-        params.set('funnel', nextFunnel.id);
-        params.set('operation', nextFunnel.operation);
-      }
-      return params;
-    }, { replace: true });
-  };
-
-  const primaryKanbanLink = selectedScope === ALL_SCOPE ? '/leads' : `/leads?funnel=${selectedScope}&operation=${activeFunnel?.operation || 'commercial'}`;
-  const primaryReportLink = selectedScope === ALL_SCOPE ? '/reports' : `/reports?funnel=${selectedScope}&operation=${activeFunnel?.operation || 'commercial'}`;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-10">
-      <header className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <header className="space-y-4">
         <div>
           <h1 className="text-4xl font-serif font-bold tracking-tight gold-text-gradient md:text-5xl">Painel de Controle</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Um cockpit único para decidir o que precisa de ação agora, acompanhar funis sem navegar em áreas paralelas e operar a equipe com menos fricção.
+            A visão geral da operação fica aqui. Atalhos, prioridades, agenda e saúde dos funis sem obrigar ninguém a trocar de contexto para entender o que fazer.
           </p>
         </div>
-        <select
-          value={selectedScope}
-          onChange={(event) => handleScopeChange(event.target.value)}
-          className="min-w-[280px] rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground"
-        >
-          <option value={ALL_SCOPE}>Operação completa</option>
-          <optgroup label="Funis comerciais">
-            {allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => (
-              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-            ))}
-          </optgroup>
-          <optgroup label="Funis de prospecção">
-            {allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => (
-              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-            ))}
-          </optgroup>
-        </select>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard icon={LayoutDashboard} label="Registros na operação" value={metrics.total} />
+          <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
+          <StatCard icon={AlertTriangle} label="Parados 24h+" value={metrics.stalled} />
+          <StatCard icon={CalendarClock} label="Ações para hoje" value={metrics.dueToday} />
+        </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.95fr]">
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.24em] text-gold-500/70">Foco do dia</p>
-              <h2 className="mt-2 text-3xl font-serif font-bold">{activeFunnel ? activeFunnel.name : 'Operação completa'}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                {activeFunnel
-                  ? `Você está olhando o funil ${activeFunnel.operation === 'prospecting' ? 'de prospecção' : 'comercial'} "${activeFunnel.name}". Use os atalhos abaixo para agir rápido sem sair do contexto.`
-                  : 'Você está vendo a operação inteira. Use esta visão para priorizar gargalos, acompanhar agenda e identificar onde a equipe precisa agir primeiro.'}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard icon={LayoutDashboard} label="Registros" value={metrics.total} />
-              <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-              <StatCard icon={GitBranchPlus} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
-              <StatCard icon={AlertTriangle} label="Parados 24h+" value={metrics.stalled} />
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-2xl">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-gold-500/70">Ações rápidas</p>
-          <div className="mt-4 grid gap-3">
-            <QuickLink to={primaryKanbanLink} icon={KanbanSquare} title="Abrir Kanban" description="Trabalhar o funil selecionado" />
-            <QuickLink to={primaryReportLink} icon={FileText} title="Ver relatórios" description="Analisar desempenho por funil" compact />
-            <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Editar funis" description="Etapas, campos e playbooks" compact />
-          </div>
-        </div>
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <QuickLink to="/leads" icon={KanbanSquare} title="Gestão de leads" description="Entrar no Kanban unificado e trabalhar os funis." />
+        <QuickLink to="/reports" icon={FileText} title="Relatórios" description="Analisar desempenho e conversão por funil." />
+        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" description="Ligar tráfego, origem e entrada de oportunidades." />
+        <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Operação do CRM" description="Ajustar funis, formulários e catálogo do sistema." />
       </section>
 
-      <section className="grid grid-cols-1 gap-8 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid grid-cols-1 gap-8 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-8">
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-border bg-accent p-6">
@@ -314,16 +218,19 @@ export function Dashboard() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent p-6">
-              <h2 className="text-lg font-serif font-bold">{activeFunnel ? `Etapas do ${activeFunnel.name}` : 'Distribuição por funil'}</h2>
-              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{activeFunnel ? activeFunnel.operation : 'geral'}</span>
+            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
+              <h2 className="text-lg font-serif font-bold">Atividade recente</h2>
+              <Link to="/leads" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Abrir operação <ArrowRight className="h-3 w-3" /></Link>
             </div>
-            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2 xl:grid-cols-3">
-              {stageSummary.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border bg-background/30 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{item.name}</p>
-                  <p className="mt-2 text-3xl font-serif font-bold">{item.total}</p>
-                </div>
+            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+              {recentActivity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
+                <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-semibold">{item.label}</p>
+                    <span className="shrink-0 text-[10px] uppercase tracking-widest text-gold-500/70">{item.timestamp}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{item.content}</p>
+                </Link>
               ))}
             </div>
           </div>
@@ -348,18 +255,13 @@ export function Dashboard() {
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border bg-accent p-6">
               <h2 className="text-lg font-serif font-bold">Funis em destaque</h2>
-              <Link to="/settings?tab=operations&section=funnels" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Configurar <ArrowRight className="h-3 w-3" /></Link>
+              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">Conversão geral {metrics.conversion.toFixed(1)}%</span>
             </div>
             <div className="space-y-3 p-4">
               {funnelHighlights.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há dados suficientes para destacar funis.</p>
               ) : funnelHighlights.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleScopeChange(item.id)}
-                  className="w-full rounded-xl border border-border p-4 text-left transition-all hover:bg-accent/40"
-                >
+                <Link key={item.id} to={`/leads?funnel=${item.id}&operation=${item.operation}`} className="block rounded-xl border border-border p-4 text-left transition-all hover:bg-accent/40">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">{item.name}</p>
@@ -371,28 +273,10 @@ export function Dashboard() {
                     <span>{item.won} ganhos</span>
                     <span>{item.stalled} parados</span>
                   </div>
-                </button>
+                </Link>
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border bg-accent p-6">
-          <h2 className="text-lg font-serif font-bold">Atividade recente</h2>
-          <Link to={primaryKanbanLink} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Abrir funil <ArrowRight className="h-3 w-3" /></Link>
-        </div>
-        <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
-          {recentActivity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
-            <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
-              <div className="flex items-center justify-between gap-3">
-                <p className="truncate font-semibold">{item.label}</p>
-                <span className="shrink-0 text-[10px] uppercase tracking-widest text-gold-500/70">{item.timestamp}</span>
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">{item.content}</p>
-            </Link>
-          ))}
         </div>
       </section>
     </div>
@@ -401,21 +285,19 @@ export function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; label: string; value: string | number }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-border bg-background/40 p-4 shadow-xl">
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
-      <div>
-        <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p>
-        <p className="mt-1 text-2xl font-serif font-bold">{value}</p>
-      </div>
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-xl">
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
+      <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p>
+      <p className="mt-2 text-3xl font-serif font-bold">{value}</p>
     </div>
   );
 }
 
-function QuickLink({ to, icon: Icon, title, description, compact = false }: { to: string; icon: typeof LayoutDashboard; title: string; description: string; compact?: boolean }) {
+function QuickLink({ to, icon: Icon, title, description }: { to: string; icon: typeof LayoutDashboard; title: string; description: string }) {
   return (
-    <Link to={to} className={`rounded-2xl border border-border bg-background/40 shadow-xl transition-all hover:border-gold-500/40 ${compact ? 'p-4' : 'p-5'}`}>
-      <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary ${compact ? 'mb-3' : 'mb-4'}`}><Icon className="h-5 w-5" /></div>
-      <p className={`font-serif font-bold ${compact ? 'text-base' : 'text-lg'}`}>{title}</p>
+    <Link to={to} className="rounded-2xl border border-border bg-card p-5 shadow-xl transition-all hover:border-gold-500/40">
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
+      <p className="text-lg font-serif font-bold">{title}</p>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
     </Link>
   );

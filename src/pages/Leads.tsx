@@ -18,6 +18,23 @@ const sortFunnels = (items: FunnelConfig[]) =>
     return a.name.localeCompare(b.name, 'pt-BR');
   });
 
+const buildFunnelGroups = (items: FunnelConfig[], areas: Array<{ id: string; name: string }>) => {
+  const grouped = new Map<string, { label: string; funnels: FunnelConfig[] }>();
+  for (const funnel of items) {
+    const areaLabel = areas.find((area) => area.id === funnel.areaOfLawId)?.name;
+    const key = areaLabel || (funnel.operation === 'prospecting' ? 'Funis de prospecção sem área' : 'Funis gerais');
+    if (!grouped.has(key)) {
+      grouped.set(key, { label: key, funnels: [] });
+    }
+    grouped.get(key)!.funnels.push(funnel);
+  }
+
+  return [...grouped.values()].map((group) => ({
+    ...group,
+    funnels: group.funnels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+  }));
+};
+
 export function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
@@ -94,6 +111,14 @@ export function Leads() {
   const createIsProspecting = createFunnel?.operation === 'prospecting';
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createFieldSchema = [...(createFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
+  const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
+  const createAvailableServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
+  const commercialFunnelGroups = buildFunnelGroups(commercialFunnels, areasOfLaw);
+  const prospectingFunnelGroups = buildFunnelGroups(prospectingFunnels, areasOfLaw);
+  const createFunnelGroups = [
+    ...commercialFunnelGroups.map((group) => ({ label: `Comercial · ${group.label}`, funnels: group.funnels })),
+    ...prospectingFunnelGroups.map((group) => ({ label: `Prospecção · ${group.label}`, funnels: group.funnels })),
+  ];
 
   const scopedCommercialLeads = isAdmin
     ? (leads || [])
@@ -342,16 +367,13 @@ export function Leads() {
             onChange={(event) => handleFunnelChange(event.target.value)}
             className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[260px]"
           >
-            <optgroup label="Funis Comerciais">
-              {commercialFunnels.map((funnel) => (
-                <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Funis de Prospecção">
-              {prospectingFunnels.map((funnel) => (
-                <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-              ))}
-            </optgroup>
+            {createFunnelGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.funnels.map((funnel) => (
+                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                ))}
+              </optgroup>
+            ))}
           </select>
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button
@@ -705,29 +727,65 @@ export function Leads() {
                   name="funnelId"
                   value={createFunnel.id}
                   onChange={(event) => {
-                    setCreateFunnelId(event.target.value);
-                    setSelectedArea('');
-                  }}
-                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
-                >
-                  {allFunnels.map((funnel) => (
-                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                  ))}
-                </select>
-              </div>
+                      setCreateFunnelId(event.target.value);
+                      const nextFunnel = allFunnels.find((funnel) => funnel.id === event.target.value);
+                      setSelectedArea(nextFunnel?.areaOfLawId || '');
+                    }}
+                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                  >
+                    {createFunnelGroups.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.funnels.map((funnel) => (
+                          <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
               {createIsProspecting ? (
                 <>
-                  <input name="clinicName" required placeholder="Nome da conta ou clínica" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="contactName" required placeholder="Responsável principal" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="phone" required placeholder="Telefone ou WhatsApp" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="cnpj" placeholder="CNPJ" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="email" placeholder="E-mail" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="city" placeholder="Cidade" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="neighborhood" placeholder="Bairro" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="receptionistName" placeholder="Recepção ou contato secundário" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Conta ou clínica</label>
+                    <input name="clinicName" required placeholder="Nome da conta ou clínica" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Responsável principal</label>
+                    <input name="contactName" required placeholder="Responsável principal" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Telefone ou WhatsApp</label>
+                    <input name="phone" required placeholder="Telefone ou WhatsApp" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CNPJ</label>
+                    <input name="cnpj" placeholder="CNPJ" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">E-mail</label>
+                    <input name="email" placeholder="E-mail" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Cidade</label>
+                    <input name="city" placeholder="Cidade" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Bairro</label>
+                    <input name="neighborhood" placeholder="Bairro" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Recepção ou contato secundário</label>
+                    <input name="receptionistName" placeholder="Recepção ou contato secundário" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  </div>
+                  {createFunnelArea && (
+                    <div className="md:col-span-2 rounded-2xl border border-border bg-background/30 p-4">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gold-500/70">Área de atuação vinculada ao funil</p>
+                      <p className="mt-2 font-semibold">{createFunnelArea.name}</p>
+                      {createFunnelArea.description && <p className="mt-2 text-sm text-muted-foreground">{createFunnelArea.description}</p>}
+                    </div>
+                  )}
                   <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
                     <option value="">Serviço ofertado</option>
-                    {services.map((service) => (
+                    {createAvailableServices.map((service) => (
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </select>
@@ -788,11 +846,11 @@ export function Leads() {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Área de Atuação</label>
-                      <select name="areaOfLawId" onChange={(event) => setSelectedArea(event.target.value)} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                        <option value="">Selecione a Área</option>
-                        {areasOfLaw.map((area) => (
-                          <option key={area.id} value={area.id}>{area.name}</option>
+                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Área de Atuação</label>
+                        <select name="areaOfLawId" value={selectedArea} onChange={(event) => setSelectedArea(event.target.value)} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
+                          <option value="">Selecione a Área</option>
+                          {areasOfLaw.map((area) => (
+                            <option key={area.id} value={area.id}>{area.name}</option>
                         ))}
                       </select>
                     </div>

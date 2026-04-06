@@ -248,8 +248,8 @@ interface AppState {
   updateKanbanStage: (id: string, data: Partial<KanbanStage>) => void;
   deleteKanbanStage: (id: string) => void;
   reorderKanbanStages: (stages: KanbanStage[]) => void;
-  addFunnel: (input: { name: string; operation: FunnelConfig['operation']; description?: string }) => string;
-  updateFunnel: (id: string, data: Partial<Pick<FunnelConfig, 'name' | 'description' | 'operation' | 'playbook'>>) => void;
+  addFunnel: (input: { name: string; operation: FunnelConfig['operation']; description?: string; areaOfLawId?: string }) => string;
+  updateFunnel: (id: string, data: Partial<Pick<FunnelConfig, 'name' | 'description' | 'operation' | 'playbook' | 'areaOfLawId'>>) => void;
   duplicateFunnel: (id: string) => string | null;
   deleteFunnel: (id: string) => void;
   setDefaultFunnel: (operation: FunnelConfig['operation'], funnelId: string) => void;
@@ -1000,7 +1000,7 @@ export const useStore = create<AppState>()(
         return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
-      addFunnel: ({ name, operation, description }) => {
+      addFunnel: ({ name, operation, description, areaOfLawId }) => {
         const id = uuidv4();
         set((state) => {
           const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
@@ -1013,6 +1013,7 @@ export const useStore = create<AppState>()(
               name,
               description,
               operation,
+              areaOfLawId,
               stages: template.stages.map((stage) => ({ ...stage, id: uuidv4() })),
               fieldSchema: (template.fieldSchema || []).map((field, order) => ({ ...field, id: uuidv4(), order })),
               objections: template.objections || [],

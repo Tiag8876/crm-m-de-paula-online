@@ -91,6 +91,10 @@ export function ProspectingLeadDetails() {
       || currentFunnel,
     [currentFunnel, editForm.funnelId, prospectingFunnels],
   );
+  const currentFieldSchema = useMemo(
+    () => [...(currentFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order),
+    [currentFunnel?.fieldSchema],
+  );
   const stage = useMemo(
     () => (currentFunnel?.stages || []).find((item) => item.id === lead?.status),
     [currentFunnel?.stages, lead?.status]
@@ -110,6 +114,14 @@ export function ProspectingLeadDetails() {
   }
 
   const whatsappUrl = buildWhatsAppUrl(lead.phone);
+  const updateCustomField = (key: string, value: string) => {
+    updateProspectLead(lead.id, {
+      customFields: {
+        ...(lead.customFields || {}),
+        [key]: value,
+      },
+    });
+  };
 
   const submitNote = (event: FormEvent) => {
     event.preventDefault();
@@ -302,6 +314,42 @@ export function ProspectingLeadDetails() {
           </a>
         </div>
       </section>
+
+      {currentFieldSchema.length > 0 && (
+        <section className="bg-card border border-border rounded-2xl p-6">
+          <div className="mb-5">
+            <h2 className="text-2xl font-serif font-bold">Campos específicos do funil</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Estes campos acompanham a lógica deste funil e podem ser ajustados direto aqui.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {currentFieldSchema.map((field) => (
+              <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2 space-y-2' : 'space-y-2'}>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{field.label}</label>
+                {field.type === 'textarea' ? (
+                  <textarea
+                    value={lead.customFields?.[field.key] || ''}
+                    onChange={(e) => updateCustomField(field.key, e.target.value)}
+                    placeholder={field.placeholder || field.helpText || ''}
+                    className="min-h-[120px] w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
+                  />
+                ) : (
+                  <input
+                    value={lead.customFields?.[field.key] || ''}
+                    onChange={(e) => updateCustomField(field.key, e.target.value)}
+                    type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                    inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                    placeholder={field.placeholder || field.helpText || ''}
+                    className="w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
+                  />
+                )}
+                {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 space-y-6">
