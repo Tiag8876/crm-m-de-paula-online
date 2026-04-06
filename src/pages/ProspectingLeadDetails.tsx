@@ -4,13 +4,11 @@ import { useStore } from '@/store/useStore';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { ChevronLeft, MessageCircle, PhoneCall, CalendarPlus, CheckCircle2, Pencil, X } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
-import { isAdminUser } from '@/lib/access';
 
 export function ProspectingLeadDetails() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { user, users, fetchUsers } = useAuthStore();
-  const isAdmin = isAdminUser(user);
+  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
     prospectLeads,
     prospectKanbanStages,
@@ -56,10 +54,8 @@ export function ProspectingLeadDetails() {
   });
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchUsers().catch(() => null);
-    }
-  }, [isAdmin, fetchUsers]);
+    fetchAssignableUsers().catch(() => null);
+  }, [fetchAssignableUsers]);
 
   useEffect(() => {
     if (!lead) return;
@@ -83,7 +79,7 @@ export function ProspectingLeadDetails() {
     () => (prospectKanbanStages || []).find((item) => item.id === lead?.status),
     [prospectKanbanStages, lead?.status]
   );
-  const assignableUsers = (users || []).filter((u) => u.active);
+  const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
   if (!lead) {
     return (
@@ -449,21 +445,19 @@ export function ProspectingLeadDetails() {
               ))}
             </select>
           </section>
-          {isAdmin && (
-            <section className="bg-card border border-border rounded-2xl p-6 space-y-2">
-              <h3 className="font-serif font-bold text-xl">Atribuição</h3>
-              <select
-                value={lead.ownerUserId || ''}
-                onChange={(e) => updateProspectLead(lead.id, { ownerUserId: e.target.value || undefined })}
-                className="w-full rounded-lg border border-border bg-background p-2 text-sm"
-              >
-                <option value="">Sem atribuição (visível para vendedores)</option>
-                {assignableUsers.map((assignableUser) => (
-                    <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
-                  ))}
-              </select>
-            </section>
-          )}
+          <section className="bg-card border border-border rounded-2xl p-6 space-y-2">
+            <h3 className="font-serif font-bold text-xl">Atribui??o</h3>
+            <select
+              value={lead.ownerUserId || ''}
+              onChange={(e) => updateProspectLead(lead.id, { ownerUserId: e.target.value || undefined })}
+              className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+            >
+              <option value="">Sem atribui??o (vis?vel para vendedores)</option>
+              {selectableUsers.map((assignableUser) => (
+                <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
+              ))}
+            </select>
+          </section>
         </div>
       </section>
 
@@ -591,7 +585,7 @@ export function ProspectingLeadDetails() {
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
                   <option value="">Sem atribuição</option>
-                  {assignableUsers.map((assignableUser) => (
+                  {selectableUsers.map((assignableUser) => (
                       <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
                     ))}
                 </select>

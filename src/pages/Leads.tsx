@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback } from 'react';
+﻿import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Link } from 'react-router-dom';
@@ -6,9 +6,10 @@ import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { isAdminUser } from '@/lib/access';
+import { HorizontalScrollRail } from '@/components/HorizontalScrollRail';
 
 export function Leads() {
-  const { user } = useAuthStore();
+  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const { leads, campaigns, addLead, updateLead, kanbanStages, areasOfLaw, services } = useStore();
   const isAdmin = isAdminUser(user);
 
@@ -29,6 +30,11 @@ export function Leads() {
   const scrollIntervalRef = useRef<number | null>(null);
 
   const sortedStages = [...kanbanStages].sort((a, b) => a.order - b.order);
+  const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
+
+  useEffect(() => {
+    fetchAssignableUsers().catch(() => null);
+  }, [fetchAssignableUsers]);
 
   const scopedLeads = isAdmin
     ? (leads || [])
@@ -66,7 +72,7 @@ export function Leads() {
         serviceId: formData.get('serviceId') as string,
         estimatedValue: Number(formData.get('estimatedValue')) || 0,
         status: sortedStages[0]?.id || 'novo',
-        ownerUserId: isAdmin ? undefined : user?.id,
+        ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
       });
       setShowLeadSaveSuccess(true);
       window.setTimeout(() => {
@@ -277,9 +283,11 @@ export function Leads() {
       )}
 
       {viewMode === 'kanban' ? (
+        <>
         <div
           ref={scrollContainerRef}
-          className="flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[600px]"
+          data-scroll-rail-id="main-leads-kanban"
+          className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[600px]"
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragLeave={stopAutoScroll}
@@ -338,6 +346,8 @@ export function Leads() {
             </div>
           ))}
         </div>
+        <HorizontalScrollRail containerRef={scrollContainerRef} className="sticky bottom-0 z-10" />
+        </>
       ) : (
         <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
           <table className="w-full text-left text-sm text-muted-foreground">
@@ -456,6 +466,19 @@ export function Leads() {
                 <div>
                   <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CPF</label>
                   <input name="cpf" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Respons?vel</label>
+                  <select
+                    name="ownerUserId"
+                    defaultValue={isAdmin ? '' : user?.id || ''}
+                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
+                  >
+                    <option value="">Sem atribui??o definida</option>
+                    {activeAssignableUsers.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="md:col-span-2 flex justify-end gap-4 mt-8 pt-6 border-t border-border">

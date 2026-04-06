@@ -12,12 +12,11 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
-import { isAdminUser } from '@/lib/access';
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, users, fetchUsers } = useAuthStore();
+  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
     leads, campaigns, adGroups, ads, areasOfLaw, services, standardTasks, kanbanStages,
     updateLead, deleteLead, addNoteToLead, updateNoteInLead, deleteNoteFromLead,
@@ -59,10 +58,8 @@ export function LeadDetails() {
   const [followUpTime, setFollowUpTime] = useState('09:00');
   const [followUpNotes, setFollowUpNotes] = useState('');
   useEffect(() => {
-    if (isAdminUser(user)) {
-      fetchUsers().catch(() => null);
-    }
-  }, [user, fetchUsers]);
+    fetchAssignableUsers().catch(() => null);
+  }, [fetchAssignableUsers]);
 
   useEffect(() => {
     if (!lead) return;
@@ -116,7 +113,7 @@ export function LeadDetails() {
   const hasMoreLogs = sortedLogs.length > 5;
   const sortedStages = [...kanbanStages].sort((a, b) => a.order - b.order);
   const currentStage = kanbanStages.find(s => s.id === lead.status);
-  const assignableUsers = (users || []).filter((u) => u.active);
+  const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
   const handleDeleteLead = () => {
     const confirmed = window.confirm(`Deseja realmente excluir o lead "${lead.name}"?`);
@@ -436,7 +433,7 @@ export function LeadDetails() {
               className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary w-full"
             >
               <option value="">Selecione um vendedor</option>
-              {assignableUsers.map((assignableUser) => (
+              {selectableUsers.map((assignableUser) => (
                 <option key={assignableUser.id} value={assignableUser.id}>
                   {assignableUser.name}
                 </option>
@@ -916,7 +913,7 @@ export function LeadDetails() {
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
                   <option value="">Sem atribuição</option>
-                  {assignableUsers.map((assignableUser) => (
+                  {selectableUsers.map((assignableUser) => (
                     <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
                   ))}
                 </select>

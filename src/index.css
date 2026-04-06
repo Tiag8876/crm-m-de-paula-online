@@ -77,6 +77,8 @@
 
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
+    height: 10px;
+    display: block !important;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
@@ -84,6 +86,23 @@
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background-color: hsl(var(--gold-500));
     border-radius: 20px;
+  }
+
+  .scrollbar-visible {
+    scrollbar-width: thin !important;
+    scrollbar-color: hsl(var(--gold-500)) transparent !important;
+  }
+  .scrollbar-visible::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+    display: block !important;
+  }
+  .scrollbar-visible::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  .scrollbar-visible::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--gold-500)) !important;
+    border-radius: 9999px !important;
   }
 
   .scrollbar-none {

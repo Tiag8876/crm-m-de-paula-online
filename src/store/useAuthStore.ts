@@ -16,16 +16,26 @@ interface CreateUserInput {
 interface UpdateUserInput {
   name?: string;
   email?: string;
+  avatarUrl?: string;
   password?: string;
   role?: UserRole;
   sector?: string;
   active?: boolean;
 }
 
+interface UpdateOwnProfileInput {
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
+
 interface AuthState {
   token: string | null;
   user: AppUser | null;
   users: AppUser[];
+  assignableUsers: AppUser[];
   loading: boolean;
   error: string | null;
 
@@ -33,8 +43,10 @@ interface AuthState {
   logout: () => void;
   fetchMe: () => Promise<void>;
   fetchUsers: () => Promise<void>;
+  fetchAssignableUsers: () => Promise<void>;
   createUser: (input: CreateUserInput) => Promise<void>;
   updateUser: (id: string, input: UpdateUserInput) => Promise<void>;
+  updateOwnProfile: (input: UpdateOwnProfileInput) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   setError: (message: string | null) => void;
 }
@@ -45,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       users: [],
+      assignableUsers: [],
       loading: false,
       error: null,
 
@@ -62,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('lawcrm-token');
-        set({ token: null, user: null, users: [], error: null });
+        set({ token: null, user: null, users: [], assignableUsers: [], error: null });
       },
 
       fetchMe: async () => {
@@ -78,7 +91,7 @@ export const useAuthStore = create<AuthState>()(
           set({ user: data.user, loading: false });
         } catch (error) {
           localStorage.removeItem('lawcrm-token');
-          set({ token: null, user: null, loading: false, users: [] });
+          set({ token: null, user: null, loading: false, users: [], assignableUsers: [] });
           throw error;
         }
       },
@@ -91,6 +104,11 @@ export const useAuthStore = create<AuthState>()(
         set({ users: data.users });
       },
 
+      fetchAssignableUsers: async () => {
+        const data = await api.get<{ users: AppUser[] }>('/api/users/assignable');
+        set({ assignableUsers: data.users });
+      },
+
       createUser: async (input) => {
         await api.post('/api/users', input);
         await get().fetchUsers();
@@ -101,6 +119,15 @@ export const useAuthStore = create<AuthState>()(
         await get().fetchUsers();
         if (get().user?.id === id) {
           await get().fetchMe();
+        }
+      },
+
+      updateOwnProfile: async (input) => {
+        const data = await api.put<{ user: AppUser }>('/api/profile', input);
+        set({ user: data.user });
+        await get().fetchAssignableUsers().catch(() => null);
+        if (isAdminUser(data.user)) {
+          await get().fetchUsers().catch(() => null);
         }
       },
 

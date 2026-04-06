@@ -1,28 +1,29 @@
-import { FormEvent, useEffect, useState } from 'react';
+﻿import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Plus, Search, Phone, MessageCircle, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { isAdminUser } from '@/lib/access';
+import { HorizontalScrollRail } from '@/components/HorizontalScrollRail';
 
 export function ProspectingLeads() {
-  const { user, users, fetchUsers } = useAuthStore();
+  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const { prospectLeads, prospectKanbanStages, addProspectLead, services } = useStore();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [openModal, setOpenModal] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = isAdminUser(user);
+  const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
   const scopedLeads = isAdmin
     ? (prospectLeads || [])
     : (prospectLeads || []).filter((lead) => !lead.ownerUserId || lead.ownerUserId === user?.id);
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchUsers().catch(() => null);
-    }
-  }, [isAdmin, fetchUsers]);
+    fetchAssignableUsers().catch(() => null);
+  }, [fetchAssignableUsers]);
 
   const sortedStages = [...(prospectKanbanStages || [])].sort((a, b) => a.order - b.order);
   const filteredLeads = scopedLeads.filter((lead) => {
@@ -49,7 +50,7 @@ export function ProspectingLeads() {
       neighborhood: String(form.get('neighborhood') || '') || undefined,
       serviceId: String(form.get('serviceId') || '') || undefined,
       status: sortedStages[0]?.id || 'p_novo',
-      ownerUserId: isAdmin ? (String(form.get('ownerUserId') || '') || undefined) : user?.id,
+      ownerUserId: String(form.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
     });
     setOpenModal(false);
   };
@@ -99,72 +100,75 @@ export function ProspectingLeads() {
       </div>
 
       {viewMode === 'kanban' ? (
-        <div className="flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[560px]">
-          {sortedStages.map((stage) => (
-            <div key={stage.id} className="flex-shrink-0 w-80 space-y-4">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="font-serif font-bold">{stage.name}</h3>
-                <span className="text-[10px] bg-accent px-2 py-1 rounded-full">
-                  {filteredLeads.filter((lead) => lead.status === stage.id).length}
-                </span>
-              </div>
-              <div className="min-h-[500px] rounded-2xl border border-border bg-accent/40 p-3 space-y-3">
-                {filteredLeads.filter((lead) => lead.status === stage.id).map((lead) => {
-                  const whatsappUrl = buildWhatsAppUrl(lead.phone);
-                  return (
-                    <div key={lead.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-serif font-bold text-foreground">{lead.clinicName}</p>
-                          <p className="text-xs text-muted-foreground">{lead.contactName}</p>
+        <>
+          <div ref={scrollContainerRef} data-scroll-rail-id="prospecting-kanban" className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[560px]">
+            {sortedStages.map((stage) => (
+              <div key={stage.id} className="flex-shrink-0 w-80 space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="font-serif font-bold">{stage.name}</h3>
+                  <span className="text-[10px] bg-accent px-2 py-1 rounded-full">
+                    {filteredLeads.filter((lead) => lead.status === stage.id).length}
+                  </span>
+                </div>
+                <div className="min-h-[500px] rounded-2xl border border-border bg-accent/40 p-3 space-y-3">
+                  {filteredLeads.filter((lead) => lead.status === stage.id).map((lead) => {
+                    const whatsappUrl = buildWhatsAppUrl(lead.phone);
+                    return (
+                      <div key={lead.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-serif font-bold text-foreground">{lead.clinicName}</p>
+                            <p className="text-xs text-muted-foreground">{lead.contactName}</p>
+                          </div>
+                          <Link to={`/prospecting/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary">
+                            Editar
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
                         </div>
-                        <Link to={`/prospecting/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary">
-                          Editar
-                          <ChevronRight className="w-4 h-4" />
-                        </Link>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Phone className="w-3 h-3" /> {lead.phone}
-                      </div>
-                      <div className="flex gap-2">
-                        {whatsappUrl && (
-                          <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border hover:border-emerald-500 hover:text-emerald-500"
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Phone className="w-3 h-3" /> {lead.phone}
+                        </div>
+                        <div className="flex gap-2">
+                          {whatsappUrl && (
+                            <a
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border hover:border-emerald-500 hover:text-emerald-500"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              WhatsApp
+                            </a>
+                          )}
+                          <select
+                            value={lead.status}
+                            onChange={(e) => moveToStage(lead.id, e.target.value)}
+                            className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border bg-background"
                           >
-                            <MessageCircle className="w-3 h-3" />
-                            WhatsApp
-                          </a>
-                        )}
-                        <select
-                          value={lead.status}
-                          onChange={(e) => moveToStage(lead.id, e.target.value)}
-                          className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border bg-background"
-                        >
-                          {sortedStages.map((item) => (
-                            <option key={item.id} value={item.id}>{item.name}</option>
-                          ))}
-                        </select>
+                            {sortedStages.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <HorizontalScrollRail containerRef={scrollContainerRef} className="sticky bottom-0 z-10" />
+        </>
       ) : (
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className="bg-accent text-xs uppercase tracking-[0.2em]">
               <tr>
-                <th className="px-6 py-4">Clinica</th>
+                <th className="px-6 py-4">Clínica</th>
                 <th className="px-6 py-4">Contato</th>
                 <th className="px-6 py-4">Telefone</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Acoes</th>
+                <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -203,21 +207,17 @@ export function ProspectingLeads() {
               <input name="neighborhood" placeholder="Bairro (opcional)" className="px-3 py-2 rounded-lg bg-background border border-border" />
               <input name="receptionistName" placeholder="Recepcionista (opcional)" className="px-3 py-2 rounded-lg bg-background border border-border" />
               <select name="serviceId" className="px-3 py-2 rounded-lg bg-background border border-border md:col-span-2">
-                <option value="">Servico ofertado (opcional)</option>
+                <option value="">Serviço ofertado (opcional)</option>
                 {(services || []).map((service) => (
                   <option key={service.id} value={service.id}>{service.name}</option>
                 ))}
               </select>
-              {isAdmin && (
-                <select name="ownerUserId" className="px-3 py-2 rounded-lg bg-background border border-border md:col-span-2">
-                  <option value="">Sem atribuicao (visivel para vendedores)</option>
-                  {(users || [])
-                    .filter((u) => u.active && u.role !== 'admin')
-                    .map((salesUser) => (
-                      <option key={salesUser.id} value={salesUser.id}>{salesUser.name}</option>
-                    ))}
-                </select>
-              )}
+              <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="px-3 py-2 rounded-lg bg-background border border-border md:col-span-2">
+                <option value="">Sem atribuição (visível para vendedores)</option>
+                {activeAssignableUsers.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                ))}
+              </select>
               <div className="md:col-span-2 flex justify-end gap-3 mt-2">
                 <button type="button" onClick={() => setOpenModal(false)} className="px-4 py-2 rounded-lg border border-border">Cancelar</button>
                 <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-bold">Salvar</button>

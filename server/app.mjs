@@ -124,6 +124,7 @@ const runMigrations = async () => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
+      avatar_url TEXT,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','user')),
       sector TEXT NOT NULL,
@@ -147,6 +148,8 @@ const runMigrations = async () => {
       created_at TIMESTAMPTZ NOT NULL
     );
   `);
+
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
 
   await query(
     `INSERT INTO app_state (id, state_json, updated_at, updated_by)
@@ -229,6 +232,7 @@ const toPublicUser = (row) => ({
   id: row.id,
   name: row.name,
   email: row.email,
+  avatarUrl: row.avatar_url || undefined,
   role: row.role,
   sector: row.sector,
   active: Boolean(row.active),
@@ -296,7 +300,9 @@ const mergeOwnedEntities = (existingItems, incomingItems, userId) => {
     if (!canEdit) return item;
     const incomingVersion = incomingById.get(item.id);
     if (!incomingVersion) return item;
-    const nextOwner = incomingVersion?.ownerUserId === userId ? userId : item?.ownerUserId || undefined;
+    const nextOwner = Object.prototype.hasOwnProperty.call(incomingVersion, "ownerUserId")
+      ? incomingVersion?.ownerUserId || undefined
+      : item?.ownerUserId || undefined;
     return { ...incomingVersion, ownerUserId: nextOwner };
   });
 
@@ -304,7 +310,7 @@ const mergeOwnedEntities = (existingItems, incomingItems, userId) => {
     if (!item?.id) continue;
     const exists = existing.some((current) => current?.id === item.id);
     if (exists) continue;
-    next.push({ ...item, ownerUserId: userId });
+    next.push({ ...item, ownerUserId: item?.ownerUserId || userId });
   }
 
   return next;
@@ -508,6 +514,13 @@ app.get(["/api/users", "/users"], authRequired, adminRequired, async (_req, res)
   res.json({ users: result.rows.map(toPublicUser) });
 });
 
+app.get(["/api/users/assignable", "/users/assignable", "/api/users-assignable", "/users-assignable"], authRequired, async (_req, res) => {
+  const result = await query(
+    "SELECT * FROM users WHERE active = TRUE ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, name ASC"
+  );
+  res.json({ users: result.rows.map(toPublicUser) });
+});
+
 app.post(["/api/users", "/users"], authRequired, adminRequired, async (req, res) => {
   const { name, email, password, role, sector, active } = req.body || {};
   if (!name || !email || !password || !role || !sector) {
@@ -544,9 +557,10 @@ app.put(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (re
     return res.status(404).json({ message: "Usuario nao encontrado" });
   }
 
-  const { name, email, role, sector, active, password } = req.body || {};
+  const { name, email, avatarUrl, role, sector, active, password } = req.body || {};
   const nextName = name ?? current.name;
   const nextEmail = email ? String(email).toLowerCase() : current.email;
+  const nextAvatarUrl = typeof avatarUrl === "string" ? avatarUrl.trim() || null : current.avatar_url;
   const nextRole = role ?? current.role;
   const nextSector = sector ?? current.sector;
   const nextActive = typeof active === "boolean" ? active : current.active;
@@ -565,13 +579,56 @@ app.put(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (re
 
   await query(
     `UPDATE users
-     SET name = $1, email = $2, password_hash = $3, role = $4, sector = $5, active = $6, updated_at = $7
-     WHERE id = $8`,
-    [nextName, nextEmail, passwordHash, nextRole, nextSector, nextActive, now, id]
+     SET name = $1, email = $2, avatar_url = $3, password_hash = $4, role = $5, sector = $6, active = $7, updated_at = $8
+     WHERE id = $9`,
+    [nextName, nextEmail, nextAvatarUrl, passwordHash, nextRole, nextSector, nextActive, now, id]
   );
 
   const updated = await query("SELECT * FROM users WHERE id = $1", [id]);
   await audit(req.user.id, "user_updated", `id=${id}`);
+  return res.json({ user: toPublicUser(updated.rows[0]) });
+});
+
+app.put(["/api/profile", "/profile", "/api/profile-update", "/profile-update"], authRequired, async (req, res) => {
+  const currentResult = await query("SELECT * FROM users WHERE id = $1", [req.user.id]);
+  const current = currentResult.rows[0];
+  if (!current) {
+    return res.status(404).json({ message: "Usuario nao encontrado" });
+  }
+
+  const { name, email, avatarUrl, currentPassword, newPassword } = req.body || {};
+  const wantsSensitiveChange = typeof email === "string" || typeof newPassword === "string";
+
+  if (wantsSensitiveChange) {
+    if (!currentPassword || !bcrypt.compareSync(String(currentPassword), current.password_hash)) {
+      return res.status(400).json({ message: "Senha atual invalida para alterar email ou senha" });
+    }
+  }
+
+  const nextName = typeof name === "string" && name.trim() ? name.trim() : current.name;
+  const nextEmail = typeof email === "string" && email.trim() ? email.trim().toLowerCase() : current.email;
+  const nextAvatarUrl = typeof avatarUrl === "string" ? avatarUrl.trim() || null : current.avatar_url;
+
+  const emailOwner = await query("SELECT id FROM users WHERE email = $1 AND id <> $2", [nextEmail, req.user.id]);
+  if (emailOwner.rows[0]) {
+    return res.status(409).json({ message: "Email ja utilizado por outro usuario" });
+  }
+
+  const nextPasswordHash =
+    typeof newPassword === "string" && newPassword.trim()
+      ? bcrypt.hashSync(String(newPassword), 10)
+      : current.password_hash;
+
+  const now = new Date().toISOString();
+  await query(
+    `UPDATE users
+     SET name = $1, email = $2, avatar_url = $3, password_hash = $4, updated_at = $5
+     WHERE id = $6`,
+    [nextName, nextEmail, nextAvatarUrl, nextPasswordHash, now, req.user.id]
+  );
+
+  const updated = await query("SELECT * FROM users WHERE id = $1", [req.user.id]);
+  await audit(req.user.id, "profile_updated", "Perfil atualizado pelo proprio usuario");
   return res.json({ user: toPublicUser(updated.rows[0]) });
 });
 

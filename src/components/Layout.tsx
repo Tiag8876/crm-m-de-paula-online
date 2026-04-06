@@ -43,6 +43,12 @@ export function Layout() {
       });
 
   const showProspecting = isAdminUser(user) || profile === 'commercial';
+  const userInitials = (user?.name || 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 
   const unreadCount = (notifications || []).filter((item) => !item.read).length;
 
@@ -130,7 +136,11 @@ export function Layout() {
           <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-accent border border-border">
             <div className="w-10 h-10 rounded-full gold-gradient p-[1px]">
               <div className="w-full h-full rounded-full bg-card flex items-center justify-center overflow-hidden">
-                <Users className="w-5 h-5 text-primary" />
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-xs font-black uppercase tracking-widest text-primary">{userInitials}</span>
+                )}
               </div>
             </div>
             <div className="overflow-hidden">

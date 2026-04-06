@@ -18,7 +18,7 @@ import { getUserAccessProfile, isAdminUser } from '@/lib/access';
 import { getApiBase } from '@/lib/apiConfig';
 
 export function Settings() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateOwnProfile } = useAuthStore();
   const {
     mode,
     database,
@@ -63,6 +63,20 @@ export function Settings() {
   const [newStageName, setNewStageName] = useState('');
   const [newStageColor, setNewStageColor] = useState('#D4AF37');
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
+  const [profileNewPassword, setProfileNewPassword] = useState('');
+  const [profileConfirmPassword, setProfileConfirmPassword] = useState('');
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProfileName(user?.name || '');
+    setProfileEmail(user?.email || '');
+    setProfileAvatarUrl(user?.avatarUrl || '');
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -138,6 +152,33 @@ export function Settings() {
     addKanbanStage(newStageName, newStageColor);
     setNewStageName('');
     setNewStageColor('#D4AF37');
+  };
+
+  const handleUpdateOwnProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProfileError(null);
+    setProfileMessage(null);
+
+    if (profileNewPassword && profileNewPassword !== profileConfirmPassword) {
+      setProfileError('A confirmacao da nova senha nao confere.');
+      return;
+    }
+
+    try {
+      await updateOwnProfile({
+        name: profileName.trim(),
+        email: profileEmail.trim(),
+        avatarUrl: profileAvatarUrl.trim(),
+        currentPassword: profileCurrentPassword || undefined,
+        newPassword: profileNewPassword || undefined,
+      });
+      setProfileCurrentPassword('');
+      setProfileNewPassword('');
+      setProfileConfirmPassword('');
+      setProfileMessage('Perfil atualizado com sucesso.');
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Falha ao atualizar perfil.');
+    }
   };
 
   const moveStage = (id: string, direction: 'up' | 'down') => {
@@ -232,6 +273,46 @@ export function Settings() {
             <div className="mt-4 rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
               Este bloco e alimentado pelo backend online e pelo estado real de sincronizacao. Ele serve para validar se os dados estao indo para o servidor.
             </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h2 className="mb-4 text-xl font-serif text-gold-400">Meu Perfil</h2>
+            <form onSubmit={handleUpdateOwnProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Nome exibido</label>
+                <input value={profileName} onChange={(event) => setProfileName(event.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Email de acesso</label>
+                <input value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} type="email" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Foto de perfil (URL)</label>
+                <input value={profileAvatarUrl} onChange={(event) => setProfileAvatarUrl(event.target.value)} placeholder="https://..." className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Senha atual</label>
+                <input value={profileCurrentPassword} onChange={(event) => setProfileCurrentPassword(event.target.value)} type="password" placeholder="Obrigatoria para trocar email ou senha" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Nova senha</label>
+                <input value={profileNewPassword} onChange={(event) => setProfileNewPassword(event.target.value)} type="password" placeholder="Deixe em branco para manter" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Confirmar nova senha</label>
+                <input value={profileConfirmPassword} onChange={(event) => setProfileConfirmPassword(event.target.value)} type="password" placeholder="Repita a nova senha" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+              </div>
+              <div className="md:col-span-2 flex items-center justify-between gap-4">
+                <div className="text-xs text-muted-foreground">
+                  Alteracoes sensiveis usam o backend online e atualizam sua sessao atual.
+                </div>
+                <button type="submit" className="rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
+                  Salvar Perfil
+                </button>
+              </div>
+              {profileMessage && <p className="md:col-span-2 text-sm text-emerald-400">{profileMessage}</p>}
+              {profileError && <p className="md:col-span-2 text-sm text-red-400">{profileError}</p>}
+            </form>
           </div>
 
           {!isAdmin && (
