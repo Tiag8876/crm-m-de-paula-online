@@ -25,6 +25,15 @@ const pickState = (state: ReturnType<typeof useStore.getState>) => ({
   dailyInsight: state.dailyInsight,
 });
 
+const isSnapshotNewer = (capturedAt?: string | null, updatedAt?: string | null) => {
+  if (!capturedAt) return false;
+  if (!updatedAt) return true;
+  const snapshotTime = new Date(capturedAt).getTime();
+  const serverTime = new Date(updatedAt).getTime();
+  if (Number.isNaN(snapshotTime) || Number.isNaN(serverTime)) return false;
+  return snapshotTime > serverTime;
+};
+
 export function StateSyncProvider() {
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
@@ -91,6 +100,7 @@ export function StateSyncProvider() {
 
     const load = async () => {
       try {
+        const snapshot = getOfflineSnapshot();
         const health = await fetch('/api/health', { cache: 'no-store' });
         const healthJson = await health.json().catch(() => ({}));
         setRuntimeInfo({
@@ -101,18 +111,30 @@ export function StateSyncProvider() {
         });
 
         const data = await api.get<{ state: ReturnType<typeof pickState>; updatedAt?: string }>('/api/state');
-        const normalizedState = normalizePtBrDeep(data.state);
+        const shouldPreferSnapshot = isSnapshotNewer(snapshot?.capturedAt, data.updatedAt || null);
+        const sourceState = shouldPreferSnapshot && snapshot?.state ? snapshot.state : data.state;
+        const normalizedState = normalizePtBrDeep(sourceState);
         skipNextRef.current = true;
         useStore.setState((current) => ({ ...current, ...normalizedState }));
         saveOfflineSnapshot(normalizedState as unknown as Record<string, unknown>);
         lastServerUpdatedAtRef.current = data.updatedAt || null;
-        setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
+        if (shouldPreferSnapshot && snapshot?.state) {
+          pendingStateRef.current = normalizedState as ReturnType<typeof pickState>;
+          setSyncState({
+            syncState: 'error',
+            syncError: 'Snapshot local mais recente encontrado. Tentando reenviar ao servidor.',
+            lastSyncAt: data.updatedAt || null,
+          });
+        } else {
+          setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
+        }
       } catch {
         const snapshot = getOfflineSnapshot();
         if (snapshot?.state) {
           const normalizedState = normalizePtBrDeep(snapshot.state);
           skipNextRef.current = true;
           useStore.setState((current) => ({ ...current, ...normalizedState }));
+          pendingStateRef.current = normalizedState as ReturnType<typeof pickState>;
         }
         setSyncState({ syncState: 'error', syncError: 'Falha ao carregar dados iniciais do servidor' });
         // fallback: keep local state
@@ -124,6 +146,7 @@ export function StateSyncProvider() {
         if (mounted) {
           setLoading(false);
         }
+        flushPendingState();
       }
     };
 
