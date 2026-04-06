@@ -1,6 +1,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign, CheckCircle2, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
@@ -37,6 +37,7 @@ const buildFunnelGroups = (items: FunnelConfig[], areas: Array<{ id: string; nam
 };
 
 export function Leads() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
@@ -72,6 +73,7 @@ export function Leads() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
+  const draggedRecordIdRef = useRef<string | null>(null);
 
   const allFunnels = sortFunnels(funnels || []);
   const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
@@ -113,9 +115,14 @@ export function Leads() {
   const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createIsProspecting = createFunnel?.operation === 'prospecting';
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
-  const createFieldSchema = [...(createFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
   const createEffectiveFieldSchema = buildEffectiveFieldSchema(createFunnel);
   const createFieldMap = new Map(createEffectiveFieldSchema.map((field) => [field.key, field]));
+  const createBaseFieldKeys = new Set(
+    (createIsProspecting
+      ? ['clinicName', 'contactName', 'phone', 'email', 'cnpj', 'city', 'neighborhood', 'receptionistName']
+      : ['name', 'phone', 'email', 'cpf'])
+  );
+  const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => !createBaseFieldKeys.has(field.key));
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAvailableServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
   const commercialFunnelGroups = buildFunnelGroups(commercialFunnels, areasOfLaw);
@@ -208,7 +215,7 @@ export function Leads() {
   };
 
   const collectCustomFields = (formData: FormData) =>
-    createFieldSchema.reduce<Record<string, string>>((acc, field) => {
+    createCustomFieldSchema.reduce<Record<string, string>>((acc, field) => {
       const rawValue = formData.get(`customField:${field.key}`);
       const value = typeof rawValue === 'string' ? rawValue.trim() : '';
       if (value) {
@@ -274,6 +281,7 @@ export function Leads() {
   };
 
   const onDragStart = (event: React.DragEvent, id: string) => {
+    draggedRecordIdRef.current = id;
     event.dataTransfer.setData('recordId', id);
   };
 
@@ -283,6 +291,11 @@ export function Leads() {
       scrollIntervalRef.current = null;
     }
   }, []);
+
+  const handleCardOpen = (path: string, id: string) => {
+    if (draggedRecordIdRef.current === id) return;
+    navigate(path);
+  };
 
   const startAutoScroll = useCallback((speed: number) => {
     if (scrollIntervalRef.current !== null) return;
@@ -512,13 +525,25 @@ export function Leads() {
                   {filteredProspectLeads.filter((lead) => lead.status === stage.id).map((lead) => {
                     const whatsappUrl = buildWhatsAppUrl(lead.phone);
                     return (
-                      <div key={lead.id} draggable onDragStart={(event) => onDragStart(event, lead.id)} onDragEnd={stopAutoScroll} className="rounded-xl border border-border bg-card p-4 space-y-3 cursor-grab active:cursor-grabbing">
+                      <div
+                        key={lead.id}
+                        draggable
+                        onDragStart={(event) => onDragStart(event, lead.id)}
+                        onDragEnd={() => {
+                          stopAutoScroll();
+                          window.setTimeout(() => {
+                            draggedRecordIdRef.current = null;
+                          }, 0);
+                        }}
+                        onClick={() => handleCardOpen(`/prospecting/leads/${lead.id}`, lead.id)}
+                        className="rounded-xl border border-border bg-card p-4 space-y-3 cursor-pointer hover:border-gold-500/40 active:cursor-grabbing"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-serif font-bold text-foreground">{lead.clinicName}</p>
                             <p className="text-xs text-muted-foreground">{lead.contactName}</p>
                           </div>
-                          <Link to={`/prospecting/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary">
+                          <Link to={`/prospecting/leads/${lead.id}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary">
                             Editar
                             <ChevronRight className="w-4 h-4" />
                           </Link>
@@ -536,16 +561,17 @@ export function Leads() {
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           {whatsappUrl && (
-                            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border hover:border-emerald-500 hover:text-emerald-500">
+                            <a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border hover:border-emerald-500 hover:text-emerald-500">
                               <MessageCircle className="w-3 h-3" />
                               WhatsApp
                             </a>
                           )}
-                          <select
-                            value={lead.status}
-                            onChange={(event) => updateProspectLead(lead.id, { status: event.target.value })}
-                            className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border bg-background"
-                          >
+                            <select
+                              value={lead.status}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) => updateProspectLead(lead.id, { status: event.target.value })}
+                              className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border bg-background"
+                            >
                             {sortedStages.map((item) => (
                               <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
@@ -580,14 +606,17 @@ export function Leads() {
                     const stage = sortedStages.find((item) => item.id === lead.status);
                     const whatsappUrl = buildWhatsAppUrl(lead.phone);
                     return (
-                      <tr key={lead.id} className="border-t border-border">
+                      <tr
+                        key={lead.id}
+                        onClick={() => navigate(`/prospecting/leads/${lead.id}`)}
+                        className="cursor-pointer border-t border-border hover:bg-accent/60">
                         <td className="px-6 py-4 font-semibold">{lead.clinicName}</td>
                         <td className="px-6 py-4">{lead.contactName}</td>
                         <td className="px-6 py-4">{lead.phone}</td>
                         <td className="px-6 py-4">{stage?.name || lead.status}</td>
                         <td className="px-6 py-4 text-right space-x-4">
                           {whatsappUrl && <a href={whatsappUrl} target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">WhatsApp</a>}
-                          <Link to={`/prospecting/leads/${lead.id}`} className="text-primary hover:underline">Editar</Link>
+                          <Link to={`/prospecting/leads/${lead.id}`} onClick={(event) => event.stopPropagation()} className="text-primary hover:underline">Editar</Link>
                         </td>
                       </tr>
                     );
@@ -620,10 +649,22 @@ export function Leads() {
                 </div>
                 <div className="flex-1 space-y-4 bg-accent/50 rounded-2xl p-3 border border-border min-h-[500px]">
                   {filteredCommercialLeads.filter((lead) => lead.status === column.id).map((lead) => (
-                    <div key={lead.id} draggable onDragStart={(event) => onDragStart(event, lead.id)} onDragEnd={stopAutoScroll} className="bg-muted p-5 rounded-xl border border-border shadow-lg cursor-grab active:cursor-grabbing hover:border-gold-500/40 transition-all group">
+                    <div
+                      key={lead.id}
+                      draggable
+                      onDragStart={(event) => onDragStart(event, lead.id)}
+                      onDragEnd={() => {
+                        stopAutoScroll();
+                        window.setTimeout(() => {
+                          draggedRecordIdRef.current = null;
+                        }, 0);
+                      }}
+                      onClick={() => handleCardOpen(`/leads/${lead.id}`, lead.id)}
+                      className="bg-muted p-5 rounded-xl border border-border shadow-lg cursor-pointer active:cursor-grabbing hover:border-gold-500/40 transition-all group"
+                    >
                       <div className="flex justify-between items-start mb-3 gap-3">
                         <h4 className="font-serif font-bold text-foreground group-hover:text-primary transition-colors">{lead.name}</h4>
-                        <Link to={`/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gold-500/70 hover:text-primary">
+                        <Link to={`/leads/${lead.id}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gold-500/70 hover:text-primary">
                           Editar
                           <ChevronRight className="w-4 h-4" />
                         </Link>
@@ -670,7 +711,7 @@ export function Leads() {
                   filteredCommercialLeads.map((lead) => {
                     const stage = sortedStages.find((item) => item.id === lead.status);
                     return (
-                      <tr key={lead.id} className="hover:bg-accent transition-all group">
+                      <tr key={lead.id} onClick={() => navigate(`/leads/${lead.id}`)} className="cursor-pointer hover:bg-accent transition-all group">
                         <td className="px-8 py-5">
                           <div className="flex flex-col">
                             <span className="font-serif font-bold text-foreground text-base group-hover:text-primary transition-colors">{lead.name}</span>
@@ -694,7 +735,7 @@ export function Leads() {
                         </td>
                         <td className="px-8 py-5 font-bold text-emerald-500">{lead.estimatedValue ? `R$ ${lead.estimatedValue.toLocaleString()}` : '-'}</td>
                         <td className="px-8 py-5 text-right">
-                          <Link to={`/leads/${lead.id}`} className="text-primary font-black text-[10px] uppercase tracking-widest hover:text-gold-400 transition-colors">Editar Lead</Link>
+                          <Link to={`/leads/${lead.id}`} onClick={(event) => event.stopPropagation()} className="text-primary font-black text-[10px] uppercase tracking-widest hover:text-gold-400 transition-colors">Editar Lead</Link>
                         </td>
                       </tr>
                     );
@@ -802,16 +843,11 @@ export function Leads() {
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </select>
-                  {createFieldSchema.length > 0 && (
+                  {createCustomFieldSchema.length > 0 && (
                     <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
-                      <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Este funil pede informações extras no momento do cadastro para manter a operação consistente.
-                        </p>
-                      </div>
+                      <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
                       <div className="grid gap-4 md:grid-cols-2">
-                        {createFieldSchema.map((field) => (
+                        {createCustomFieldSchema.map((field) => (
                           <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
                             <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
                               {field.label}
@@ -888,16 +924,11 @@ export function Leads() {
                       <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                   </div>
-                  {createFieldSchema.length > 0 && (
+                  {createCustomFieldSchema.length > 0 && (
                     <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
-                      <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Este funil usa informações próprias. O cadastro muda aqui sem obrigar todos os outros funis a seguirem o mesmo formulário.
-                        </p>
-                      </div>
+                      <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
                       <div className="grid gap-4 md:grid-cols-2">
-                        {createFieldSchema.map((field) => (
+                        {createCustomFieldSchema.map((field) => (
                           <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
                             <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
                               {field.label}

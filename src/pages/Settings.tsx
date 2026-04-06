@@ -141,6 +141,7 @@ export function Settings() {
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, FieldDraft>>({});
   const [objectionDrafts, setObjectionDrafts] = useState<Record<string, string>>({});
   const [funnelDrafts, setFunnelDrafts] = useState<Record<string, FunnelDraft>>({});
+  const [expandedFunnels, setExpandedFunnels] = useState<Record<string, boolean>>({});
   const [expandedStageSections, setExpandedStageSections] = useState<Record<string, boolean>>({});
   const [expandedFieldSections, setExpandedFieldSections] = useState<Record<string, boolean>>({});
   const [profileName, setProfileName] = useState('');
@@ -254,6 +255,10 @@ export function Settings() {
 
   const toggleFieldSection = (funnelId: string) => {
     setExpandedFieldSections((current) => ({ ...current, [funnelId]: !current[funnelId] }));
+  };
+
+  const toggleFunnelCard = (funnelId: string) => {
+    setExpandedFunnels((current) => ({ ...current, [funnelId]: !current[funnelId] }));
   };
 
   const upsertFunnelFieldByKey = (
@@ -495,20 +500,32 @@ export function Settings() {
               <h3 className="text-xl font-serif text-gold-400">Funis e formulários</h3>
             </div>
 
-            <div className="grid gap-4 rounded-xl border border-border bg-background/40 p-4 md:grid-cols-2 xl:grid-cols-5">
-              <input type="text" placeholder="Nome do novo funil" value={newFunnelName} onChange={(event) => setNewFunnelName(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
-              <select value={newFunnelOperation} onChange={(event) => setNewFunnelOperation(event.target.value as FunnelConfig['operation'])} className="rounded-lg border border-border bg-background px-4 py-2">
+            <div className="grid gap-4 rounded-xl border border-border bg-background/40 p-5 lg:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Nome do funil</label>
+                <input type="text" value={newFunnelName} onChange={(event) => setNewFunnelName(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Tipo de operação</label>
+                <select value={newFunnelOperation} onChange={(event) => setNewFunnelOperation(event.target.value as FunnelConfig['operation'])} className="w-full rounded-lg border border-border bg-background px-4 py-3">
                 <option value="commercial">Comercial</option>
                 <option value="prospecting">Prospecção</option>
               </select>
-              <select value={newFunnelAreaId} onChange={(event) => setNewFunnelAreaId(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2">
-                <option value="">Área de atuação vinculada</option>
-                {areasOfLaw.map((area) => (
-                  <option key={area.id} value={area.id}>{area.name}</option>
-                ))}
-              </select>
-              <input type="text" placeholder="Descrição curta" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2 xl:col-span-2" />
-              <div className="md:col-span-2 xl:col-span-5 flex justify-end">
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Área de atuação</label>
+                <select value={newFunnelAreaId} onChange={(event) => setNewFunnelAreaId(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3">
+                  <option value="">Sem área vinculada</option>
+                  {areasOfLaw.map((area) => (
+                    <option key={area.id} value={area.id}>{area.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Descrição</label>
+                <input type="text" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3" />
+              </div>
+              <div className="lg:col-span-2 flex justify-end">
                 <button onClick={handleAddFunnel} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
                   <Plus className="h-4 w-4" /> Criar funil
                 </button>
@@ -526,410 +543,455 @@ export function Settings() {
                 const baseFields = effectiveFields.filter((field) => baseFieldKeys.has(field.key));
                 const customFields = effectiveFields.filter((field) => !baseFieldKeys.has(field.key));
                 const fieldOverrides = new Map((funnel.fieldSchema || []).map((field) => [field.key, field]));
+                const isFunnelOpen = Boolean(expandedFunnels[funnel.id]);
                 const isStageOpen = Boolean(expandedStageSections[funnel.id]);
                 const isFieldOpen = Boolean(expandedFieldSections[funnel.id]);
+                const linkedArea = areasOfLaw.find((area) => area.id === funnel.areaOfLawId);
 
                 return (
-                  <div key={funnel.id} className="rounded-2xl border border-border bg-background/30 p-5">
-                    <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="grid flex-1 gap-3 md:grid-cols-2">
-                        <input value={draft.name} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, name: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { name: draft.name.trim() || funnel.name })} className="rounded-lg border border-border bg-card px-4 py-2 font-semibold" />
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          <span className="rounded-full border border-border px-3 py-2">{funnel.operation === 'commercial' ? 'Comercial' : 'Prospecção'}</span>
-                          {funnel.areaOfLawId && (
-                            <span className="rounded-full border border-border px-3 py-2">
-                              {areasOfLaw.find((area) => area.id === funnel.areaOfLawId)?.name || 'Área vinculada'}
+                  <article key={funnel.id} className="overflow-hidden rounded-2xl border border-border bg-background/30">
+                    <div className="flex flex-col gap-4 border-b border-border/70 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleFunnelCard(funnel.id)}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left"
+                      >
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="truncate font-serif text-xl font-bold text-foreground">{funnel.name}</h4>
+                            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                              {funnel.operation === 'commercial' ? 'Comercial' : 'Prospecção'}
                             </span>
-                          )}
-                          {isDefault && <span className="rounded-full bg-primary px-3 py-2 text-primary-foreground">Principal</span>}
+                            {linkedArea && (
+                              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                {linkedArea.name}
+                              </span>
+                            )}
+                            {isDefault && (
+                              <span className="rounded-full bg-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary-foreground">
+                                Principal
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <input value={draft.description} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, description: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { description: draft.description.trim() || undefined })} placeholder="Descricao do funil" className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2" />
-                        <select value={funnel.areaOfLawId || ''} onChange={(event) => updateFunnel(funnel.id, { areaOfLawId: event.target.value || undefined })} className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2">
-                          <option value="">Sem área vinculada</option>
-                          {areasOfLaw.map((area) => (
-                            <option key={area.id} value={area.id}>{area.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isFunnelOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
                       <div className="flex flex-wrap gap-2">
                         {!isDefault && (
-                          <button type="button" onClick={() => setDefaultFunnel(funnel.operation, funnel.id)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary">
-                            <Star className="h-4 w-4" /> Definir principal
+                          <button
+                            type="button"
+                            onClick={() => setDefaultFunnel(funnel.operation, funnel.id)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground hover:text-primary"
+                          >
+                            <Star className="h-4 w-4" /> Principal
                           </button>
                         )}
-                        <button type="button" onClick={() => duplicateFunnel(funnel.id)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary">
+                        <button
+                          type="button"
+                          onClick={() => duplicateFunnel(funnel.id)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground hover:text-primary"
+                        >
                           <Copy className="h-4 w-4" /> Duplicar
                         </button>
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`Excluir o funil \"${funnel.name}\"?`)) {
+                            if (window.confirm(`Excluir o funil "${funnel.name}"?`)) {
                               deleteFunnel(funnel.id);
                             }
                           }}
-                          className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-400 hover:bg-red-500/10"
+                          className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-red-400 hover:bg-red-500/10"
                         >
                           <Trash2 className="h-4 w-4" /> Excluir
                         </button>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleStageSection(funnel.id)}
-                        className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left"
-                      >
-                        <div>
-                          <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Etapas</h4>
-                          <span className="text-xs text-muted-foreground">{sortedStages.length} etapa(s)</span>
-                        </div>
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isStageOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {isStageOpen && (
-                        <>
-                          {sortedStages.map((stage, index) => (
-                            <div key={stage.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:flex-row lg:items-center">
-                              <div className="flex items-center gap-2">
-                                <button disabled={index === 0} onClick={() => {
-                                  const reordered = [...sortedStages];
-                                  [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-                                  reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
-                                }} className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30">
-                                  <ArrowUp className="h-4 w-4" />
-                                </button>
-                                <button disabled={index === sortedStages.length - 1} onClick={() => {
-                                  const reordered = [...sortedStages];
-                                  [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
-                                  reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
-                                }} className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30">
-                                  <ArrowDown className="h-4 w-4" />
-                                </button>
-                                <div className="h-8 w-3 rounded-full" style={{ backgroundColor: stage.color }} />
-                              </div>
-                              <input value={stage.name} onChange={(event) => updateFunnelStage(funnel.id, stage.id, { name: event.target.value })} className="flex-1 rounded-lg border border-border bg-background px-3 py-2" />
-                              <input type="color" value={stage.color} onChange={(event) => updateFunnelStage(funnel.id, stage.id, { color: event.target.value })} className="h-10 w-12 rounded-lg border border-border bg-background" />
-                              <button onClick={() => deleteFunnelStage(funnel.id, stage.id)} className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ))}
-                          <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background/40 p-3 md:grid-cols-[1fr_auto_auto]">
-                            <input value={stageDraft.name} onChange={(event) => updateStageDraft(funnel.id, { name: event.target.value })} placeholder="Nova etapa" className="rounded-lg border border-border bg-background px-3 py-2" />
-                            <input type="color" value={stageDraft.color} onChange={(event) => updateStageDraft(funnel.id, { color: event.target.value })} className="h-10 w-12 rounded-lg border border-border bg-background" />
-                            <button
-                              onClick={() => {
-                                if (!stageDraft.name.trim()) return;
-                                addFunnelStage(funnel.id, stageDraft.name.trim(), stageDraft.color);
-                                setStageDrafts((current) => ({ ...current, [funnel.id]: { name: '', color: '#D4AF37' } }));
-                              }}
-                              className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+                    {isFunnelOpen && (
+                      <div className="space-y-5 px-5 py-5">
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Nome do funil</label>
+                            <input
+                              value={draft.name}
+                              onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, name: event.target.value } }))}
+                              onBlur={() => updateFunnel(funnel.id, { name: draft.name.trim() || funnel.name })}
+                              className="w-full rounded-lg border border-border bg-card px-4 py-3 font-semibold"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Descrição</label>
+                            <input
+                              value={draft.description}
+                              onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, description: event.target.value } }))}
+                              onBlur={() => updateFunnel(funnel.id, { description: draft.description.trim() || undefined })}
+                              className="w-full rounded-lg border border-border bg-card px-4 py-3"
+                            />
+                          </div>
+                          <div className="space-y-2 xl:max-w-md">
+                            <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Área de atuação</label>
+                            <select
+                              value={funnel.areaOfLawId || ''}
+                              onChange={(event) => updateFunnel(funnel.id, { areaOfLawId: event.target.value || undefined })}
+                              className="w-full rounded-lg border border-border bg-card px-4 py-3"
                             >
-                              <Plus className="h-4 w-4" /> Adicionar
-                            </button>
+                              <option value="">Sem área vinculada</option>
+                              {areasOfLaw.map((area) => (
+                                <option key={area.id} value={area.id}>{area.name}</option>
+                              ))}
+                            </select>
                           </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="mt-6 space-y-3 rounded-xl border border-border bg-card p-4">
-                      <button
-                        type="button"
-                        onClick={() => toggleFieldSection(funnel.id)}
-                        className="flex w-full items-center justify-between gap-4 text-left"
-                      >
-                        <div>
-                          <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Campos do cadastro</h4>
-                          <span className="text-xs text-muted-foreground">{effectiveFields.length} campo(s)</span>
                         </div>
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isFieldOpen ? 'rotate-180' : ''}`} />
-                      </button>
 
-                      {isFieldOpen && (
-                        <>
-                          <div className="space-y-3">
-                            {baseFields.map((field) => {
-                              const baseDefinition = getBaseFieldSchema(funnel.operation).find((item) => item.key === field.key)!;
-                              const hasOverride = fieldOverrides.has(field.key);
-                              return (
-                                <div key={field.key} className="rounded-xl border border-border bg-background/40 p-3">
-                                  <div className="mb-3 flex items-center justify-between gap-3">
-                                    <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Campo padrão</p>
-                                    {hasOverride && (
-                                      <button
-                                        type="button"
-                                        onClick={() => resetBaseFieldOverride(funnel, field.key)}
-                                        className="rounded-lg border border-border px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary"
-                                      >
-                                        Restaurar padrão
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="grid gap-3 lg:grid-cols-[1fr_180px_160px]">
-                                    <input
-                                      value={field.label}
-                                      onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { label: event.target.value })}
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    />
-                                    <select
-                                      value={field.type}
-                                      onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { type: event.target.value as FunnelFieldType })}
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    >
-                                      {FIELD_TYPE_OPTIONS.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                      ))}
-                                    </select>
-                                    <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                      <input
-                                        type="checkbox"
-                                        checked={Boolean(field.required)}
-                                        onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { required: event.target.checked })}
-                                        className="rounded border-border bg-background"
-                                      />
-                                      Obrigatório
-                                    </label>
-                                  </div>
-                                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                    <input
-                                      value={field.placeholder || ''}
-                                      onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { placeholder: event.target.value })}
-                                      placeholder="Placeholder"
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    />
-                                    <input
-                                      value={field.helpText || ''}
-                                      onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { helpText: event.target.value })}
-                                      placeholder="Ajuda curta"
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleStageSection(funnel.id)}
+                            className="flex w-full items-center justify-between gap-4 text-left"
+                          >
+                            <div>
+                              <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Etapas</h4>
+                              <span className="text-xs text-muted-foreground">{sortedStages.length} etapa(s)</span>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isStageOpen ? 'rotate-180' : ''}`} />
+                          </button>
 
-                          <div className="space-y-3">
-                            {customFields.map((field, index) => (
-                              <div key={field.id} className="rounded-xl border border-border bg-background/40 p-3">
-                                <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr_180px_160px_auto] lg:items-center">
+                          {isStageOpen && (
+                            <div className="space-y-3">
+                              {sortedStages.map((stage, index) => (
+                                <div key={stage.id} className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 lg:flex-row lg:items-center">
                                   <div className="flex items-center gap-2">
                                     <button
+                                      type="button"
                                       disabled={index === 0}
                                       onClick={() => {
-                                        const reordered = [...customFields];
+                                        const reordered = [...sortedStages];
                                         [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-                                        reorderFunnelFields(funnel.id, [
-                                          ...(funnel.fieldSchema || []).filter((item) => baseFieldKeys.has(item.key)),
-                                          ...reordered.map((item, order) => ({ ...item, order })),
-                                        ]);
+                                        reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
                                       }}
                                       className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30"
                                     >
                                       <ArrowUp className="h-4 w-4" />
                                     </button>
                                     <button
-                                      disabled={index === customFields.length - 1}
+                                      type="button"
+                                      disabled={index === sortedStages.length - 1}
                                       onClick={() => {
-                                        const reordered = [...customFields];
+                                        const reordered = [...sortedStages];
                                         [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
-                                        reorderFunnelFields(funnel.id, [
-                                          ...(funnel.fieldSchema || []).filter((item) => baseFieldKeys.has(item.key)),
-                                          ...reordered.map((item, order) => ({ ...item, order })),
-                                        ]);
+                                        reorderFunnelStages(funnel.id, reordered.map((item, order) => ({ ...item, order })));
                                       }}
                                       className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30"
                                     >
                                       <ArrowDown className="h-4 w-4" />
                                     </button>
+                                    <div className="h-8 w-3 rounded-full" style={{ backgroundColor: stage.color }} />
                                   </div>
-                                  <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(field.required)}
-                                      onChange={(event) => updateFunnelField(funnel.id, field.id, { required: event.target.checked })}
-                                      className="rounded border-border bg-background"
-                                    />
-                                    Obrigatório
-                                  </label>
                                   <input
-                                    value={field.label}
-                                    onChange={(event) => updateFunnelField(funnel.id, field.id, {
-                                      label: event.target.value,
-                                      key: normalizeFieldKey(event.target.value || field.key),
-                                    })}
-                                    className="rounded-lg border border-border bg-background px-3 py-2"
+                                    value={stage.name}
+                                    onChange={(event) => updateFunnelStage(funnel.id, stage.id, { name: event.target.value })}
+                                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2"
                                   />
-                                  <select
-                                    value={field.type}
-                                    onChange={(event) => updateFunnelField(funnel.id, field.id, { type: event.target.value as FunnelFieldType })}
-                                    className="rounded-lg border border-border bg-background px-3 py-2"
+                                  <input
+                                    type="color"
+                                    value={stage.color}
+                                    onChange={(event) => updateFunnelStage(funnel.id, stage.id, { color: event.target.value })}
+                                    className="h-10 w-12 rounded-lg border border-border bg-background"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteFunnelStage(funnel.id, stage.id)}
+                                    className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10"
                                   >
-                                    {FIELD_TYPE_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                  </select>
-                                  <input
-                                    value={field.placeholder || ''}
-                                    onChange={(event) => updateFunnelField(funnel.id, field.id, { placeholder: event.target.value })}
-                                    placeholder="Placeholder"
-                                    className="rounded-lg border border-border bg-background px-3 py-2"
-                                  />
-                                  <button onClick={() => deleteFunnelField(funnel.id, field.id)} className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10">
                                     <Trash2 className="h-4 w-4" />
                                   </button>
                                 </div>
-                                <div className="mt-3 grid gap-3 md:grid-cols-[200px_1fr]">
-                                  <input
-                                    value={field.key}
-                                    onChange={(event) => updateFunnelField(funnel.id, field.id, { key: normalizeFieldKey(event.target.value) })}
-                                    placeholder="chave_interna"
-                                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                  />
-                                  <input
-                                    value={field.helpText || ''}
-                                    onChange={(event) => updateFunnelField(funnel.id, field.id, { helpText: event.target.value })}
-                                    placeholder="Ajuda curta"
-                                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
 
-                          {(() => {
-                            const fieldDraft = getFieldDraft(funnel.id);
-                            return (
-                              <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background/40 p-4 lg:grid-cols-[1.2fr_180px_160px_auto]">
-                                <div className="space-y-3">
-                                  <input
-                                    value={fieldDraft.label}
-                                    onChange={(event) => updateFieldDraft(funnel.id, {
-                                      label: event.target.value,
-                                      key: normalizeFieldKey(event.target.value),
-                                    })}
-                                    placeholder="Novo campo"
-                                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                                  />
-                                  <div className="grid gap-3 md:grid-cols-2">
-                                    <input
-                                      value={fieldDraft.key}
-                                      onChange={(event) => updateFieldDraft(funnel.id, { key: normalizeFieldKey(event.target.value) })}
-                                      placeholder="chave_interna"
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    />
-                                    <input
-                                      value={fieldDraft.placeholder}
-                                      onChange={(event) => updateFieldDraft(funnel.id, { placeholder: event.target.value })}
-                                      placeholder="Placeholder"
-                                      className="rounded-lg border border-border bg-background px-3 py-2"
-                                    />
-                                  </div>
-                                </div>
-                                <select
-                                  value={fieldDraft.type}
-                                  onChange={(event) => updateFieldDraft(funnel.id, { type: event.target.value as FunnelFieldType })}
+                              <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background/40 p-4 md:grid-cols-[1fr_auto_auto]">
+                                <input
+                                  value={stageDraft.name}
+                                  onChange={(event) => updateStageDraft(funnel.id, { name: event.target.value })}
+                                  placeholder="Nova etapa"
                                   className="rounded-lg border border-border bg-background px-3 py-2"
-                                >
-                                  {FIELD_TYPE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
-                                <div className="space-y-3">
-                                  <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    <input
-                                      type="checkbox"
-                                      checked={fieldDraft.required}
-                                      onChange={(event) => updateFieldDraft(funnel.id, { required: event.target.checked })}
-                                      className="rounded border-border bg-background"
-                                    />
-                                    Obrigatório
-                                  </label>
-                                  <input
-                                    value={fieldDraft.helpText}
-                                    onChange={(event) => updateFieldDraft(funnel.id, { helpText: event.target.value })}
-                                    placeholder="Ajuda curta"
-                                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                                  />
-                                </div>
+                                />
+                                <input
+                                  type="color"
+                                  value={stageDraft.color}
+                                  onChange={(event) => updateStageDraft(funnel.id, { color: event.target.value })}
+                                  className="h-10 w-12 rounded-lg border border-border bg-background"
+                                />
                                 <button
+                                  type="button"
                                   onClick={() => {
-                                    if (!fieldDraft.label.trim()) return;
-                                    addFunnelField(funnel.id, {
-                                      key: normalizeFieldKey(fieldDraft.key || fieldDraft.label),
-                                      label: fieldDraft.label.trim(),
-                                      type: fieldDraft.type,
-                                      required: fieldDraft.required,
-                                      placeholder: fieldDraft.placeholder.trim(),
-                                      helpText: fieldDraft.helpText.trim(),
-                                    });
-                                    setFieldDrafts((current) => ({
-                                      ...current,
-                                      [funnel.id]: {
-                                        label: '',
-                                        key: '',
-                                        type: 'text',
-                                        required: false,
-                                        placeholder: '',
-                                        helpText: '',
-                                      },
-                                    }));
+                                    if (!stageDraft.name.trim()) return;
+                                    addFunnelStage(funnel.id, stageDraft.name.trim(), stageDraft.color);
+                                    setStageDrafts((current) => ({ ...current, [funnel.id]: { name: '', color: '#D4AF37' } }));
                                   }}
                                   className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
                                 >
-                                  <Plus className="h-4 w-4" /> Adicionar campo
+                                  <Plus className="h-4 w-4" /> Adicionar
                                 </button>
                               </div>
-                            );
-                          })()}
-                        </>
-                      )}
-                    </div>
+                            </div>
+                          )}
+                        </section>
 
-                    {funnel.operation === 'prospecting' && (
-                      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-                        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                          <div>
-                            <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Objeções</h4>
-                            <p className="mt-1 text-sm text-muted-foreground">Use objeções padrão quando o funil exigir abordagem comercial consultiva.</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <input value={objectionDraft} onChange={(event) => setObjectionDrafts((current) => ({ ...current, [funnel.id]: event.target.value }))} placeholder="Nova objeção" className="flex-1 rounded-lg border border-border bg-background px-3 py-2" />
-                            <button
-                              onClick={() => {
-                                if (!objectionDraft.trim()) return;
-                                addFunnelObjection(funnel.id, objectionDraft.trim());
-                                setObjectionDrafts((current) => ({ ...current, [funnel.id]: '' }));
-                              }}
-                              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
-                            >
-                              Adicionar
-                            </button>
-                          </div>
-                          <div className="space-y-2">
-                            {(funnel.objections || []).map((item) => (
-                              <div key={item} className="flex items-center justify-between rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
-                                <span>{item}</span>
-                                <button onClick={() => removeFunnelObjection(funnel.id, item)} className="text-red-400 hover:text-red-300">
-                                  <Trash2 className="h-4 w-4" />
+                        <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleFieldSection(funnel.id)}
+                            className="flex w-full items-center justify-between gap-4 text-left"
+                          >
+                            <div>
+                              <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Campos do cadastro</h4>
+                              <span className="text-xs text-muted-foreground">{effectiveFields.length} campo(s)</span>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isFieldOpen ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {isFieldOpen && (
+                            <div className="space-y-4">
+                              <div className="grid gap-3">
+                                {baseFields.map((field) => {
+                                  const baseDefinition = getBaseFieldSchema(funnel.operation).find((item) => item.key === field.key)!;
+                                  const hasOverride = fieldOverrides.has(field.key);
+                                  return (
+                                    <div key={field.key} className="rounded-xl border border-border bg-background/40 p-4">
+                                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                        <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Campo padrão</p>
+                                        {hasOverride && (
+                                          <button
+                                            type="button"
+                                            onClick={() => resetBaseFieldOverride(funnel, field.key)}
+                                            className="rounded-lg border border-border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground hover:text-primary"
+                                          >
+                                            Restaurar padrão
+                                          </button>
+                                        )}
+                                      </div>
+                                      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px_180px]">
+                                        <input
+                                          value={field.label}
+                                          onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { label: event.target.value })}
+                                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                        />
+                                        <select
+                                          value={field.type}
+                                          onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { type: event.target.value as FunnelFieldType })}
+                                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                        >
+                                          {FIELD_TYPE_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                          ))}
+                                        </select>
+                                        <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(field.required)}
+                                            onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { required: event.target.checked })}
+                                            className="rounded border-border bg-background"
+                                          />
+                                          Obrigatório
+                                        </label>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="grid gap-3">
+                                {customFields.map((field, index) => (
+                                  <div key={field.id} className="rounded-xl border border-border bg-background/40 p-4">
+                                    <div className="grid gap-3 xl:grid-cols-[auto_minmax(0,1fr)_220px_180px_auto] xl:items-center">
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          disabled={index === 0}
+                                          onClick={() => {
+                                            const reordered = [...customFields];
+                                            [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+                                            reorderFunnelFields(funnel.id, [
+                                              ...(funnel.fieldSchema || []).filter((item) => baseFieldKeys.has(item.key)),
+                                              ...reordered.map((item, order) => ({ ...item, order })),
+                                            ]);
+                                          }}
+                                          className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30"
+                                        >
+                                          <ArrowUp className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={index === customFields.length - 1}
+                                          onClick={() => {
+                                            const reordered = [...customFields];
+                                            [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
+                                            reorderFunnelFields(funnel.id, [
+                                              ...(funnel.fieldSchema || []).filter((item) => baseFieldKeys.has(item.key)),
+                                              ...reordered.map((item, order) => ({ ...item, order })),
+                                            ]);
+                                          }}
+                                          className="p-1 text-muted-foreground hover:text-primary disabled:opacity-30"
+                                        >
+                                          <ArrowDown className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                      <input
+                                        value={field.label}
+                                        onChange={(event) => updateFunnelField(funnel.id, field.id, {
+                                          label: event.target.value,
+                                          key: normalizeFieldKey(event.target.value || field.key),
+                                        })}
+                                        className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                      />
+                                      <select
+                                        value={field.type}
+                                        onChange={(event) => updateFunnelField(funnel.id, field.id, { type: event.target.value as FunnelFieldType })}
+                                        className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                      >
+                                        {FIELD_TYPE_OPTIONS.map((option) => (
+                                          <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                      </select>
+                                      <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(field.required)}
+                                          onChange={(event) => updateFunnelField(funnel.id, field.id, { required: event.target.checked })}
+                                          className="rounded border-border bg-background"
+                                        />
+                                        Obrigatório
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteFunnelField(funnel.id, field.id)}
+                                        className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {(() => {
+                                const fieldDraft = getFieldDraft(funnel.id);
+                                return (
+                                  <div className="grid gap-3 rounded-xl border border-dashed border-border bg-background/40 p-4 xl:grid-cols-[minmax(0,1fr)_220px_180px_auto] xl:items-center">
+                                    <input
+                                      value={fieldDraft.label}
+                                      onChange={(event) => updateFieldDraft(funnel.id, {
+                                        label: event.target.value,
+                                        key: normalizeFieldKey(event.target.value),
+                                      })}
+                                      placeholder="Novo campo"
+                                      className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                    />
+                                    <select
+                                      value={fieldDraft.type}
+                                      onChange={(event) => updateFieldDraft(funnel.id, { type: event.target.value as FunnelFieldType })}
+                                      className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                    >
+                                      {FIELD_TYPE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                      ))}
+                                    </select>
+                                    <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                      <input
+                                        type="checkbox"
+                                        checked={fieldDraft.required}
+                                        onChange={(event) => updateFieldDraft(funnel.id, { required: event.target.checked })}
+                                        className="rounded border-border bg-background"
+                                      />
+                                      Obrigatório
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!fieldDraft.label.trim()) return;
+                                        addFunnelField(funnel.id, {
+                                          key: normalizeFieldKey(fieldDraft.key || fieldDraft.label),
+                                          label: fieldDraft.label.trim(),
+                                          type: fieldDraft.type,
+                                          required: fieldDraft.required,
+                                          placeholder: fieldDraft.placeholder.trim(),
+                                          helpText: fieldDraft.helpText.trim(),
+                                        });
+                                        setFieldDrafts((current) => ({
+                                          ...current,
+                                          [funnel.id]: {
+                                            label: '',
+                                            key: '',
+                                            type: 'text',
+                                            required: false,
+                                            placeholder: '',
+                                            helpText: '',
+                                          },
+                                        }));
+                                      }}
+                                      className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+                                    >
+                                      <Plus className="h-4 w-4" /> Adicionar campo
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </section>
+
+                        {funnel.operation === 'prospecting' && (
+                          <div className="grid gap-5 xl:grid-cols-2">
+                            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                              <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Objeções</h4>
+                              <div className="flex gap-2">
+                                <input
+                                  value={objectionDraft}
+                                  onChange={(event) => setObjectionDrafts((current) => ({ ...current, [funnel.id]: event.target.value }))}
+                                  placeholder="Nova objeção"
+                                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!objectionDraft.trim()) return;
+                                    addFunnelObjection(funnel.id, objectionDraft.trim());
+                                    setObjectionDrafts((current) => ({ ...current, [funnel.id]: '' }));
+                                  }}
+                                  className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+                                >
+                                  Adicionar
                                 </button>
                               </div>
-                            ))}
-                          </div>
-                        </div>
+                              <div className="space-y-2">
+                                {(funnel.objections || []).map((item) => (
+                                  <div key={item} className="flex items-center justify-between rounded-lg border border-border bg-background/50 px-3 py-2 text-sm">
+                                    <span>{item}</span>
+                                    <button type="button" onClick={() => removeFunnelObjection(funnel.id, item)} className="text-red-400 hover:text-red-300">
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
 
-                        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                          <div>
-                            <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Playbook</h4>
-                            <p className="mt-1 text-sm text-muted-foreground">Esse roteiro acompanha o funil e deixa a operação replicável.</p>
+                            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                              <h4 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/80">Playbook</h4>
+                              <textarea
+                                value={funnel.playbook || ''}
+                                onChange={(event) => setFunnelPlaybook(funnel.id, event.target.value)}
+                                className="h-56 w-full rounded-xl border border-border bg-background p-3 text-sm"
+                              />
+                            </div>
                           </div>
-                          <textarea value={funnel.playbook || ''} onChange={(event) => setFunnelPlaybook(funnel.id, event.target.value)} className="h-56 w-full rounded-xl border border-border bg-background p-3 text-sm" />
-                        </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </article>
                 );
               })}
+
             </div>
           </section>
           )}
