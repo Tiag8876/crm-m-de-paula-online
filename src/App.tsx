@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AuthGate, AdminGate, AccessGate } from "./components/AuthGate";
 import { StateSyncProvider } from "./components/StateSyncProvider";
@@ -22,7 +22,6 @@ import { ProspectingDashboard } from "./pages/ProspectingDashboard";
 import { ProspectingLeads } from "./pages/ProspectingLeads";
 import { ProspectingLeadDetails } from "./pages/ProspectingLeadDetails";
 import { ProspectingReports } from "./pages/ProspectingReports";
-import { ProspectingSettings } from "./pages/ProspectingSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,7 +53,7 @@ const App = () => (
                   <Route path="prospecting/leads" element={<ProspectingLeads />} />
                   <Route path="prospecting/leads/:id" element={<ProspectingLeadDetails />} />
                   <Route path="prospecting/reports" element={<ProspectingReports />} />
-                  <Route path="prospecting/settings" element={<ProspectingSettings />} />
+                  <Route path="prospecting/settings" element={<Navigate to="/settings?tab=operations&section=prospecting" replace />} />
                 <Route element={<AdminGate />}>
                     <Route path="admin/users" element={<UsersAdminPage />} />
                 </Route>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Users, Megaphone, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck, Building2, KanbanSquare, ClipboardList, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, Users, Megaphone, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck, Building2, KanbanSquare, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
@@ -22,7 +22,6 @@ const prospectingNavItems = [
   { icon: Building2, label: 'Visao Geral', path: '/prospecting' },
   { icon: KanbanSquare, label: 'Kanban', path: '/prospecting/leads' },
   { icon: ClipboardList, label: 'Relatorios', path: '/prospecting/reports' },
-  { icon: SlidersHorizontal, label: 'Configuracoes', path: '/prospecting/settings' },
 ];
 
 export function Layout() {
