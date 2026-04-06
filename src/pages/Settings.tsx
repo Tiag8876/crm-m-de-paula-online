@@ -23,7 +23,7 @@ import { UsersAdminPage } from '@/pages/UsersAdminPage';
 import type { FunnelConfig, FunnelFieldType } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'team' | 'operations';
-type OperationsSection = 'funnels' | 'areas' | 'services' | 'tasks';
+type OperationsSection = 'funnels' | 'areas' | 'services' | 'sources' | 'tasks';
 type StageDraft = { name: string; color: string };
 type FunnelDraft = { name: string; description: string };
 type FieldDraft = {
@@ -53,6 +53,12 @@ const ADMIN_SECTION_LINKS = [
     label: 'Serviços',
     description: 'Centralize ofertas, precificação e contexto comercial em uma mesma camada.',
     icon: Database,
+  },
+  {
+    id: 'sources',
+    label: 'Origens do lead',
+    description: 'Defina de onde as oportunidades entram antes da equipe marcar campanha.',
+    icon: Star,
   },
   {
     id: 'tasks',
@@ -95,6 +101,7 @@ export function Settings() {
   const {
     areasOfLaw,
     services,
+    leadSources,
     standardTasks,
     funnels,
     commercialDefaultFunnelId,
@@ -103,6 +110,9 @@ export function Settings() {
     deleteAreaOfLaw,
     addService,
     deleteService,
+    addLeadSource,
+    updateLeadSource,
+    deleteLeadSource,
     addStandardTask,
     deleteStandardTask,
     addFunnel,
@@ -131,6 +141,8 @@ export function Settings() {
   const [newServiceDesc, setNewServiceDesc] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
   const [selectedAreaForService, setSelectedAreaForService] = useState('');
+  const [newLeadSourceName, setNewLeadSourceName] = useState('');
+  const [newLeadSourceKind, setNewLeadSourceKind] = useState<'campaign' | 'referral' | 'partner' | 'organic' | 'other'>('referral');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newFunnelName, setNewFunnelName] = useState('');
@@ -312,6 +324,13 @@ export function Settings() {
     setNewServiceName('');
     setNewServiceDesc('');
     setNewServicePrice('');
+  };
+
+  const handleAddLeadSource = () => {
+    if (!newLeadSourceName.trim()) return;
+    addLeadSource(newLeadSourceName.trim(), newLeadSourceKind);
+    setNewLeadSourceName('');
+    setNewLeadSourceKind('referral');
   };
 
   const handleAddTask = () => {
@@ -1021,6 +1040,71 @@ export function Settings() {
                 );
               })}
               {services.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhum serviço cadastrado.</p>}
+            </div>
+          </section>
+          )}
+
+          {activeOperationSection === 'sources' && (
+          <section id="settings-section-sources" className="space-y-6 rounded-xl border border-border bg-card p-6">
+            <div>
+              <h3 className="text-xl font-serif text-gold-400">Origens do lead</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto]">
+              <input
+                type="text"
+                placeholder="Nome da origem"
+                value={newLeadSourceName}
+                onChange={(e) => setNewLeadSourceName(e.target.value)}
+                className="rounded-lg border border-border bg-background px-4 py-2"
+              />
+              <select
+                value={newLeadSourceKind}
+                onChange={(e) => setNewLeadSourceKind(e.target.value as 'campaign' | 'referral' | 'partner' | 'organic' | 'other')}
+                className="rounded-lg border border-border bg-background px-4 py-2"
+              >
+                <option value="campaign">Campanha</option>
+                <option value="referral">Indicação</option>
+                <option value="partner">Parceria</option>
+                <option value="organic">Orgânico</option>
+                <option value="other">Outro</option>
+              </select>
+              <button
+                onClick={handleAddLeadSource}
+                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
+              >
+                <Plus className="h-4 w-4" /> Adicionar
+              </button>
+            </div>
+            <div className="grid gap-4">
+              {leadSources.map((source) => (
+                <div key={source.id} className="grid items-center gap-3 rounded-xl border border-border bg-background/40 p-4 xl:grid-cols-[minmax(0,1fr)_220px_auto]">
+                  <input
+                    value={source.name}
+                    disabled={source.locked}
+                    onChange={(e) => updateLeadSource(source.id, { name: e.target.value })}
+                    className="rounded-lg border border-border bg-background px-4 py-2 disabled:cursor-not-allowed disabled:opacity-70"
+                  />
+                  <select
+                    value={source.kind}
+                    disabled={source.locked}
+                    onChange={(e) => updateLeadSource(source.id, { kind: e.target.value as 'campaign' | 'referral' | 'partner' | 'organic' | 'other' })}
+                    className="rounded-lg border border-border bg-background px-4 py-2 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="campaign">Campanha</option>
+                    <option value="referral">Indicação</option>
+                    <option value="partner">Parceria</option>
+                    <option value="organic">Orgânico</option>
+                    <option value="other">Outro</option>
+                  </select>
+                  <button
+                    onClick={() => deleteLeadSource(source.id)}
+                    disabled={source.locked}
+                    className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
             </div>
           </section>
           )}

@@ -55,6 +55,16 @@ export interface Service {
   price?: number;
 }
 
+export type LeadSourceKind = 'campaign' | 'referral' | 'partner' | 'organic' | 'other';
+
+export interface LeadSource {
+  id: string;
+  name: string;
+  kind: LeadSourceKind;
+  description?: string;
+  locked?: boolean;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -134,6 +144,9 @@ export interface Lead {
   adId?: string;
   areaOfLawId?: string;
   serviceId?: string;
+  serviceIds?: string[];
+  sourceId?: string;
+  sourceDetails?: string;
   funnelId?: string;
   notes: LeadNote[];
   followUps: FollowUp[];

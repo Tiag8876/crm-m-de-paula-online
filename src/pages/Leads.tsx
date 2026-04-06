@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign, CheckCircle2, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
+import { getLeadServiceIds, leadMatchesService } from '@/lib/leadServices';
 import { isAdminUser } from '@/lib/access';
 import { buildEffectiveFieldSchema } from '@/lib/funnelFieldSchema';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
@@ -53,6 +54,7 @@ export function Leads() {
     prospectingDefaultFunnelId,
     areasOfLaw,
     services,
+    leadSources,
   } = useStore();
   const isAdmin = isAdminUser(user);
 
@@ -70,6 +72,7 @@ export function Leads() {
   const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const [selectedArea, setSelectedArea] = useState('');
   const [createFunnelId, setCreateFunnelId] = useState('');
+  const [createLeadSourceId, setCreateLeadSourceId] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
@@ -125,6 +128,8 @@ export function Leads() {
   const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => !createBaseFieldKeys.has(field.key));
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAvailableServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
+  const createLeadSource = (leadSources || []).find((source) => source.id === createLeadSourceId);
+  const createAvailableCampaigns = campaigns.filter((campaign) => !createFunnel?.areaOfLawId || !campaign.areaOfLawId || campaign.areaOfLawId === createFunnel.areaOfLawId);
   const commercialFunnelGroups = buildFunnelGroups(commercialFunnels, areasOfLaw);
   const prospectingFunnelGroups = buildFunnelGroups(prospectingFunnels, areasOfLaw);
   const createFunnelGroups = [
@@ -160,7 +165,7 @@ export function Leads() {
 
     const byCampaign = !filterCampaignId || lead.campaignId === filterCampaignId;
     const byArea = !filterAreaId || lead.areaOfLawId === filterAreaId;
-    const byService = !filterServiceId || lead.serviceId === filterServiceId;
+    const byService = leadMatchesService(lead, filterServiceId);
     const byStatus = !filterStatus || lead.status === filterStatus;
     const byFunnel = funnelId === activeFunnel?.id;
 
@@ -212,6 +217,7 @@ export function Leads() {
     setIsSavingRecord(false);
     setShowSaveSuccess(false);
     setSelectedArea('');
+    setCreateLeadSourceId('');
   };
 
   const collectCustomFields = (formData: FormData) =>
@@ -234,6 +240,10 @@ export function Leads() {
     try {
       const formData = new FormData(event.currentTarget);
       const customFields = collectCustomFields(formData);
+      const selectedServiceIds = formData
+        .getAll('serviceIds')
+        .map((value) => String(value))
+        .filter(Boolean);
       if (createIsProspecting) {
         addProspectLead({
           clinicName: String(formData.get('clinicName') || ''),
@@ -251,14 +261,29 @@ export function Leads() {
           customFields,
         });
       } else {
+        const sourceId = String(formData.get('sourceId') || '') || undefined;
+        const selectedSource = (leadSources || []).find((source) => source.id === sourceId);
+        const campaignId = selectedSource?.kind === 'campaign'
+          ? String(formData.get('campaignId') || '') || undefined
+          : undefined;
+        const selectedCampaign = campaigns.find((campaign) => campaign.id === campaignId);
+        const mergedServiceIds = selectedCampaign?.serviceId
+          ? Array.from(new Set([selectedCampaign.serviceId, ...selectedServiceIds]))
+          : selectedServiceIds;
         addLead({
           name: String(formData.get('name') || ''),
           phone: String(formData.get('phone') || ''),
           email: String(formData.get('email') || ''),
           cpf: String(formData.get('cpf') || ''),
           legalArea: String(formData.get('legalArea') || ''),
-          areaOfLawId: String(formData.get('areaOfLawId') || ''),
-          serviceId: String(formData.get('serviceId') || ''),
+          areaOfLawId: selectedCampaign?.areaOfLawId || String(formData.get('areaOfLawId') || ''),
+          serviceId: mergedServiceIds[0],
+          serviceIds: mergedServiceIds,
+          sourceId,
+          sourceDetails: selectedSource?.kind === 'campaign'
+            ? undefined
+            : String(formData.get('sourceDetails') || '') || undefined,
+          campaignId,
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           estimatedValue: Number(formData.get('estimatedValue')) || 0,
           status: createSortedStages[0]?.id || 'novo',
@@ -419,6 +444,8 @@ export function Leads() {
             onClick={() => {
               resetModalState();
               setCreateFunnelId(activeFunnel?.id || '');
+              setSelectedArea(activeFunnel?.areaOfLawId || '');
+              setCreateLeadSourceId('');
               setIsModalOpen(true);
             }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
@@ -679,6 +706,14 @@ export function Leads() {
                             {areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name}
                           </div>
                         )}
+                        {getLeadServiceIds(lead).length > 0 && (
+                          <p className="text-[10px] uppercase tracking-widest text-gold-500/70">
+                            {getLeadServiceIds(lead)
+                              .map((serviceId) => services.find((service) => service.id === serviceId)?.name)
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
                         <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{format(new Date(lead.createdAt), 'dd MMM')}</span>
@@ -719,7 +754,17 @@ export function Leads() {
                           </div>
                         </td>
                         <td className="px-8 py-5">
-                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'Não definido'}</span>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'NÃ£o definido'}</span>
+                            {getLeadServiceIds(lead).length > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {getLeadServiceIds(lead)
+                                  .map((serviceId) => services.find((service) => service.id === serviceId)?.name)
+                                  .filter(Boolean)
+                                  .join(', ')}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-8 py-5">
                           <span
@@ -784,6 +829,7 @@ export function Leads() {
                       setCreateFunnelId(event.target.value);
                       const nextFunnel = allFunnels.find((funnel) => funnel.id === event.target.value);
                       setSelectedArea(nextFunnel?.areaOfLawId || '');
+                      setCreateLeadSourceId('');
                     }}
                     className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                   >
@@ -905,13 +951,56 @@ export function Leads() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Serviço</label>
-                      <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                        <option value="">Selecione o Serviço</option>
-                        {services.filter((service) => service.areaOfLawId === selectedArea).map((service) => (
-                          <option key={service.id} value={service.id}>{service.name}</option>
+                      <div className="space-y-2 rounded-xl border border-border bg-background/20 p-3">
+                        {services.filter((service) => service.areaOfLawId === selectedArea).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Nenhum serviço vinculado a esta área.</p>
+                        ) : (
+                          services
+                            .filter((service) => service.areaOfLawId === selectedArea)
+                            .map((service) => (
+                              <label key={service.id} className="flex items-center gap-3 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm">
+                                <input type="checkbox" name="serviceIds" value={service.id} className="rounded border-border bg-background" />
+                                <span>{service.name}</span>
+                              </label>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Origem do lead</label>
+                      <select
+                        name="sourceId"
+                        value={createLeadSourceId}
+                        onChange={(event) => setCreateLeadSourceId(event.target.value)}
+                        className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                      >
+                        <option value="">Selecione a origem</option>
+                        {(leadSources || []).map((source) => (
+                          <option key={source.id} value={source.id}>{source.name}</option>
                         ))}
                       </select>
                     </div>
+                    {createLeadSource?.kind === 'campaign' ? (
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Campanha</label>
+                        <select name="campaignId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
+                          <option value="">Selecione a campanha</option>
+                          {createAvailableCampaigns.map((campaign) => (
+                            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : createLeadSourceId ? (
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Detalhe da origem</label>
+                        <input
+                          name="sourceDetails"
+                          type="text"
+                          placeholder="Ex.: indicação de cliente antigo, parceria local, evento"
+                          className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                        />
+                      </div>
+                    ) : null}
                     <div>
                       <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor Estimado</label>
                       <div className="relative">
@@ -984,4 +1073,5 @@ export function Leads() {
     </div>
   );
 }
+
 

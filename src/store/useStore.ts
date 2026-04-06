@@ -18,6 +18,8 @@ import {
   SystemNotification,
   WeeklySnapshot,
   ProspectLead,
+  LeadSource,
+  LeadSourceKind,
 } from '../types/crm';
 import { getLeadIdleHours } from '@/lib/leadMetrics';
 
@@ -52,6 +54,39 @@ const DEFAULT_PROSPECT_STAGES: KanbanStage[] = [
 
 const DEFAULT_COMMERCIAL_FUNNEL_ID = 'funnel-commercial-default';
 const DEFAULT_PROSPECTING_FUNNEL_ID = 'funnel-prospecting-default';
+const DEFAULT_LEAD_SOURCE_CAMPAIGN_ID = 'lead-source-campaign';
+
+const DEFAULT_LEAD_SOURCES: LeadSource[] = [
+  { id: DEFAULT_LEAD_SOURCE_CAMPAIGN_ID, name: 'Campanha', kind: 'campaign', locked: true },
+  { id: 'lead-source-referral', name: 'Indicacao', kind: 'referral' },
+  { id: 'lead-source-partner', name: 'Parceria', kind: 'partner' },
+  { id: 'lead-source-organic', name: 'Organico', kind: 'organic' },
+  { id: 'lead-source-other', name: 'Outro', kind: 'other' },
+];
+
+const ensureLeadSources = (sources?: LeadSource[]): LeadSource[] => {
+  const current = [...(sources || [])];
+  for (const fallback of DEFAULT_LEAD_SOURCES) {
+    if (!current.some((source) => source.id === fallback.id)) {
+      current.push(fallback);
+    }
+  }
+  return current;
+};
+
+const normalizeLeadServices = <T extends { serviceId?: string; serviceIds?: string[] }>(lead: T): T => {
+  const normalizedIds = Array.from(new Set((lead.serviceIds || []).filter(Boolean)));
+  const fallbackServiceId = lead.serviceId || normalizedIds[0];
+  const serviceIds = fallbackServiceId
+    ? Array.from(new Set([fallbackServiceId, ...normalizedIds]))
+    : normalizedIds;
+
+  return {
+    ...lead,
+    serviceId: serviceIds[0],
+    serviceIds,
+  };
+};
 
 const buildDefaultFunnels = (): FunnelConfig[] => {
   const timestamp = new Date().toISOString();
@@ -187,6 +222,7 @@ interface AppState {
   ads: Ad[];
   areasOfLaw: AreaOfLaw[];
   services: Service[];
+  leadSources: LeadSource[];
   standardTasks: Omit<Task, 'date' | 'leadId' | 'status' | 'isStandard'>[];
   funnels: FunnelConfig[];
   commercialDefaultFunnelId: string;
@@ -240,6 +276,10 @@ interface AppState {
   addService: (areaOfLawId: string, name: string, description?: string, price?: number) => void;
   updateService: (id: string, data: Partial<Service>) => void;
   deleteService: (id: string) => void;
+
+  addLeadSource: (name: string, kind: LeadSourceKind, description?: string) => void;
+  updateLeadSource: (id: string, data: Partial<Omit<LeadSource, 'id'>>) => void;
+  deleteLeadSource: (id: string) => void;
 
   addStandardTask: (title: string, description?: string) => void;
   deleteStandardTask: (id: string) => void;
@@ -300,6 +340,7 @@ export const useStore = create<AppState>()(
       ads: [],
       areasOfLaw: [],
       services: [],
+      leadSources: ensureLeadSources(),
       standardTasks: [],
       notifications: [],
       weeklySnapshots: [],
@@ -311,14 +352,15 @@ export const useStore = create<AppState>()(
         const timestamp = new Date().toISOString();
         const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const defaultFunnel = getDefaultFunnel(aliases.funnels, 'commercial', aliases.commercialDefaultFunnelId);
+        const normalizedLead = normalizeLeadServices(leadData);
         return {
           leads: [...state.leads, {
-            ...leadData,
+            ...normalizedLead,
             id,
             createdAt: timestamp,
             lastInteractionAt: timestamp,
-            funnelId: leadData.funnelId || defaultFunnel.id,
-            customFields: leadData.customFields || {},
+            funnelId: normalizedLead.funnelId || defaultFunnel.id,
+            customFields: normalizedLead.customFields || {},
             notes: [],
             followUps: [],
             tasks: [],
@@ -336,24 +378,25 @@ export const useStore = create<AppState>()(
       updateLead: (id, data) => set((state) => ({
         leads: (state.leads || []).map(lead => {
           if (lead.id === id) {
+            const normalizedData = normalizeLeadServices({ ...lead, ...data });
             const logs = [...(lead.logs || [])];
-            if (data.status && data.status !== lead.status) {
+            if (normalizedData.status && normalizedData.status !== lead.status) {
               const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
               const resolvedFunnel = getDefaultFunnel(
                 aliases.funnels,
                 'commercial',
-                data.funnelId || lead.funnelId || aliases.commercialDefaultFunnelId,
+                normalizedData.funnelId || lead.funnelId || aliases.commercialDefaultFunnelId,
               );
               const oldStage = resolvedFunnel.stages.find(s => s.id === lead.status);
-              const newStage = resolvedFunnel.stages.find(s => s.id === data.status);
+              const newStage = resolvedFunnel.stages.find(s => s.id === normalizedData.status);
               logs.push({
                 id: uuidv4(),
                 type: 'status_change',
-                content: `Status alterado de ${oldStage?.name || lead.status} para ${newStage?.name || data.status}`,
+                content: `Status alterado de ${oldStage?.name || lead.status} para ${newStage?.name || normalizedData.status}`,
                 timestamp: getSPTime()
               });
             }
-            return { ...lead, ...data, lastInteractionAt: new Date().toISOString(), logs };
+            return { ...lead, ...normalizedData, lastInteractionAt: new Date().toISOString(), logs };
           }
           return lead;
         })
@@ -937,8 +980,44 @@ export const useStore = create<AppState>()(
       })),
 
       deleteService: (id) => set((state) => ({
-        services: (state.services || []).filter(s => s.id !== id)
+        services: (state.services || []).filter(s => s.id !== id),
+        leads: (state.leads || []).map((lead) => {
+          const nextServiceIds = (lead.serviceIds || []).filter((serviceId) => serviceId !== id);
+          if (lead.serviceId !== id && nextServiceIds.length === (lead.serviceIds || []).length) return lead;
+          return {
+            ...lead,
+            serviceId: nextServiceIds[0],
+            serviceIds: nextServiceIds,
+          };
+        }),
+        prospectLeads: (state.prospectLeads || []).map((lead) => (
+          lead.serviceId === id ? { ...lead, serviceId: undefined } : lead
+        )),
       })),
+
+      addLeadSource: (name, kind, description) => set((state) => ({
+        leadSources: [...ensureLeadSources(state.leadSources), { id: uuidv4(), name, kind, description }]
+      })),
+
+      updateLeadSource: (id, data) => set((state) => ({
+        leadSources: ensureLeadSources(state.leadSources).map((source) => (
+          source.id === id ? { ...source, ...data, id: source.id } : source
+        )),
+      })),
+
+      deleteLeadSource: (id) => set((state) => {
+        const target = ensureLeadSources(state.leadSources).find((source) => source.id === id);
+        if (!target || target.locked) return state;
+
+        return {
+          leadSources: ensureLeadSources(state.leadSources).filter((source) => source.id !== id),
+          leads: (state.leads || []).map((lead) => (
+            lead.sourceId === id
+              ? { ...lead, sourceId: undefined, sourceDetails: undefined, campaignId: undefined, adGroupId: undefined, adId: undefined }
+              : lead
+          )),
+        };
+      }),
 
       addStandardTask: (title, description) => set((state) => ({
         standardTasks: [...(state.standardTasks || []), { id: uuidv4(), title, description }]

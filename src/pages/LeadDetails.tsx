@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 
@@ -18,7 +19,7 @@ export function LeadDetails() {
   const navigate = useNavigate();
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
   const {
-    leads, campaigns, adGroups, ads, areasOfLaw, services, standardTasks, funnels, commercialDefaultFunnelId,
+    leads, campaigns, adGroups, ads, areasOfLaw, services, leadSources, standardTasks, funnels, commercialDefaultFunnelId,
     updateLead, deleteLead, addNoteToLead, updateNoteInLead, deleteNoteFromLead,
     addDocumentToLead, updateDocumentInLead, deleteDocumentFromLead,
     addFollowUpToLead, updateFollowUpInLead, deleteFollowUpFromLead, updateFollowUpStatus,
@@ -48,6 +49,8 @@ export function LeadDetails() {
     estimatedValue: '',
     areaOfLawId: '',
     serviceId: '',
+    sourceId: '',
+    sourceDetails: '',
     funnelId: '',
     campaignId: '',
     ownerUserId: '',
@@ -73,6 +76,8 @@ export function LeadDetails() {
       estimatedValue: lead.estimatedValue ? String(lead.estimatedValue) : '',
       areaOfLawId: lead.areaOfLawId || '',
       serviceId: lead.serviceId || '',
+      sourceId: lead.sourceId || '',
+      sourceDetails: lead.sourceDetails || '',
       funnelId: lead.funnelId || '',
       campaignId: lead.campaignId || '',
       ownerUserId: lead.ownerUserId || '',
@@ -81,6 +86,8 @@ export function LeadDetails() {
 
   const campaign = campaigns.find(c => c.id === lead?.campaignId);
   const ad = ads.find(a => a.id === lead?.adId);
+  const selectedSource = lead ? (leadSources || []).find((source) => source.id === lead.sourceId) : undefined;
+  const leadServiceIds = lead ? getLeadServiceIds(lead) : [];
 
   const availableServices = services.filter(s => s.areaOfLawId === lead?.areaOfLawId);
   const availableAds = ads.filter(a => adGroups.find(ag => ag.id === a.adGroupId)?.campaignId === lead?.campaignId);
@@ -148,8 +155,15 @@ export function LeadDetails() {
       estimatedValue: editForm.estimatedValue ? Number(editForm.estimatedValue) : undefined,
       areaOfLawId: editForm.areaOfLawId || undefined,
       serviceId: editForm.serviceId || undefined,
+      serviceIds: editForm.serviceId ? [editForm.serviceId] : [],
+      sourceId: editForm.sourceId || undefined,
+      sourceDetails: editForm.sourceId && (leadSources || []).find((source) => source.id === editForm.sourceId)?.kind !== 'campaign'
+        ? editForm.sourceDetails || undefined
+        : undefined,
       funnelId: editForm.funnelId || undefined,
-      campaignId: editForm.campaignId || undefined,
+      campaignId: editForm.sourceId && (leadSources || []).find((source) => source.id === editForm.sourceId)?.kind === 'campaign'
+        ? editForm.campaignId || undefined
+        : undefined,
       ownerUserId: editForm.ownerUserId || undefined,
     });
     setIsEditModalOpen(false);
@@ -364,29 +378,38 @@ export function LeadDetails() {
             <div className="flex flex-col gap-2 mt-1">
               <select
                 value={lead.areaOfLawId || ''}
-                onChange={(e) => updateLead(lead.id, { areaOfLawId: e.target.value, serviceId: undefined })}
+                onChange={(e) => updateLead(lead.id, { areaOfLawId: e.target.value, serviceId: undefined, serviceIds: [] })}
                 className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="">Selecione a Área</option>
+                <option value="">Selecione a Ãrea</option>
                 {areasOfLaw.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               {lead.areaOfLawId && (
-                <select
-                  value={lead.serviceId || ''}
-                  onChange={(e) => {
-                    const selectedService = services.find(s => s.id === e.target.value);
-                    updateLead(lead.id, {
-                      serviceId: e.target.value,
-                      estimatedValue: selectedService?.price || lead.estimatedValue
-                    });
-                  }}
-                  className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-                >
-                  <option value="">Selecione o Serviço</option>
-                  {availableServices.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <div className="space-y-2 rounded-lg border border-border bg-background/30 p-2">
+                  {availableServices.map((service) => {
+                    const checked = leadServiceIds.includes(service.id);
+                    return (
+                      <label key={service.id} className="flex items-center gap-2 text-xs text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const nextIds = e.target.checked
+                              ? Array.from(new Set([...leadServiceIds, service.id]))
+                              : leadServiceIds.filter((serviceId) => serviceId !== service.id);
+                            updateLead(lead.id, {
+                              serviceId: nextIds[0],
+                              serviceIds: nextIds,
+                              estimatedValue: nextIds.length === 1 ? services.find((item) => item.id === nextIds[0])?.price || lead.estimatedValue : lead.estimatedValue
+                            });
+                          }}
+                          className="rounded border-border bg-background"
+                        />
+                        <span>{service.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
             {lead.estimatedValue && (
@@ -400,27 +423,56 @@ export function LeadDetails() {
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Origem do Lead</p>
             <div className="flex flex-col gap-2 mt-1">
               <select
-                value={lead.campaignId || ''}
+                value={lead.sourceId || ''}
                 onChange={(e) => {
-                  const selectedCampaign = campaigns.find(c => c.id === e.target.value);
                   updateLead(lead.id, {
-                    campaignId: e.target.value,
+                    sourceId: e.target.value || undefined,
+                    sourceDetails: undefined,
+                    campaignId: undefined,
                     adGroupId: undefined,
                     adId: undefined,
-                    areaOfLawId: selectedCampaign?.areaOfLawId || lead.areaOfLawId,
-                    serviceId: selectedCampaign?.serviceId || lead.serviceId
                   });
                 }}
                 className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="">Selecione a Campanha</option>
-                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="">Selecione a origem</option>
+                {(leadSources || []).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
               </select>
 
-              {/* Creative selector button */}
+              {selectedSource?.kind === 'campaign' ? (
+                <select
+                  value={lead.campaignId || ''}
+                  onChange={(e) => {
+                    const selectedCampaign = campaigns.find(c => c.id === e.target.value);
+                    updateLead(lead.id, {
+                      campaignId: e.target.value || undefined,
+                      adGroupId: undefined,
+                      adId: undefined,
+                      areaOfLawId: selectedCampaign?.areaOfLawId || lead.areaOfLawId,
+                      serviceId: selectedCampaign?.serviceId || lead.serviceId,
+                      serviceIds: selectedCampaign?.serviceId
+                        ? Array.from(new Set([selectedCampaign.serviceId, ...leadServiceIds]))
+                        : leadServiceIds,
+                    });
+                  }}
+                  className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                >
+                  <option value="">Selecione a Campanha</option>
+                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : selectedSource ? (
+                <input
+                  type="text"
+                  value={lead.sourceDetails || ''}
+                  onChange={(e) => updateLead(lead.id, { sourceDetails: e.target.value || undefined })}
+                  placeholder="Detalhe da origem"
+                  className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                />
+              ) : null}
+
               <button
                 onClick={() => setIsAdSelectorOpen(true)}
-                disabled={!lead.campaignId}
+                disabled={!lead.campaignId || selectedSource?.kind !== 'campaign'}
                 className="w-full bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground text-left flex items-center justify-between hover:border-gold-500/50 disabled:opacity-50"
               >
                 <span>{ad ? ad.name : 'Selecionar Criativo'}</span>
