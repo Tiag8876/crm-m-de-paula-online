@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Lead,
@@ -57,7 +57,7 @@ const buildDefaultFunnels = (): FunnelConfig[] => {
   return [
     {
       id: DEFAULT_COMMERCIAL_FUNNEL_ID,
-      name: 'Funil Comercial Padrao',
+      name: 'Funil Comercial Padrão',
       description: 'Fluxo principal de vendas do escritorio.',
       operation: 'commercial',
       stages: DEFAULT_STAGES,
@@ -66,21 +66,21 @@ const buildDefaultFunnels = (): FunnelConfig[] => {
     },
     {
       id: DEFAULT_PROSPECTING_FUNNEL_ID,
-      name: 'Funil de Prospeccao Padrao',
-      description: 'Fluxo usado para contatos frios e qualificacao inicial.',
+      name: 'Funil de Prospecção Padrão',
+      description: 'Fluxo usado para contatos frios e qualificação inicial.',
       operation: 'prospecting',
       stages: DEFAULT_PROSPECT_STAGES,
       objections: [
-        'Sem orcamento no momento',
-        'Ja possui assessoria',
+        'Sem orçamento no momento',
+        'Já possui assessoria',
         'Sem tempo para implementar agora',
-        'Nao viu valor na proposta',
+        'Não viu valor na proposta',
       ],
       playbook:
-        '1) Abertura: confirme nome da clinica e responsavel.\n' +
-        '2) Diagnostico: pergunte sobre desafios juridicos e sanitarios atuais.\n' +
-        '3) Valor: explique como a assessoria reduz risco e organiza a operacao.\n' +
-        '4) Objeções: registre motivo e avance para proximo passo.\n' +
+        '1) Abertura: confirme nome da clínica e responsável.\n' +
+        '2) Diagnóstico: pergunte sobre desafios jurídicos e sanitários atuais.\n' +
+        '3) Valor: explique como a assessoria reduz risco e organiza a operação.\n' +
+        '4) Objeções: registre motivo e avance para o próximo passo.\n' +
         '5) Fechamento: agende retorno com data e hora.',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -1516,6 +1516,7 @@ export const useStore = create<AppState>()(
       setDailyInsight: (insight) => set({ dailyInsight: insight })
     })
 );
+
 
 
 

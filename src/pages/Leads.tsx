@@ -50,6 +50,7 @@ export function Leads() {
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const [selectedArea, setSelectedArea] = useState('');
+  const [createFunnelId, setCreateFunnelId] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
@@ -86,9 +87,12 @@ export function Leads() {
     || allFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
     || allFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
     || allFunnels[0];
+  const createFunnel = allFunnels.find((funnel) => funnel.id === createFunnelId) || activeFunnel;
 
   const isProspecting = activeFunnel?.operation === 'prospecting';
   const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+  const createIsProspecting = createFunnel?.operation === 'prospecting';
+  const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
 
   const scopedCommercialLeads = isAdmin
     ? (leads || [])
@@ -158,6 +162,7 @@ export function Leads() {
     setSaveError(null);
     setIsSavingRecord(false);
     setShowSaveSuccess(false);
+    setSelectedArea('');
   };
   const handleCreateRecord = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -168,7 +173,7 @@ export function Leads() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      if (isProspecting) {
+      if (createIsProspecting) {
         addProspectLead({
           clinicName: String(formData.get('clinicName') || ''),
           contactName: String(formData.get('contactName') || ''),
@@ -179,8 +184,8 @@ export function Leads() {
           city: String(formData.get('city') || ''),
           neighborhood: String(formData.get('neighborhood') || '') || undefined,
           serviceId: String(formData.get('serviceId') || '') || undefined,
-          funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
-          status: sortedStages[0]?.id || 'p_novo',
+          funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
+          status: createSortedStages[0]?.id || 'p_novo',
           ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
         });
       } else {
@@ -192,9 +197,9 @@ export function Leads() {
           legalArea: String(formData.get('legalArea') || ''),
           areaOfLawId: String(formData.get('areaOfLawId') || ''),
           serviceId: String(formData.get('serviceId') || ''),
-          funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
+          funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           estimatedValue: Number(formData.get('estimatedValue')) || 0,
-          status: sortedStages[0]?.id || 'novo',
+          status: createSortedStages[0]?.id || 'novo',
           ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
         });
       }
@@ -255,12 +260,12 @@ export function Leads() {
       if (!reasonLabel) return;
       const matched = LOSS_REASON_OPTIONS.find((option) => option.label.toLowerCase() === reasonLabel.trim().toLowerCase());
       if (!matched) {
-        alert('Motivo inv·lido. Use um dos motivos listados.');
+        alert('Motivo inv√°lido. Use um dos motivos listados.');
         return;
       }
-      const detail = prompt('Descreva o motivo da perda com clareza (mÌnimo 12 caracteres):') || '';
+      const detail = prompt('Descreva o motivo da perda com clareza (m√≠nimo 12 caracteres):') || '';
       if (!isValidLossReasonDetail(detail)) {
-        alert('Motivo de perda inv·lido. Evite justificativa genÈrica como "n„o respondeu".');
+        alert('Motivo de perda inv√°lido. Evite justificativa gen√©rica como "n√£o respondeu".');
         return;
       }
       const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
@@ -304,16 +309,16 @@ export function Leads() {
   const prospectingFunnels = allFunnels.filter((funnel) => funnel.operation === 'prospecting');
 
   const searchPlaceholder = isProspecting
-    ? 'Buscar por clÌnica, contato, telefone ou CNPJ...'
+    ? 'Buscar por cl√≠nica, contato, telefone ou CNPJ...'
     : 'Buscar por nome, telefone ou CPF...';
 
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-10">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-5xl font-serif font-bold gold-text-gradient tracking-tight">Gest„o de Leads</h1>
+          <h1 className="text-5xl font-serif font-bold gold-text-gradient tracking-tight">Gest√£o de Leads</h1>
           <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-xs">
-            Um ˙nico kanban para operar qualquer funil do escritÛrio
+            Um √∫nico kanban para operar qualquer funil do escrit√≥rio
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
@@ -327,7 +332,7 @@ export function Leads() {
                 <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
               ))}
             </optgroup>
-            <optgroup label="Funis de ProspecÁ„o">
+            <optgroup label="Funis de Prospec√ß√£o">
               {prospectingFunnels.map((funnel) => (
                 <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
               ))}
@@ -350,12 +355,13 @@ export function Leads() {
           <button
             onClick={() => {
               resetModalState();
+              setCreateFunnelId(activeFunnel?.id || '');
               setIsModalOpen(true);
             }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
           >
             <Plus className="w-5 h-5" />
-            {isProspecting ? 'Nova Conta' : 'Novo Lead'}
+            Novo cadastro
           </button>
         </div>
       </header>
@@ -400,14 +406,14 @@ export function Leads() {
               }}
               className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
             >
-              <option value="">Todas as ·reas</option>
+              <option value="">Todas as √°reas</option>
               {areasOfLaw.map((area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
               ))}
             </select>
           )}
           <select value={filterServiceId} onChange={(event) => setFilterServiceId(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-            <option value="">Todos os serviÁos</option>
+            <option value="">Todos os servi√ßos</option>
             {services
               .filter((service) => isProspecting || !filterAreaId || service.areaOfLawId === filterAreaId)
               .map((service) => (
@@ -511,7 +517,7 @@ export function Leads() {
                   <th className="px-6 py-4">Contato</th>
                   <th className="px-6 py-4">Telefone</th>
                   <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">AÁıes</th>
+                  <th className="px-6 py-4 text-right">A√ß√µes</th>
                 </tr>
               </thead>
               <tbody>
@@ -599,10 +605,10 @@ export function Leads() {
               <thead className="bg-accent text-primary font-black text-[10px] uppercase tracking-[0.2em] border-b border-border">
                 <tr>
                   <th className="px-8 py-5">Nome do Cliente</th>
-                  <th className="px-8 py-5">¡rea JurÌdica</th>
+                  <th className="px-8 py-5">√Årea Jur√≠dica</th>
                   <th className="px-8 py-5">Status</th>
                   <th className="px-8 py-5">Valor Est.</th>
-                  <th className="px-8 py-5 text-right">AÁıes</th>
+                  <th className="px-8 py-5 text-right">A√ß√µes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -622,7 +628,7 @@ export function Leads() {
                           </div>
                         </td>
                         <td className="px-8 py-5">
-                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'N„o definido'}</span>
+                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'N√£o definido'}</span>
                         </td>
                         <td className="px-8 py-5">
                           <span
@@ -650,7 +656,7 @@ export function Leads() {
         )
       )}
 
-      {isModalOpen && activeFunnel && (
+      {isModalOpen && createFunnel && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-2xl p-8 w-full max-w-2xl shadow-2xl border border-border relative max-h-[90vh] overflow-y-auto scrollbar-none">
             {showSaveSuccess && (
@@ -663,26 +669,49 @@ export function Leads() {
             )}
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-3xl font-serif font-bold gold-text-gradient">{isProspecting ? 'Nova Conta em ProspecÁ„o' : 'Registrar Novo Lead'}</h2>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground mt-2">Funil atual: {activeFunnel.name}</p>
+                <h2 className="text-3xl font-serif font-bold gold-text-gradient">{createIsProspecting ? 'Novo cadastro em prospec√ß√£o' : 'Novo lead comercial'}</h2>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mt-2">Funil de entrada: {createFunnel.name}</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-primary" disabled={isSavingRecord}>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetModalState();
+                }}
+                className="text-muted-foreground hover:text-primary"
+                disabled={isSavingRecord}
+              >
                 <Plus className="w-6 h-6 rotate-45" />
               </button>
             </div>
             <form onSubmit={handleCreateRecord} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {isProspecting ? (
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
+                <select
+                  name="funnelId"
+                  value={createFunnel.id}
+                  onChange={(event) => {
+                    setCreateFunnelId(event.target.value);
+                    setSelectedArea('');
+                  }}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  {allFunnels.map((funnel) => (
+                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                  ))}
+                </select>
+              </div>
+              {createIsProspecting ? (
                 <>
-                  <input name="clinicName" required placeholder="Nome da conta ou clÌnica" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="contactName" required placeholder="Respons·vel principal" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="clinicName" required placeholder="Nome da conta ou cl√≠nica" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="contactName" required placeholder="Respons√°vel principal" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <input name="phone" required placeholder="Telefone ou WhatsApp" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <input name="cnpj" placeholder="CNPJ" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <input name="email" placeholder="E-mail" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <input name="city" placeholder="Cidade" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <input name="neighborhood" placeholder="Bairro" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
-                  <input name="receptionistName" placeholder="RecepÁ„o ou contato secund·rio" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="receptionistName" placeholder="Recep√ß√£o ou contato secund√°rio" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
-                    <option value="">ServiÁo ofertado</option>
+                    <option value="">Servi√ßo ofertado</option>
                     {services.map((service) => (
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
@@ -706,18 +735,18 @@ export function Leads() {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">¡rea de AtuaÁ„o</label>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">√Årea de Atua√ß√£o</label>
                       <select name="areaOfLawId" onChange={(event) => setSelectedArea(event.target.value)} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                        <option value="">Selecione a ¡rea</option>
+                        <option value="">Selecione a √Årea</option>
                         {areasOfLaw.map((area) => (
                           <option key={area.id} value={area.id}>{area.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">ServiÁo</label>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Servi√ßo</label>
                       <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                        <option value="">Selecione o ServiÁo</option>
+                        <option value="">Selecione o Servi√ßo</option>
                         {services.filter((service) => service.areaOfLawId === selectedArea).map((service) => (
                           <option key={service.id} value={service.id}>{service.name}</option>
                         ))}
@@ -737,13 +766,8 @@ export function Leads() {
                   </div>
                 </>
               )}
-              <select name="funnelId" defaultValue={activeFunnel.id} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
-                {allFunnels.filter((funnel) => funnel.operation === activeFunnel.operation).map((funnel) => (
-                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                ))}
-              </select>
               <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
-                <option value="">Sem atribuiÁ„o definida</option>
+                <option value="">Sem atribui√ß√£o definida</option>
                 {activeAssignableUsers.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
                 ))}
@@ -764,3 +788,4 @@ export function Leads() {
     </div>
   );
 }
+

@@ -10,12 +10,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const baseNavItems = [
   { icon: LayoutDashboard, label: 'Painel de Controle', path: '/' },
-  { icon: Users, label: 'Gestao de Leads', path: '/leads' },
+  { icon: Users, label: 'Gestão de Leads', path: '/leads' },
   { icon: Megaphone, label: 'Estrategia de Trafego', path: '/campaigns' },
   { icon: BarChart3, label: 'Painel de Trafego', path: '/traffic' },
-  { icon: FileText, label: 'Relatorios', path: '/reports' },
+  { icon: FileText, label: 'Relatórios', path: '/reports' },
   { icon: Calendar, label: 'Agenda', path: '/calendar' },
-  { icon: Settings, label: 'Configuracoes', path: '/settings' },
+  { icon: Settings, label: 'Configurações', path: '/settings' },
 ];
 
 export function Layout() {
@@ -142,7 +142,7 @@ export function Layout() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[360px] p-0">
               <DropdownMenuLabel className="px-4 py-3 text-xs uppercase tracking-widest flex items-center justify-between gap-3">
-                Alertas da Operacao
+                Alertas da Operação
                 <button
                   type="button"
                   onClick={markAllNotificationsRead}
@@ -171,7 +171,7 @@ export function Layout() {
                         )}
                         <div>
                           <p className="text-sm font-semibold leading-tight">
-                            {alert.title} {!alert.read && <span className="text-primary">�</span>}
+                            {alert.title} {!alert.read && <span className="text-primary">•</span>}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1 leading-tight">{alert.description}</p>
                         </div>
@@ -191,3 +191,5 @@ export function Layout() {
     </div>
   );
 }
+
+

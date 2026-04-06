@@ -183,15 +183,15 @@ export function Dashboard() {
         <div>
           <h1 className="text-4xl md:text-5xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Controle</h1>
           <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
-            Operação unificada por funil, sem menus paralelos
+            OperaÃ§Ã£o unificada por funil, sem menus paralelos
           </p>
         </div>
         <select value={selectedScope} onChange={(event) => handleScopeChange(event.target.value)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[280px]">
-          <option value={ALL_SCOPE}>Operação Completa</option>
+          <option value={ALL_SCOPE}>OperaÃ§Ã£o completa</option>
           <optgroup label="Funis Comerciais">
             {allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}
           </optgroup>
-          <optgroup label="Funis de Prospecção">
+          <optgroup label="Funis de ProspecÃ§Ã£o">
             {allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}
           </optgroup>
         </select>
@@ -200,21 +200,21 @@ export function Dashboard() {
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon={LayoutDashboard} label="Registros no pipeline" value={metrics.total} />
         <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-        <StatCard icon={GitBranchPlus} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
-        <StatCard icon={AlertTriangle} label="Sem ação 24h+" value={metrics.stalled} />
+        <StatCard icon={GitBranchPlus} label="ConversÃ£o" value={`${metrics.conversion.toFixed(1)}%`} />
+        <StatCard icon={AlertTriangle} label="Sem aÃ§Ã£o 24h+" value={metrics.stalled} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <QuickLink to={primaryKanbanLink} icon={KanbanSquare} title="Abrir Kanban" description="Trabalhar o funil selecionado" />
-        <QuickLink to={primaryReportLink} icon={FileText} title="Ver Relatórios" description="Analisar conversão por funil" />
-        <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Configurar Funis" description="Etapas, playbooks e objeções" />
-        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" description="Relacionar tráfego e origem" />
+        <QuickLink to={primaryReportLink} icon={FileText} title="Ver RelatÃ³rios" description="Analisar conversÃ£o por funil" />
+        <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Configurar Funis" description="Etapas, playbooks e objeÃ§Ãµes" />
+        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" description="Relacionar trÃ¡fego e origem" />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
           <div className="p-6 border-b border-border bg-accent flex items-center justify-between gap-4">
-            <h2 className="text-lg font-serif font-bold">{activeFunnel ? `Etapas do ${activeFunnel.name}` : 'Distribuição por Funil'}</h2>
+            <h2 className="text-lg font-serif font-bold">{activeFunnel ? `Etapas do ${activeFunnel.name}` : 'DistribuiÃ§Ã£o por Funil'}</h2>
             <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{activeFunnel ? activeFunnel.operation : 'geral'}</span>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -229,8 +229,8 @@ export function Dashboard() {
 
         <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
           <div className="p-6 border-b border-border bg-accent flex items-center justify-between">
-            <h2 className="text-lg font-serif font-bold">Agenda de Hoje</h2>
-            <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} ações</span>
+            <h2 className="text-lg font-serif font-bold">Agenda de hoje</h2>
+            <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} aÃ§Ãµes</span>
           </div>
           <div className="p-4 space-y-3">
             {agenda.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nada pendente para hoje.</p> : agenda.map((item) => (
@@ -282,3 +282,4 @@ function QuickLink({ to, icon: Icon, title, description }: { to: string; icon: t
     </Link>
   );
 }
+

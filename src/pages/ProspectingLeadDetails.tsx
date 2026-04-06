@@ -86,17 +86,25 @@ export function ProspectingLeadDetails() {
       || prospectingFunnels[0],
     [lead?.funnelId, prospectingDefaultFunnelId, prospectingFunnels],
   );
+  const editFunnel = useMemo(
+    () => prospectingFunnels.find((funnel) => funnel.id === editForm.funnelId)
+      || currentFunnel,
+    [currentFunnel, editForm.funnelId, prospectingFunnels],
+  );
   const stage = useMemo(
     () => (currentFunnel?.stages || []).find((item) => item.id === lead?.status),
     [currentFunnel?.stages, lead?.status]
   );
   const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
+  const unifiedProspectingPath = currentFunnel
+    ? `/leads?operation=prospecting&funnel=${currentFunnel.id}`
+    : '/leads?operation=prospecting';
 
   if (!lead) {
     return (
       <div className="p-10">
         <h1 className="text-3xl font-serif font-bold text-primary">Clínica não encontrada</h1>
-        <Link to="/prospecting/leads" className="text-muted-foreground hover:text-primary mt-3 inline-block">Voltar</Link>
+        <Link to="/leads?operation=prospecting" className="text-muted-foreground hover:text-primary mt-3 inline-block">Voltar</Link>
       </div>
     );
   }
@@ -124,7 +132,7 @@ export function ProspectingLeadDetails() {
     const confirmed = window.confirm(`Deseja realmente excluir a clínica "${lead.clinicName}"?`);
     if (!confirmed) return;
     deleteProspectLead(lead.id);
-    navigate('/prospecting/leads');
+    navigate(unifiedProspectingPath);
   };
 
   const handleSaveProspectEdit = (event: FormEvent) => {
@@ -206,7 +214,7 @@ export function ProspectingLeadDetails() {
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-8">
       <header className="flex items-center justify-between">
-        <button onClick={() => navigate('/prospecting/leads')} className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary">
+        <button onClick={() => navigate(unifiedProspectingPath)} className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary">
           <ChevronLeft className="w-4 h-4" />
           Voltar ao Kanban de Prospecção
         </button>
@@ -458,13 +466,13 @@ export function ProspectingLeadDetails() {
             </select>
           </section>
           <section className="bg-card border border-border rounded-2xl p-6 space-y-2">
-            <h3 className="font-serif font-bold text-xl">Atribui??o</h3>
+            <h3 className="font-serif font-bold text-xl">Atribuição</h3>
             <select
               value={lead.ownerUserId || ''}
               onChange={(e) => updateProspectLead(lead.id, { ownerUserId: e.target.value || undefined })}
               className="w-full rounded-lg border border-border bg-background p-2 text-sm"
             >
-              <option value="">Sem atribui??o (vis?vel para vendedores)</option>
+              <option value="">Sem atribuição (visível para vendedores)</option>
               {selectableUsers.map((assignableUser) => (
                 <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
               ))}
@@ -558,7 +566,7 @@ export function ProspectingLeadDetails() {
                   onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
-                  {[...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order).map((item) => (
+                  {[...(editFunnel?.stages || [])].sort((a, b) => a.order - b.order).map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
@@ -597,7 +605,7 @@ export function ProspectingLeadDetails() {
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
                 >
                   <option value="">Selecione uma objeção</option>
-                  {(currentFunnel?.objections || []).map((item) => (
+                  {(editFunnel?.objections || []).map((item) => (
                     <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
@@ -631,3 +639,4 @@ export function ProspectingLeadDetails() {
     </div>
   );
 }
+

@@ -96,7 +96,7 @@ export function SalesReports() {
         status: lead.status,
         closed: lead.status === 'p_fechada',
         lost: lead.status === 'p_perdida',
-        sourceName: services.find((service) => service.id === lead.serviceId)?.name || 'Sem serviço',
+        sourceName: services.find((service) => service.id === lead.serviceId)?.name || 'Sem serviÃ§o',
         idleHours: getProspectIdleHours(lead, now),
         followUps: lead.followUps || [],
         tasks: lead.tasks || [],
@@ -140,7 +140,7 @@ export function SalesReports() {
     for (const record of records) {
       const owner = users.find((item) => item.id === record.ownerUserId);
       const key = record.ownerUserId || 'unassigned';
-      const name = owner?.name || (key === 'unassigned' ? 'Sem responsável' : 'Usuário');
+      const name = owner?.name || (key === 'unassigned' ? 'Sem responsÃ¡vel' : 'UsuÃ¡rio');
       if (!byUser.has(key)) byUser.set(key, { name, total: 0, won: 0, stalled: 0, overdue: 0 });
       const row = byUser.get(key)!;
       row.total += 1;
@@ -152,21 +152,21 @@ export function SalesReports() {
   }, [now, records, users]);
 
   const exportReport = () => {
-    const title = activeFunnel ? `Relatório do ${activeFunnel.name}` : 'Relatório Geral de Funis';
+    const title = activeFunnel ? `RelatÃ³rio do ${activeFunnel.name}` : 'RelatÃ³rio Geral de Funis';
     const html = `
       <html><head><meta charset="utf-8" />
       <style>body{font-family:Segoe UI,Arial,sans-serif;padding:16px;color:#111827}table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;font-size:12px}th{background:#111827;color:#fff;text-transform:uppercase;font-size:10px}h1{font-size:20px} .summary{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:8px;margin:12px 0} .card{border:1px solid #d1d5db;border-radius:8px;padding:8px} .label{font-size:10px;text-transform:uppercase;color:#6b7280} .value{font-size:18px;font-weight:700;margin-top:4px}</style>
       </head><body>
       <h1>${escapeHtml(title)}</h1>
-      <p>Período: ${escapeHtml(period)} | Gerado em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
+      <p>PerÃ­odo: ${escapeHtml(period)} | Gerado em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
       <div class="summary">
         <div class="card"><div class="label">Entradas</div><div class="value">${escapeHtml(metrics.total)}</div></div>
         <div class="card"><div class="label">Fechados</div><div class="value">${escapeHtml(metrics.won)}</div></div>
         <div class="card"><div class="label">Perdidos</div><div class="value">${escapeHtml(metrics.lost)}</div></div>
-        <div class="card"><div class="label">Conversão</div><div class="value">${escapeHtml(metrics.conversion.toFixed(1))}%</div></div>
+        <div class="card"><div class="label">ConversÃ£o</div><div class="value">${escapeHtml(metrics.conversion.toFixed(1))}%</div></div>
         <div class="card"><div class="label">Follow-up atrasado</div><div class="value">${escapeHtml(metrics.overdue)}</div></div>
       </div>
-      <table><thead><tr><th>${selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'Serviço' : 'Campanha'}</th><th>Entradas</th><th>Fechados</th><th>Conversão</th></tr></thead><tbody>
+      <table><thead><tr><th>${selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'ServiÃ§o' : 'Campanha'}</th><th>Entradas</th><th>Fechados</th><th>ConversÃ£o</th></tr></thead><tbody>
       ${groupedRows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.total)}</td><td>${escapeHtml(row.won)}</td><td>${escapeHtml(row.conversion.toFixed(1))}%</td></tr>`).join('')}
       </tbody></table>
       </body></html>`;
@@ -202,17 +202,17 @@ export function SalesReports() {
     <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
       <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">Relatórios</h1>
-          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">Uma única área de leitura, orientada por funil</p>
+          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">RelatÃ³rios</h1>
+          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">Uma Ãºnica Ã¡rea de leitura, orientada por funil</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <select value={selectedScope} onChange={(event) => handleScopeChange(event.target.value)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[260px]">
             <option value={ALL_SCOPE}>Todos os Funis</option>
             <optgroup label="Funis Comerciais">{allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}</optgroup>
-            <optgroup label="Funis de Prospecção">{allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}</optgroup>
+            <optgroup label="Funis de ProspecÃ§Ã£o">{allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}</optgroup>
           </select>
           <select value={period} onChange={(event) => setPeriod(event.target.value as PeriodFilter)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground">
-            <option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="all">Todo o período</option>
+            <option value="7">Ãšltimos 7 dias</option><option value="30">Ãšltimos 30 dias</option><option value="90">Ãšltimos 90 dias</option><option value="all">Todo o perÃ­odo</option>
           </select>
           <button onClick={exportReport} className="px-4 py-3 rounded-xl bg-primary text-primary-foreground text-xs uppercase tracking-widest font-black inline-flex items-center gap-2"><Download className="w-4 h-4" />Exportar</button>
         </div>
@@ -221,24 +221,24 @@ export function SalesReports() {
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <MetricCard icon={FileSpreadsheet} label="Entradas" value={metrics.total} />
         <MetricCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-        <MetricCard icon={TrendingUp} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
+        <MetricCard icon={TrendingUp} label="ConversÃ£o" value={`${metrics.conversion.toFixed(1)}%`} />
         <MetricCard icon={Clock3} label="Follow-up atrasado" value={metrics.overdue} />
-        <MetricCard icon={AlertTriangle} label="Sem ação 24h+" value={metrics.stalled} />
+        <MetricCard icon={AlertTriangle} label="Sem aÃ§Ã£o 24h+" value={metrics.stalled} />
       </section>
 
       <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
         <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
           <GitBranchPlus className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">{selectedScope === ALL_SCOPE ? 'Fechamento por Funil' : activeFunnel?.operation === 'prospecting' ? 'Fechamento por Serviço' : 'Fechamento por Campanha'}</h2>
+          <h2 className="text-lg font-serif font-bold">{selectedScope === ALL_SCOPE ? 'Fechamento por Funil' : activeFunnel?.operation === 'prospecting' ? 'Fechamento por ServiÃ§o' : 'Fechamento por Campanha'}</h2>
         </div>
         <div className="overflow-x-auto scrollbar-none">
           <table className="w-full text-sm">
             <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
               <tr>
-                <th className="px-4 py-3 text-left">{selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'Serviço' : 'Campanha'}</th>
+                <th className="px-4 py-3 text-left">{selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'ServiÃ§o' : 'Campanha'}</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Fechados</th>
-                <th className="px-4 py-3 text-left">Conversão</th>
+                <th className="px-4 py-3 text-left">ConversÃ£o</th>
               </tr>
             </thead>
             <tbody>
@@ -258,22 +258,22 @@ export function SalesReports() {
       <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
         <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">Disciplina por Responsável</h2>
+          <h2 className="text-lg font-serif font-bold">Disciplina por ResponsÃ¡vel</h2>
         </div>
         <div className="overflow-x-auto scrollbar-none">
           <table className="w-full text-sm">
             <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
               <tr>
-                <th className="px-4 py-3 text-left">Responsável</th>
+                <th className="px-4 py-3 text-left">ResponsÃ¡vel</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Fechados</th>
-                <th className="px-4 py-3 text-left">Conversão</th>
-                <th className="px-4 py-3 text-left">Sem ação 24h+</th>
+                <th className="px-4 py-3 text-left">ConversÃ£o</th>
+                <th className="px-4 py-3 text-left">Sem aÃ§Ã£o 24h+</th>
                 <th className="px-4 py-3 text-left">Follow-up atrasado</th>
               </tr>
             </thead>
             <tbody>
-              {disciplineRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Nenhum responsável encontrado para este filtro.</td></tr> : disciplineRows.map((row) => (
+              {disciplineRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Nenhum responsÃ¡vel encontrado para este filtro.</td></tr> : disciplineRows.map((row) => (
                 <tr key={row.name} className="border-b border-border/50 hover:bg-accent/40">
                   <td className="px-4 py-3 font-semibold">{row.name}</td>
                   <td className="px-4 py-3">{row.total}</td>
@@ -294,3 +294,4 @@ export function SalesReports() {
 function MetricCard({ icon: Icon, label, value }: { icon: typeof FileSpreadsheet; label: string; value: string | number }) {
   return <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-xl"><div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary"><Icon className="w-4 h-4" /></div><div><p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p><p className="text-lg font-serif font-bold">{value}</p></div></div>;
 }
+

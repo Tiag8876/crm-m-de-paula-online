@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -23,9 +23,9 @@ type FunnelDraft = { name: string; description: string };
 
 const ADMIN_SECTION_LINKS = [
   { id: 'funnels', label: 'Funis' },
-  { id: 'areas', label: 'Areas de atuacao' },
-  { id: 'services', label: 'Servicos' },
-  { id: 'tasks', label: 'Tarefas padrao' },
+  { id: 'areas', label: 'Áreas de atuação' },
+  { id: 'services', label: 'Serviços' },
+  { id: 'tasks', label: 'Tarefas padrão' },
 ] as const;
 
 export function Settings() {
@@ -247,7 +247,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-7xl p-8">
       <div className="mb-8">
-        <h1 className="mb-2 text-4xl font-serif font-bold text-primary">Configuracoes</h1>
+        <h1 className="mb-2 text-4xl font-serif font-bold text-primary">Configurações</h1>
         <p className="max-w-3xl text-muted-foreground">
           Organize perfil, equipe e estrutura operacional do CRM em um unico lugar, com menos menus e mais clareza para a equipe.
         </p>
@@ -346,7 +346,7 @@ export function Settings() {
       {isAdmin && activeTab === 'operations' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-2xl font-serif text-gold-400">Operacao do CRM</h2>
+            <h2 className="text-2xl font-serif text-gold-400">Operação do CRM</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               Aqui ficam os cadastros estruturais do sistema. Funis, areas, servicos e tarefas passam a viver no mesmo contexto operacional.
             </p>
@@ -371,7 +371,7 @@ export function Settings() {
               <input type="text" placeholder="Nome do novo funil" value={newFunnelName} onChange={(event) => setNewFunnelName(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
               <select value={newFunnelOperation} onChange={(event) => setNewFunnelOperation(event.target.value as FunnelConfig['operation'])} className="rounded-lg border border-border bg-background px-4 py-2">
                 <option value="commercial">Comercial</option>
-                <option value="prospecting">Prospeccao</option>
+                <option value="prospecting">Prospecção</option>
               </select>
               <input type="text" placeholder="Descricao curta" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="rounded-lg border border-border bg-background px-4 py-2 xl:col-span-2" />
               <div className="md:col-span-2 xl:col-span-4 flex justify-end">
@@ -394,7 +394,7 @@ export function Settings() {
                       <div className="grid flex-1 gap-3 md:grid-cols-2">
                         <input value={draft.name} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, name: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { name: draft.name.trim() || funnel.name })} className="rounded-lg border border-border bg-card px-4 py-2 font-semibold" />
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          <span className="rounded-full border border-border px-3 py-2">{funnel.operation === 'commercial' ? 'Comercial' : 'Prospeccao'}</span>
+                          <span className="rounded-full border border-border px-3 py-2">{funnel.operation === 'commercial' ? 'Comercial' : 'Prospecção'}</span>
                           {isDefault && <span className="rounded-full bg-primary px-3 py-2 text-primary-foreground">Principal</span>}
                         </div>
                         <input value={draft.description} onChange={(event) => setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, description: event.target.value } }))} onBlur={() => updateFunnel(funnel.id, { description: draft.description.trim() || undefined })} placeholder="Descricao do funil" className="rounded-lg border border-border bg-card px-4 py-2 md:col-span-2" />
@@ -619,3 +619,4 @@ export function Settings() {
     </div>
   );
 }
+
