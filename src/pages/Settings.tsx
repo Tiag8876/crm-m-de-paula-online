@@ -12,10 +12,11 @@ import {
   LayoutGrid,
   ArrowUp,
   ArrowDown,
-  BookOpen,
+  Shield,
 } from 'lucide-react';
 import { getUserAccessProfile, isAdminUser } from '@/lib/access';
 import { getApiBase } from '@/lib/apiConfig';
+import { UsersAdminPage } from '@/pages/UsersAdminPage';
 
 export function Settings() {
   const { user, logout, updateOwnProfile } = useAuthStore();
@@ -51,7 +52,7 @@ export function Settings() {
     reorderKanbanStages,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'areas' | 'services' | 'tasks' | 'kanban' | 'guide'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'users' | 'areas' | 'services' | 'tasks' | 'kanban'>('account');
   const [newAreaName, setNewAreaName] = useState('');
   const [newAreaDesc, setNewAreaDesc] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
@@ -181,6 +182,17 @@ export function Settings() {
     }
   };
 
+  const handleProfileAvatarFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileAvatarUrl(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const moveStage = (id: string, direction: 'up' | 'down') => {
     const sorted = [...kanbanStages].sort((a, b) => a.order - b.order);
     const index = sorted.findIndex((stage) => stage.id === id);
@@ -195,13 +207,13 @@ export function Settings() {
   };
 
   const tabs = [
-    { key: 'account', icon: Edit2, label: 'Conta' },
-    { key: 'guide', icon: BookOpen, label: 'Guia do Sistema' },
-    { key: 'areas', icon: Scale, label: 'Áreas de Atuação' },
-    { key: 'services', icon: Briefcase, label: 'Serviços' },
-    { key: 'tasks', icon: ListTodo, label: 'Tarefas Padrão' },
+    { key: 'account', icon: Edit2, label: 'Meu Perfil' },
+    { key: 'users', icon: Shield, label: 'Equipe' },
+    { key: 'areas', icon: Scale, label: 'Areas de Atuacao' },
+    { key: 'services', icon: Briefcase, label: 'Servicos' },
+    { key: 'tasks', icon: ListTodo, label: 'Tarefas Padrao' },
     { key: 'kanban', icon: LayoutGrid, label: 'Fluxo Kanban' },
-  ].filter((tab) => isAdmin || tab.key === 'account' || tab.key === 'guide');
+  ].filter((tab) => isAdmin || tab.key === 'account');
 
   return (
     <div className="mx-auto max-w-7xl p-8">
@@ -278,6 +290,26 @@ export function Settings() {
           <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="mb-4 text-xl font-serif text-gold-400">Meu Perfil</h2>
             <form onSubmit={handleUpdateOwnProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 flex items-center gap-4 rounded-xl border border-border bg-background/40 p-4">
+                <div className="h-16 w-16 overflow-hidden rounded-full border border-border bg-card">
+                  {profileAvatarUrl ? (
+                    <img src={profileAvatarUrl} alt={profileName || user?.name || 'Perfil'} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-black uppercase tracking-widest text-primary">
+                      {(profileName || user?.name || 'U')
+                        .split(' ')
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase() || '')
+                        .join('')}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Foto de perfil</label>
+                  <input type="file" accept="image/*" onChange={handleProfileAvatarFile} className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground hover:file:bg-gold-400" />
+                </div>
+              </div>
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Nome exibido</label>
                 <input value={profileName} onChange={(event) => setProfileName(event.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
@@ -285,10 +317,6 @@ export function Settings() {
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Email de acesso</label>
                 <input value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} type="email" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Foto de perfil (URL)</label>
-                <input value={profileAvatarUrl} onChange={(event) => setProfileAvatarUrl(event.target.value)} placeholder="https://..." className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
               <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Senha atual</label>
@@ -325,78 +353,7 @@ export function Settings() {
         </div>
       )}
 
-      {activeTab === 'guide' && (
-        <div className="space-y-6">
-          <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="mb-3 text-xl font-serif text-gold-400">Documentação Completa do Aplicativo</h2>
-            <p className="text-sm text-muted-foreground">
-              Este guia orienta a operação diária do CRM M de Paula. Use como manual de treinamento para novos usuários.
-            </p>
-          </div>
-
-          <div className="grid gap-4">
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">1. Painel de Controle</h3>
-              <p className="text-sm text-muted-foreground">
-                Mostra os indicadores principais da operação: volume de leads, conversão, follow-ups atrasados e fila crítica.
-                O administrador vê a operação completa. Usuários veem apenas dados permitidos pelo perfil.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">2. Gestão de Leads</h3>
-              <p className="text-sm text-muted-foreground">
-                Cadastre e mova leads no funil. Registre histórico, tarefas, documentos e follow-ups.
-                O sistema prioriza disciplina comercial com alertas de inatividade e cobrança de retorno.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">3. Estratégia de Tráfego</h3>
-              <p className="text-sm text-muted-foreground">
-                Organize campanhas, conjuntos e criativos. Mantenha nomenclatura padrão para facilitar análise por campanha
-                e decisões de escala, corte e reposicionamento.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">4. Relatórios Comerciais</h3>
-              <p className="text-sm text-muted-foreground">
-                Acompanhe entradas, fechamentos e taxa de conversão. O vendedor vê visão personalizada.
-                O administrador vê consolidado geral para diagnosticar gargalo entre tráfego e comercial.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">5. Agenda e Follow-up</h3>
-              <p className="text-sm text-muted-foreground">
-                Centralize compromissos e retornos. Follow-up vencido entra como prioridade para evitar perda por demora.
-                Use a agenda diariamente no início e no fim do expediente.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">6. Usuários e Permissões (Admin)</h3>
-              <p className="text-sm text-muted-foreground">
-                Cadastre usuários por perfil: Administrador, Comercial ou Tráfego. O admin pode editar, inativar e excluir usuários.
-                Regra recomendada: cada lead deve ter responsável definido.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="mb-2 font-semibold text-gold-100">7. Passo a Passo de Implantação</h3>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                <li>Criar áreas de atuação do escritório.</li>
-                <li>Cadastrar serviços por área.</li>
-                <li>Definir tarefas padrão de atendimento.</li>
-                <li>Configurar etapas do Kanban comercial.</li>
-                <li>Cadastrar usuários e perfis da equipe.</li>
-                <li>Treinar o time para registrar toda interação no lead.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
+      {isAdmin && activeTab === 'users' && <UsersAdminPage embedded />}
 
       {isAdmin && activeTab === 'areas' && (
         <div className="space-y-6">

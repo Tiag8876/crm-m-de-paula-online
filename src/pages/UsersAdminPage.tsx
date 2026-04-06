@@ -10,7 +10,7 @@ const ACCESS_OPTIONS = [
 
 type AccessOption = (typeof ACCESS_OPTIONS)[number]['value'];
 
-export function UsersAdminPage() {
+export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
   const { users, user: currentUser, fetchUsers, createUser, updateUser, deleteUser } = useAuthStore();
 
   const [name, setName] = useState('');
@@ -109,10 +109,12 @@ export function UsersAdminPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-4xl font-serif font-bold gold-text-gradient">Administracao de Usuarios</h1>
-        <p className="text-muted-foreground">Cadastre usuarios, setor, perfil e credenciais. Apenas admin pode editar.</p>
-      </header>
+      {!embedded && (
+        <header>
+          <h1 className="text-4xl font-serif font-bold gold-text-gradient">Administracao de Usuarios</h1>
+          <p className="text-muted-foreground">Cadastre usuarios, setor, perfil e credenciais. Apenas admin pode editar.</p>
+        </header>
+      )}
 
       <section className="bg-card border border-border rounded-xl p-6">
         <h2 className="text-xl font-semibold mb-4">Novo Usuario</h2>

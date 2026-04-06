@@ -6,7 +6,6 @@ import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { isAdminUser } from '@/lib/access';
-import { HorizontalScrollRail } from '@/components/HorizontalScrollRail';
 
 export function Leads() {
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
@@ -283,7 +282,6 @@ export function Leads() {
       )}
 
       {viewMode === 'kanban' ? (
-        <>
         <div
           ref={scrollContainerRef}
           data-scroll-rail-id="main-leads-kanban"
@@ -346,8 +344,6 @@ export function Leads() {
             </div>
           ))}
         </div>
-        <HorizontalScrollRail containerRef={scrollContainerRef} className="sticky bottom-0 z-10" />
-        </>
       ) : (
         <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
           <table className="w-full text-left text-sm text-muted-foreground">

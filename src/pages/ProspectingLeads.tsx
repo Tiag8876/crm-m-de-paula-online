@@ -5,7 +5,6 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Plus, Search, Phone, MessageCircle, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { isAdminUser } from '@/lib/access';
-import { HorizontalScrollRail } from '@/components/HorizontalScrollRail';
 
 export function ProspectingLeads() {
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
@@ -100,7 +99,6 @@ export function ProspectingLeads() {
       </div>
 
       {viewMode === 'kanban' ? (
-        <>
           <div ref={scrollContainerRef} data-scroll-rail-id="prospecting-kanban" className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[560px]">
             {sortedStages.map((stage) => (
               <div key={stage.id} className="flex-shrink-0 w-80 space-y-4">
@@ -157,8 +155,6 @@ export function ProspectingLeads() {
               </div>
             ))}
           </div>
-          <HorizontalScrollRail containerRef={scrollContainerRef} className="sticky bottom-0 z-10" />
-        </>
       ) : (
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <table className="w-full text-left text-sm">

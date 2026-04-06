@@ -79,6 +79,14 @@ const parseStateSafely = (rawState) => {
   }
 };
 
+const serializeTimestamp = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toISOString();
+};
+
 const isDatabaseConfigured = () => Boolean(databaseUrl);
 
 const createPool = () => {
@@ -146,6 +154,13 @@ const runMigrations = async () => {
       action TEXT NOT NULL,
       details TEXT,
       created_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS state_revisions (
+      id TEXT PRIMARY KEY,
+      state_json JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
     );
   `);
 
@@ -236,8 +251,8 @@ const toPublicUser = (row) => ({
   role: row.role,
   sector: row.sector,
   active: Boolean(row.active),
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
+  createdAt: serializeTimestamp(row.created_at),
+  updatedAt: serializeTimestamp(row.updated_at),
 });
 
 const isSystemAdmin = (user) => {
@@ -685,7 +700,7 @@ app.get(["/api/state", "/state"], authRequired, async (req, res) => {
 
   const parsed = parseStateSafely(row.state_json);
   const scoped = scopedStateForUser(parsed, req.user);
-  return res.json({ state: scoped, updatedAt: row.updated_at });
+  return res.json({ state: scoped, updatedAt: serializeTimestamp(row.updated_at) });
 });
 
 app.put(["/api/state", "/state"], authRequired, async (req, res) => {
@@ -698,13 +713,15 @@ app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   const currentResult = await query("SELECT state_json, updated_at FROM app_state WHERE id = 1");
   const currentRow = currentResult.rows[0];
 
-  if (clientUpdatedAt && currentRow?.updated_at && clientUpdatedAt !== currentRow.updated_at) {
+  const currentUpdatedAt = serializeTimestamp(currentRow?.updated_at);
+
+  if (clientUpdatedAt && currentUpdatedAt && clientUpdatedAt !== currentUpdatedAt) {
     const latestState = parseStateSafely(currentRow?.state_json);
     const scoped = scopedStateForUser(latestState, req.user);
     return res.status(409).json({
       message: "Estado desatualizado. Sincronize e tente novamente.",
       state: scoped,
-      updatedAt: currentRow.updated_at,
+      updatedAt: currentUpdatedAt,
     });
   }
 
@@ -712,12 +729,20 @@ app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   const mergedState = mergeStateForUser(currentState, state, req.user);
   const serialized = JSON.stringify(mergedState);
 
-  await query(
-    `INSERT INTO app_state (id, state_json, updated_at, updated_by)
-     VALUES (1, $1::jsonb, $2, $3)
-     ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
-    [serialized, now, req.user.id]
-  );
+  await withTransaction(async (client) => {
+    await client.query(
+      `INSERT INTO app_state (id, state_json, updated_at, updated_by)
+       VALUES (1, $1::jsonb, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+      [serialized, now, req.user.id]
+    );
+
+    await client.query(
+      `INSERT INTO state_revisions (id, state_json, created_at, updated_by)
+       VALUES ($1, $2::jsonb, $3, $4)`,
+      [randomUUID(), serialized, now, req.user.id]
+    );
+  });
 
   await audit(req.user.id, "state_updated", null);
   return res.json({ ok: true, updatedAt: now });
