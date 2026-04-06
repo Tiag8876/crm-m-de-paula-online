@@ -5,6 +5,7 @@ import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { isAdminUser } from '@/lib/access';
+import { buildEffectiveFieldSchema } from '@/lib/funnelFieldSchema';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -105,12 +106,16 @@ export function Leads() {
     || allFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
     || allFunnels[0];
   const createFunnel = allFunnels.find((funnel) => funnel.id === createFunnelId) || activeFunnel;
+  const commercialFunnels = allFunnels.filter((funnel) => funnel.operation === 'commercial');
+  const prospectingFunnels = allFunnels.filter((funnel) => funnel.operation === 'prospecting');
 
   const isProspecting = activeFunnel?.operation === 'prospecting';
   const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createIsProspecting = createFunnel?.operation === 'prospecting';
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createFieldSchema = [...(createFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
+  const createEffectiveFieldSchema = buildEffectiveFieldSchema(createFunnel);
+  const createFieldMap = new Map(createEffectiveFieldSchema.map((field) => [field.key, field]));
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAvailableServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
   const commercialFunnelGroups = buildFunnelGroups(commercialFunnels, areasOfLaw);
@@ -119,6 +124,17 @@ export function Leads() {
     ...commercialFunnelGroups.map((group) => ({ label: `Comercial · ${group.label}`, funnels: group.funnels })),
     ...prospectingFunnelGroups.map((group) => ({ label: `Prospecção · ${group.label}`, funnels: group.funnels })),
   ];
+  const getBaseField = (key: string, fallbackLabel: string, fallbackPlaceholder = '', fallbackRequired = false) =>
+    createFieldMap.get(key) || {
+      key,
+      label: fallbackLabel,
+      placeholder: fallbackPlaceholder,
+      required: fallbackRequired,
+      type: 'text' as const,
+      id: `fallback-${key}`,
+      order: 0,
+      helpText: '',
+    };
 
   const scopedCommercialLeads = isAdmin
     ? (leads || [])
@@ -344,9 +360,6 @@ export function Leads() {
     if (lead) handleCommercialDrop(lead, status);
     stopAutoScroll();
   };
-
-  const commercialFunnels = allFunnels.filter((funnel) => funnel.operation === 'commercial');
-  const prospectingFunnels = allFunnels.filter((funnel) => funnel.operation === 'prospecting');
 
   const searchPlaceholder = isProspecting
     ? 'Buscar por clínica, contato, telefone ou CNPJ...'
@@ -753,24 +766,24 @@ export function Leads() {
                     <input name="contactName" required placeholder="Responsável principal" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Telefone ou WhatsApp</label>
-                    <input name="phone" required placeholder="Telefone ou WhatsApp" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).label}</label>
+                    <input name="phone" required={Boolean(getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).required)} placeholder={getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).placeholder || 'Telefone ou WhatsApp'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CNPJ</label>
-                    <input name="cnpj" placeholder="CNPJ" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('cnpj', 'CNPJ', 'CNPJ').label}</label>
+                    <input name="cnpj" placeholder={getBaseField('cnpj', 'CNPJ', 'CNPJ').placeholder || 'CNPJ'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">E-mail</label>
-                    <input name="email" placeholder="E-mail" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
+                    <input name="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Cidade</label>
-                    <input name="city" placeholder="Cidade" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('city', 'Cidade', 'Cidade').label}</label>
+                    <input name="city" placeholder={getBaseField('city', 'Cidade', 'Cidade').placeholder || 'Cidade'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Bairro</label>
-                    <input name="neighborhood" placeholder="Bairro" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('neighborhood', 'Bairro', 'Bairro').label}</label>
+                    <input name="neighborhood" placeholder={getBaseField('neighborhood', 'Bairro', 'Bairro').placeholder || 'Bairro'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Recepção ou contato secundário</label>
@@ -832,16 +845,16 @@ export function Leads() {
                 <>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Nome Completo</label>
-                      <input required name="name" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('name', 'Nome completo', 'Nome do cliente', true).label}</label>
+                      <input required={Boolean(getBaseField('name', 'Nome completo', 'Nome do cliente', true).required)} name="name" type="text" placeholder={getBaseField('name', 'Nome completo', 'Nome do cliente', true).placeholder || 'Nome do cliente'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Telefone</label>
-                      <input required name="phone" type="tel" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('phone', 'Telefone', 'Telefone', true).label}</label>
+                      <input required={Boolean(getBaseField('phone', 'Telefone', 'Telefone', true).required)} name="phone" type="tel" placeholder={getBaseField('phone', 'Telefone', 'Telefone', true).placeholder || 'Telefone'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">E-mail</label>
-                      <input name="email" type="email" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
+                      <input name="email" type="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                   </div>
                   <div className="space-y-4">
@@ -872,7 +885,7 @@ export function Leads() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CPF</label>
-                      <input name="cpf" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                      <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                   </div>
                   {createFieldSchema.length > 0 && (

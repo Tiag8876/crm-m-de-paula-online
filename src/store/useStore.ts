@@ -39,15 +39,15 @@ const DEFAULT_STAGES: KanbanStage[] = [
 
 const DEFAULT_PROSPECT_STAGES: KanbanStage[] = [
   { id: 'p_novo', name: 'Novo Cadastro', color: '#D4AF37', order: 0 },
-  { id: 'p_primeira_ligacao', name: 'Primeira Ligacao', color: '#3B82F6', order: 1 },
+  { id: 'p_primeira_ligacao', name: 'Primeira Ligação', color: '#3B82F6', order: 1 },
   { id: 'p_sem_contato', name: 'Sem Contato', color: '#F59E0B', order: 2 },
   { id: 'p_retorno', name: 'Retorno Agendado', color: '#8B5CF6', order: 3 },
   { id: 'p_qualificada', name: 'Qualificada', color: '#06B6D4', order: 4 },
   { id: 'p_proposta', name: 'Proposta Enviada', color: '#6366F1', order: 5 },
-  { id: 'p_negociacao', name: 'Negociacao', color: '#EC4899', order: 6 },
+  { id: 'p_negociacao', name: 'Negociação', color: '#EC4899', order: 6 },
   { id: 'p_fechada', name: 'Fechada', color: '#10B981', order: 7 },
   { id: 'p_perdida', name: 'Perdida', color: '#EF4444', order: 8 },
-  { id: 'p_inspecao', name: 'Inspecao', color: '#22C55E', order: 9 },
+  { id: 'p_inspecao', name: 'Inspeção', color: '#22C55E', order: 9 },
 ];
 
 const DEFAULT_COMMERCIAL_FUNNEL_ID = 'funnel-commercial-default';

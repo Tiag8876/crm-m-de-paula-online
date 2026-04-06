@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -1023,7 +1023,7 @@ export function LeadDetails() {
                   className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
                 >
                   <option value="whatsapp">WhatsApp</option>
-                  <option value="ligacao">Ligacao Direta</option>
+                  <option value="ligacao">Ligação Direta</option>
                   <option value="email">E-mail</option>
                 </select>
               </div>
