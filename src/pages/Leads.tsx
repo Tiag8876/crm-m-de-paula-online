@@ -889,39 +889,32 @@ export function Leads() {
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </select>
-                  {createCustomFieldSchema.length > 0 && (
-                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
-                      <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {createCustomFieldSchema.map((field) => (
-                          <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
-                              {field.label}
-                              {field.required ? ' *' : ''}
-                            </label>
-                            {field.type === 'textarea' ? (
-                              <textarea
-                                name={`customField:${field.key}`}
-                                required={Boolean(field.required)}
-                                placeholder={field.placeholder || field.helpText || ''}
-                                className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
-                              />
-                            ) : (
-                              <input
-                                name={`customField:${field.key}`}
-                                required={Boolean(field.required)}
-                                type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
-                                inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
-                                placeholder={field.placeholder || field.helpText || ''}
-                                className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
-                              />
-                            )}
-                            {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
-                          </div>
-                        ))}
-                      </div>
+                  {createCustomFieldSchema.map((field) => (
+                    <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                        {field.label}
+                        {field.required ? ' *' : ''}
+                      </label>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          name={`customField:${field.key}`}
+                          required={Boolean(field.required)}
+                          placeholder={field.placeholder || field.helpText || ''}
+                          className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                        />
+                      ) : (
+                        <input
+                          name={`customField:${field.key}`}
+                          required={Boolean(field.required)}
+                          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                          inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                          placeholder={field.placeholder || field.helpText || ''}
+                          className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                        />
+                      )}
+                      {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
                     </div>
-                  )}
+                  ))}
                 </>
               ) : (
                 <>
@@ -1013,39 +1006,32 @@ export function Leads() {
                       <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                   </div>
-                  {createCustomFieldSchema.length > 0 && (
-                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
-                      <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {createCustomFieldSchema.map((field) => (
-                          <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
-                              {field.label}
-                              {field.required ? ' *' : ''}
-                            </label>
-                            {field.type === 'textarea' ? (
-                              <textarea
-                                name={`customField:${field.key}`}
-                                required={Boolean(field.required)}
-                                placeholder={field.placeholder || field.helpText || ''}
-                                className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
-                              />
-                            ) : (
-                              <input
-                                name={`customField:${field.key}`}
-                                required={Boolean(field.required)}
-                                type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
-                                inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
-                                placeholder={field.placeholder || field.helpText || ''}
-                                className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
-                              />
-                            )}
-                            {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
-                          </div>
-                        ))}
-                      </div>
+                  {createCustomFieldSchema.map((field) => (
+                    <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                        {field.label}
+                        {field.required ? ' *' : ''}
+                      </label>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          name={`customField:${field.key}`}
+                          required={Boolean(field.required)}
+                          placeholder={field.placeholder || field.helpText || ''}
+                          className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                        />
+                      ) : (
+                        <input
+                          name={`customField:${field.key}`}
+                          required={Boolean(field.required)}
+                          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                          inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                          placeholder={field.placeholder || field.helpText || ''}
+                          className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                        />
+                      )}
+                      {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
                     </div>
-                  )}
+                  ))}
                 </>
               )}
               <div className="md:col-span-2">

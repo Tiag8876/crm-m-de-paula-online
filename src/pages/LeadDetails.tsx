@@ -497,6 +497,29 @@ export function LeadDetails() {
               )}
             </div>
           </div>
+          {currentFieldSchema.map((field) => (
+            <div key={field.id} className={field.type === 'textarea' ? 'space-y-1 md:col-span-2 lg:col-span-4' : 'space-y-1'}>
+              <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">{field.label}</p>
+              {field.type === 'textarea' ? (
+                <textarea
+                  value={lead.customFields?.[field.key] || ''}
+                  onChange={(e) => updateCustomField(field.key, e.target.value)}
+                  placeholder={field.placeholder || field.helpText || ''}
+                  className="min-h-[120px] w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm focus:border-primary focus:outline-none"
+                />
+              ) : (
+                <input
+                  value={lead.customFields?.[field.key] || ''}
+                  onChange={(e) => updateCustomField(field.key, e.target.value)}
+                  type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                  inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                  placeholder={field.placeholder || field.helpText || ''}
+                  className="w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm focus:border-primary focus:outline-none"
+                />
+              )}
+              {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
+            </div>
+          ))}
           <div className="space-y-1">
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Responsável</p>
             <select
@@ -519,43 +542,6 @@ export function LeadDetails() {
           </div>
         </div>
       </section>
-
-      {currentFieldSchema.length > 0 && (
-        <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
-          <div className="border-b border-border bg-accent px-8 py-5">
-            <h2 className="text-lg font-serif font-bold">Campos específicos do funil</h2>
-
-
-          </div>
-          <div className="grid grid-cols-1 gap-5 p-8 md:grid-cols-2">
-            {currentFieldSchema.map((field) => (
-              <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2 space-y-2' : 'space-y-2'}>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
-                  {field.label}
-                </label>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    value={lead.customFields?.[field.key] || ''}
-                    onChange={(e) => updateCustomField(field.key, e.target.value)}
-                    placeholder={field.placeholder || field.helpText || ''}
-                    className="min-h-[120px] w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
-                  />
-                ) : (
-                  <input
-                    value={lead.customFields?.[field.key] || ''}
-                    onChange={(e) => updateCustomField(field.key, e.target.value)}
-                    type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
-                    inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
-                    placeholder={field.placeholder || field.helpText || ''}
-                    className="w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm"
-                  />
-                )}
-                {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Left Column: Follow-ups & Actions */}
