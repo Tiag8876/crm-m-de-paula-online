@@ -93,6 +93,7 @@ export function Leads() {
   const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createIsProspecting = createFunnel?.operation === 'prospecting';
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+  const createFieldSchema = [...(createFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
 
   const scopedCommercialLeads = isAdmin
     ? (leads || [])
@@ -164,6 +165,17 @@ export function Leads() {
     setShowSaveSuccess(false);
     setSelectedArea('');
   };
+
+  const collectCustomFields = (formData: FormData) =>
+    createFieldSchema.reduce<Record<string, string>>((acc, field) => {
+      const rawValue = formData.get(`customField:${field.key}`);
+      const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+      if (value) {
+        acc[field.key] = value;
+      }
+      return acc;
+    }, {});
+
   const handleCreateRecord = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSavingRecord) return;
@@ -173,6 +185,7 @@ export function Leads() {
 
     try {
       const formData = new FormData(event.currentTarget);
+      const customFields = collectCustomFields(formData);
       if (createIsProspecting) {
         addProspectLead({
           clinicName: String(formData.get('clinicName') || ''),
@@ -187,6 +200,7 @@ export function Leads() {
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           status: createSortedStages[0]?.id || 'p_novo',
           ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+          customFields,
         });
       } else {
         addLead({
@@ -201,6 +215,7 @@ export function Leads() {
           estimatedValue: Number(formData.get('estimatedValue')) || 0,
           status: createSortedStages[0]?.id || 'novo',
           ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+          customFields,
         });
       }
 
@@ -716,6 +731,44 @@ export function Leads() {
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </select>
+                  {createFieldSchema.length > 0 && (
+                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Este funil pede informações extras no momento do cadastro para manter a operação consistente.
+                        </p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {createFieldSchema.map((field) => (
+                          <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                              {field.label}
+                              {field.required ? ' *' : ''}
+                            </label>
+                            {field.type === 'textarea' ? (
+                              <textarea
+                                name={`customField:${field.key}`}
+                                required={Boolean(field.required)}
+                                placeholder={field.placeholder || field.helpText || ''}
+                                className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                              />
+                            ) : (
+                              <input
+                                name={`customField:${field.key}`}
+                                required={Boolean(field.required)}
+                                type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                                inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                                placeholder={field.placeholder || field.helpText || ''}
+                                className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                              />
+                            )}
+                            {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -764,6 +817,44 @@ export function Leads() {
                       <input name="cpf" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
                     </div>
                   </div>
+                  {createFieldSchema.length > 0 && (
+                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-border bg-background/30 p-5">
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gold-500/70">Campos específicos do funil</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Este funil usa informações próprias. O cadastro muda aqui sem obrigar todos os outros funis a seguirem o mesmo formulário.
+                        </p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {createFieldSchema.map((field) => (
+                          <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                              {field.label}
+                              {field.required ? ' *' : ''}
+                            </label>
+                            {field.type === 'textarea' ? (
+                              <textarea
+                                name={`customField:${field.key}`}
+                                required={Boolean(field.required)}
+                                placeholder={field.placeholder || field.helpText || ''}
+                                className="min-h-[110px] w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                              />
+                            ) : (
+                              <input
+                                name={`customField:${field.key}`}
+                                required={Boolean(field.required)}
+                                type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                                inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                                placeholder={field.placeholder || field.helpText || ''}
+                                className="w-full rounded-xl border border-border bg-background/40 px-4 py-3"
+                              />
+                            )}
+                            {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">

@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from 'react';
+﻿import { useMemo, useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, KanbanSquare, FileText, Settings, Megaphone, CheckCircle2, Clock3, AlertTriangle, GitBranchPlus, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, FileText, GitBranchPlus, KanbanSquare, LayoutDashboard, Settings } from 'lucide-react';
 import { isToday, format } from 'date-fns';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -15,7 +15,10 @@ const sortFunnels = (items: FunnelConfig[]) =>
     return a.name.localeCompare(b.name, 'pt-BR');
   });
 
-const getProspectIdleHours = (lead: { createdAt: string; lastInteractionAt?: string; followUps?: Array<{ date: string }>; tasks?: Array<{ date: string }>; notes?: Array<{ createdAt: string }> }, nowMs = Date.now()) => {
+const getProspectIdleHours = (
+  lead: { createdAt: string; lastInteractionAt?: string; followUps?: Array<{ date: string }>; tasks?: Array<{ date: string }>; notes?: Array<{ createdAt: string }> },
+  nowMs = Date.now(),
+) => {
   const candidates = [Date.parse(lead.createdAt || ''), Date.parse(lead.lastInteractionAt || '')].filter((value) => !Number.isNaN(value));
   for (const followUp of lead.followUps || []) {
     const time = Date.parse(followUp.date || '');
@@ -36,7 +39,7 @@ const getProspectIdleHours = (lead: { createdAt: string; lastInteractionAt?: str
 export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
-  const { funnels, leads, prospectLeads, campaigns, services } = useStore();
+  const { funnels, leads, prospectLeads } = useStore();
   const [selectedScope, setSelectedScope] = useState<string>(ALL_SCOPE);
 
   const allFunnels = sortFunnels(funnels || []);
@@ -124,37 +127,81 @@ export function Dashboard() {
     }));
   }, [activeFunnel, allFunnels, records]);
 
-  const agenda = useMemo(() => (
-    records
-      .flatMap((item) => [
-        ...item.followUps.filter((followUp) => isToday(new Date(followUp.date)) && followUp.status === 'pendente').map((followUp) => ({
-          id: `${item.id}-${followUp.id}`,
-          label: item.name,
-          description: `Follow-up ${format(new Date(followUp.date), 'HH:mm')}`,
-          path: item.detailPath,
-        })),
-        ...item.tasks.filter((task) => isToday(new Date(task.date)) && task.status === 'pendente').map((task) => ({
-          id: `${item.id}-${task.id}`,
-          label: item.name,
-          description: task.title,
-          path: item.detailPath,
-        })),
-      ])
-      .slice(0, 8)
-  ), [records]);
+  const agenda = useMemo(
+    () =>
+      records
+        .flatMap((item) => [
+          ...item.followUps.filter((followUp) => isToday(new Date(followUp.date)) && followUp.status === 'pendente').map((followUp) => ({
+            id: `${item.id}-${followUp.id}`,
+            label: item.name,
+            description: `Follow-up ${format(new Date(followUp.date), 'HH:mm')}`,
+            path: item.detailPath,
+          })),
+          ...item.tasks.filter((task) => isToday(new Date(task.date)) && task.status === 'pendente').map((task) => ({
+            id: `${item.id}-${task.id}`,
+            label: item.name,
+            description: task.title,
+            path: item.detailPath,
+          })),
+        ])
+        .slice(0, 8),
+    [records],
+  );
 
-  const recentActivity = useMemo(() => (
-    records
-      .flatMap((item) => item.logs.map((log) => ({
-        id: `${item.id}-${log.id}`,
-        path: item.detailPath,
-        label: log.label,
-        content: log.content,
-        timestamp: log.timestamp,
-      })))
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, 10)
-  ), [records]);
+  const recentActivity = useMemo(
+    () =>
+      records
+        .flatMap((item) => item.logs.map((log) => ({
+          id: `${item.id}-${log.id}`,
+          path: item.detailPath,
+          label: log.label,
+          content: log.content,
+          timestamp: log.timestamp,
+        })))
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .slice(0, 10),
+    [records],
+  );
+
+  const priorityQueue = useMemo(
+    () =>
+      records
+        .filter((item) => !item.closed && !item.lost)
+        .map((item) => {
+          const nextFollowUp = item.followUps
+            .filter((followUp) => followUp.status === 'pendente')
+            .sort((a, b) => a.date.localeCompare(b.date))[0];
+          const overdue = nextFollowUp ? Date.parse(nextFollowUp.date) < now : item.idleHours >= 48;
+          return { ...item, nextFollowUp, overdue };
+        })
+        .sort((a, b) => {
+          if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+          if (Boolean(a.nextFollowUp) !== Boolean(b.nextFollowUp)) return a.nextFollowUp ? -1 : 1;
+          return b.idleHours - a.idleHours;
+        })
+        .slice(0, 6),
+    [now, records],
+  );
+
+  const funnelHighlights = useMemo(
+    () =>
+      allFunnels
+        .map((funnel) => {
+          const scoped = records.filter((item) => item.funnelId === funnel.id);
+          return {
+            id: funnel.id,
+            name: funnel.name,
+            operation: funnel.operation,
+            total: scoped.length,
+            stalled: scoped.filter((item) => !item.closed && !item.lost && item.idleHours >= 24).length,
+            won: scoped.filter((item) => item.closed).length,
+          };
+        })
+        .filter((item) => item.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, selectedScope === ALL_SCOPE ? 5 : 3),
+    [allFunnels, records, selectedScope],
+  );
 
   const handleScopeChange = (value: string) => {
     setSelectedScope(value);
@@ -178,84 +225,172 @@ export function Dashboard() {
   const primaryReportLink = selectedScope === ALL_SCOPE ? '/reports' : `/reports?funnel=${selectedScope}&operation=${activeFunnel?.operation || 'commercial'}`;
 
   return (
-    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
-      <header className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
+    <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-10">
+      <header className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-4xl md:text-5xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Controle</h1>
-          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
-            Operação unificada por funil, sem menus paralelos
+          <h1 className="text-4xl font-serif font-bold tracking-tight gold-text-gradient md:text-5xl">Painel de Controle</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Um cockpit único para decidir o que precisa de ação agora, acompanhar funis sem navegar em áreas paralelas e operar a equipe com menos fricção.
           </p>
         </div>
-        <select value={selectedScope} onChange={(event) => handleScopeChange(event.target.value)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[280px]">
+        <select
+          value={selectedScope}
+          onChange={(event) => handleScopeChange(event.target.value)}
+          className="min-w-[280px] rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground"
+        >
           <option value={ALL_SCOPE}>Operação completa</option>
-          <optgroup label="Funis Comerciais">
-            {allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}
+          <optgroup label="Funis comerciais">
+            {allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => (
+              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+            ))}
           </optgroup>
-          <optgroup label="Funis de Prospecção">
-            {allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}
+          <optgroup label="Funis de prospecção">
+            {allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => (
+              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+            ))}
           </optgroup>
         </select>
       </header>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={LayoutDashboard} label="Registros no pipeline" value={metrics.total} />
-        <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-        <StatCard icon={GitBranchPlus} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
-        <StatCard icon={AlertTriangle} label="Sem ação 24h+" value={metrics.stalled} />
-      </section>
-
-      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <QuickLink to={primaryKanbanLink} icon={KanbanSquare} title="Abrir Kanban" description="Trabalhar o funil selecionado" />
-        <QuickLink to={primaryReportLink} icon={FileText} title="Ver Relatórios" description="Analisar conversão por funil" />
-        <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Configurar Funis" description="Etapas, playbooks e objeções" />
-        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" description="Relacionar tráfego e origem" />
-      </section>
-
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="xl:col-span-2 bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-accent flex items-center justify-between gap-4">
-            <h2 className="text-lg font-serif font-bold">{activeFunnel ? `Etapas do ${activeFunnel.name}` : 'Distribuição por Funil'}</h2>
-            <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{activeFunnel ? activeFunnel.operation : 'geral'}</span>
-          </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {stageSummary.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-border bg-background/30 p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{item.name}</p>
-                <p className="text-3xl font-serif font-bold mt-2">{item.total}</p>
-              </div>
-            ))}
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.95fr]">
+        <div className="rounded-3xl border border-border bg-card p-6 shadow-2xl">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-gold-500/70">Foco do dia</p>
+              <h2 className="mt-2 text-3xl font-serif font-bold">{activeFunnel ? activeFunnel.name : 'Operação completa'}</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                {activeFunnel
+                  ? `Você está olhando o funil ${activeFunnel.operation === 'prospecting' ? 'de prospecção' : 'comercial'} "${activeFunnel.name}". Use os atalhos abaixo para agir rápido sem sair do contexto.`
+                  : 'Você está vendo a operação inteira. Use esta visão para priorizar gargalos, acompanhar agenda e identificar onde a equipe precisa agir primeiro.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard icon={LayoutDashboard} label="Registros" value={metrics.total} />
+              <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
+              <StatCard icon={GitBranchPlus} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
+              <StatCard icon={AlertTriangle} label="Parados 24h+" value={metrics.stalled} />
+            </div>
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-accent flex items-center justify-between">
-            <h2 className="text-lg font-serif font-bold">Agenda de hoje</h2>
-            <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} ações</span>
-          </div>
-          <div className="p-4 space-y-3">
-            {agenda.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nada pendente para hoje.</p> : agenda.map((item) => (
-              <Link key={item.id} to={item.path} className="block rounded-xl border border-border p-4 hover:bg-accent/40 transition-all">
-                <p className="font-semibold">{item.label}</p>
-                <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
-              </Link>
-            ))}
+        <div className="rounded-3xl border border-border bg-card p-6 shadow-2xl">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-gold-500/70">Ações rápidas</p>
+          <div className="mt-4 grid gap-3">
+            <QuickLink to={primaryKanbanLink} icon={KanbanSquare} title="Abrir Kanban" description="Trabalhar o funil selecionado" />
+            <QuickLink to={primaryReportLink} icon={FileText} title="Ver relatórios" description="Analisar desempenho por funil" compact />
+            <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Editar funis" description="Etapas, campos e playbooks" compact />
           </div>
         </div>
       </section>
 
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center justify-between">
-          <h2 className="text-lg font-serif font-bold">Atividade Recente</h2>
-          <Link to={primaryKanbanLink} className="text-primary text-[10px] uppercase tracking-widest font-black inline-flex items-center gap-2">Abrir funil <ArrowRight className="w-3 h-3" /></Link>
+      <section className="grid grid-cols-1 gap-8 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-8">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent p-6">
+              <h2 className="text-lg font-serif font-bold">Fila de prioridades</h2>
+              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{priorityQueue.length} item(ns)</span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+              {priorityQueue.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhum registro crítico agora. Ótimo momento para trabalhar oportunidades novas.</p>
+              ) : priorityQueue.map((item) => (
+                <Link key={item.id} to={item.detailPath} className="rounded-2xl border border-border bg-background/30 p-4 transition-all hover:bg-accent/40">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{item.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.subtitle}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${item.overdue ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-300'}`}>
+                      {item.overdue ? 'Urgente' : 'Monitorar'}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                    <p>{item.nextFollowUp ? `Próxima ação: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem follow-up agendado'}</p>
+                    <p>{item.idleHours >= 1 ? `${item.idleHours.toFixed(0)}h sem movimentação` : 'Movimentado recentemente'}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent p-6">
+              <h2 className="text-lg font-serif font-bold">{activeFunnel ? `Etapas do ${activeFunnel.name}` : 'Distribuição por funil'}</h2>
+              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{activeFunnel ? activeFunnel.operation : 'geral'}</span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2 xl:grid-cols-3">
+              {stageSummary.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-border bg-background/30 p-4">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{item.name}</p>
+                  <p className="mt-2 text-3xl font-serif font-bold">{item.total}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {recentActivity.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8 md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
-            <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 hover:bg-accent/40 transition-all">
+
+        <div className="space-y-8">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
+              <h2 className="text-lg font-serif font-bold">Agenda de hoje</h2>
+              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} ações</span>
+            </div>
+            <div className="space-y-3 p-4">
+              {agenda.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">Nada pendente para hoje.</p> : agenda.map((item) => (
+                <Link key={item.id} to={item.path} className="block rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
+                  <p className="font-semibold">{item.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
+              <h2 className="text-lg font-serif font-bold">Funis em destaque</h2>
+              <Link to="/settings?tab=operations&section=funnels" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Configurar <ArrowRight className="h-3 w-3" /></Link>
+            </div>
+            <div className="space-y-3 p-4">
+              {funnelHighlights.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há dados suficientes para destacar funis.</p>
+              ) : funnelHighlights.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleScopeChange(item.id)}
+                  className="w-full rounded-xl border border-border p-4 text-left transition-all hover:bg-accent/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{item.name}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-500/70">{item.operation === 'prospecting' ? 'Prospecção' : 'Comercial'}</p>
+                    </div>
+                    <span className="text-lg font-serif font-bold">{item.total}</span>
+                  </div>
+                  <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
+                    <span>{item.won} ganhos</span>
+                    <span>{item.stalled} parados</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border bg-accent p-6">
+          <h2 className="text-lg font-serif font-bold">Atividade recente</h2>
+          <Link to={primaryKanbanLink} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Abrir funil <ArrowRight className="h-3 w-3" /></Link>
+        </div>
+        <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+          {recentActivity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
+            <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
               <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold truncate">{item.label}</p>
-                <span className="text-[10px] uppercase tracking-widest text-gold-500/70 shrink-0">{item.timestamp}</span>
+                <p className="truncate font-semibold">{item.label}</p>
+                <span className="shrink-0 text-[10px] uppercase tracking-widest text-gold-500/70">{item.timestamp}</span>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">{item.content}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{item.content}</p>
             </Link>
           ))}
         </div>
@@ -266,20 +401,22 @@ export function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; label: string; value: string | number }) {
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 shadow-xl flex items-center gap-4">
-      <div className="w-12 h-12 rounded-xl bg-accent border border-border flex items-center justify-center text-primary"><Icon className="w-5 h-5" /></div>
-      <div><p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p><p className="text-2xl font-serif font-bold mt-1">{value}</p></div>
+    <div className="flex items-center gap-4 rounded-2xl border border-border bg-background/40 p-4 shadow-xl">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p>
+        <p className="mt-1 text-2xl font-serif font-bold">{value}</p>
+      </div>
     </div>
   );
 }
 
-function QuickLink({ to, icon: Icon, title, description }: { to: string; icon: typeof LayoutDashboard; title: string; description: string }) {
+function QuickLink({ to, icon: Icon, title, description, compact = false }: { to: string; icon: typeof LayoutDashboard; title: string; description: string; compact?: boolean }) {
   return (
-    <Link to={to} className="bg-card border border-border rounded-2xl p-5 shadow-xl hover:border-gold-500/40 transition-all">
-      <div className="w-11 h-11 rounded-xl bg-accent border border-border flex items-center justify-center text-primary mb-4"><Icon className="w-5 h-5" /></div>
-      <p className="font-serif font-bold text-lg">{title}</p>
-      <p className="text-sm text-muted-foreground mt-2">{description}</p>
+    <Link to={to} className={`rounded-2xl border border-border bg-background/40 shadow-xl transition-all hover:border-gold-500/40 ${compact ? 'p-4' : 'p-5'}`}>
+      <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary ${compact ? 'mb-3' : 'mb-4'}`}><Icon className="h-5 w-5" /></div>
+      <p className={`font-serif font-bold ${compact ? 'text-base' : 'text-lg'}`}>{title}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
     </Link>
   );
 }
-

@@ -5,12 +5,33 @@ export interface KanbanStage {
   order: number;
 }
 
+export type FunnelFieldType =
+  | 'text'
+  | 'textarea'
+  | 'email'
+  | 'phone'
+  | 'number'
+  | 'cpf'
+  | 'cnpj';
+
+export interface FunnelFieldConfig {
+  id: string;
+  key: string;
+  label: string;
+  type: FunnelFieldType;
+  required?: boolean;
+  placeholder?: string;
+  helpText?: string;
+  order: number;
+}
+
 export interface FunnelConfig {
   id: string;
   name: string;
   description?: string;
   operation: 'commercial' | 'prospecting';
   stages: KanbanStage[];
+  fieldSchema?: FunnelFieldConfig[];
   objections?: string[];
   playbook?: string;
   createdAt: string;
@@ -123,6 +144,7 @@ export interface Lead {
   estimatedValue?: number;
   legalArea?: string;
   aiInsight?: string;
+  customFields?: Record<string, string>;
 }
 
 export interface ProspectLead {
@@ -146,6 +168,7 @@ export interface ProspectLead {
   logs: LeadLog[];
   createdAt: string;
   lastInteractionAt?: string;
+  customFields?: Record<string, string>;
 }
 
 export interface SystemNotification {

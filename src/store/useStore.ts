@@ -14,6 +14,7 @@ import {
   Task,
   KanbanStage,
   FunnelConfig,
+  FunnelFieldConfig,
   SystemNotification,
   WeeklySnapshot,
   ProspectLead,
@@ -93,6 +94,17 @@ const normalizeStages = (stages: KanbanStage[] = []): KanbanStage[] =>
     .sort((a, b) => a.order - b.order)
     .map((stage, index) => ({ ...stage, order: index }));
 
+const normalizeFieldSchema = (fields: FunnelFieldConfig[] = []): FunnelFieldConfig[] =>
+  [...fields]
+    .sort((a, b) => a.order - b.order)
+    .map((field, index) => ({
+      ...field,
+      order: index,
+      required: Boolean(field.required),
+      placeholder: field.placeholder || '',
+      helpText: field.helpText || '',
+    }));
+
 const ensureFunnels = (funnels?: FunnelConfig[]): FunnelConfig[] => {
   const current = [...(funnels || [])];
   const defaults = buildDefaultFunnels();
@@ -106,6 +118,7 @@ const ensureFunnels = (funnels?: FunnelConfig[]): FunnelConfig[] => {
   return current.map((funnel) => ({
     ...funnel,
     stages: normalizeStages(funnel.stages),
+    fieldSchema: normalizeFieldSchema(funnel.fieldSchema),
     objections: funnel.objections || [],
     playbook: funnel.playbook || '',
   }));
@@ -244,6 +257,10 @@ interface AppState {
   updateFunnelStage: (funnelId: string, stageId: string, data: Partial<KanbanStage>) => void;
   deleteFunnelStage: (funnelId: string, stageId: string) => void;
   reorderFunnelStages: (funnelId: string, stages: KanbanStage[]) => void;
+  addFunnelField: (funnelId: string, field: Omit<FunnelFieldConfig, 'id' | 'order'>) => void;
+  updateFunnelField: (funnelId: string, fieldId: string, data: Partial<Omit<FunnelFieldConfig, 'id' | 'order'>>) => void;
+  deleteFunnelField: (funnelId: string, fieldId: string) => void;
+  reorderFunnelFields: (funnelId: string, fields: FunnelFieldConfig[]) => void;
   addFunnelObjection: (funnelId: string, value: string) => void;
   removeFunnelObjection: (funnelId: string, value: string) => void;
   setFunnelPlaybook: (funnelId: string, value: string) => void;
@@ -301,6 +318,7 @@ export const useStore = create<AppState>()(
             createdAt: timestamp,
             lastInteractionAt: timestamp,
             funnelId: leadData.funnelId || defaultFunnel.id,
+            customFields: leadData.customFields || {},
             notes: [],
             followUps: [],
             tasks: [],
@@ -996,6 +1014,7 @@ export const useStore = create<AppState>()(
               description,
               operation,
               stages: template.stages.map((stage) => ({ ...stage, id: uuidv4() })),
+              fieldSchema: (template.fieldSchema || []).map((field, order) => ({ ...field, id: uuidv4(), order })),
               objections: template.objections || [],
               playbook: template.playbook || '',
               createdAt: timestamp,
@@ -1037,6 +1056,7 @@ export const useStore = create<AppState>()(
               id: nextId,
               name: `${source.name} (Copia)`,
               stages: source.stages.map((stage) => ({ ...stage, id: uuidv4() })),
+              fieldSchema: (source.fieldSchema || []).map((field, order) => ({ ...field, id: uuidv4(), order })),
               createdAt: timestamp,
               updatedAt: timestamp,
             },
@@ -1131,6 +1151,67 @@ export const useStore = create<AppState>()(
         return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
+      addFunnelField: (funnelId, field) => set((state) => {
+        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const nextFunnels = aliases.funnels.map((funnel) =>
+          funnel.id === funnelId
+            ? {
+                ...funnel,
+                updatedAt: new Date().toISOString(),
+                fieldSchema: normalizeFieldSchema([
+                  ...(funnel.fieldSchema || []),
+                  { ...field, id: uuidv4(), order: (funnel.fieldSchema || []).length },
+                ]),
+              }
+            : funnel,
+        );
+        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+      }),
+
+      updateFunnelField: (funnelId, fieldId, data) => set((state) => {
+        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const nextFunnels = aliases.funnels.map((funnel) =>
+          funnel.id === funnelId
+            ? {
+                ...funnel,
+                updatedAt: new Date().toISOString(),
+                fieldSchema: normalizeFieldSchema((funnel.fieldSchema || []).map((field) => (
+                  field.id === fieldId ? { ...field, ...data } : field
+                ))),
+              }
+            : funnel,
+        );
+        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+      }),
+
+      deleteFunnelField: (funnelId, fieldId) => set((state) => {
+        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const nextFunnels = aliases.funnels.map((funnel) =>
+          funnel.id === funnelId
+            ? {
+                ...funnel,
+                updatedAt: new Date().toISOString(),
+                fieldSchema: normalizeFieldSchema((funnel.fieldSchema || []).filter((field) => field.id !== fieldId)),
+              }
+            : funnel,
+        );
+        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+      }),
+
+      reorderFunnelFields: (funnelId, fields) => set((state) => {
+        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const nextFunnels = aliases.funnels.map((funnel) =>
+          funnel.id === funnelId
+            ? {
+                ...funnel,
+                updatedAt: new Date().toISOString(),
+                fieldSchema: normalizeFieldSchema(fields),
+              }
+            : funnel,
+        );
+        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+      }),
+
       addFunnelObjection: (funnelId, value) => set((state) => {
         const trimmed = value.trim();
         if (!trimmed) return state;
@@ -1187,6 +1268,7 @@ export const useStore = create<AppState>()(
             createdAt: timestamp,
             lastInteractionAt: timestamp,
             funnelId: leadData.funnelId || defaultFunnel.id,
+            customFields: leadData.customFields || {},
             notes: [],
             followUps: [],
             tasks: [],
