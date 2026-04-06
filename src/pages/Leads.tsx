@@ -959,12 +959,15 @@ export function Leads() {
                   )}
                 </>
               )}
-              <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
-                <option value="">Sem atribuição definida</option>
-                {activeAssignableUsers.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
-                ))}
-              </select>
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir responsável</label>
+                <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
+                  <option value="">Sem atribuição definida</option>
+                  {activeAssignableUsers.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="md:col-span-2 flex justify-end gap-4 mt-8 pt-6 border-t border-border">
                 <button type="button" onClick={() => { setIsModalOpen(false); resetModalState(); }} className="px-8 py-3 text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:text-foreground transition-all" disabled={isSavingRecord}>
                   Cancelar
