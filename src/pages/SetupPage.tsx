@@ -10,6 +10,8 @@ export function SetupPage() {
   const [backendReachable, setBackendReachable] = useState(false);
   const [publicSetupAllowed, setPublicSetupAllowed] = useState(false);
   const [bootstrapConfigured, setBootstrapConfigured] = useState(false);
+  const [missingBootstrapFields, setMissingBootstrapFields] = useState<string[]>([]);
+  const [bootstrapNameFallbackApplied, setBootstrapNameFallbackApplied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +37,8 @@ export function SetupPage() {
         setNeedsSetup(Boolean(status?.needsSetup));
         setPublicSetupAllowed(Boolean(status?.publicSetupAllowed));
         setBootstrapConfigured(Boolean(status?.bootstrapConfigured));
+        setMissingBootstrapFields(Array.isArray(status?.missingBootstrapFields) ? status.missingBootstrapFields : []);
+        setBootstrapNameFallbackApplied(Boolean(status?.bootstrapNameFallbackApplied));
       } catch {
         if (!mounted) return;
         setBackendReachable(false);
@@ -100,6 +104,16 @@ export function SetupPage() {
               Esta instancia nao permite criar administrador pela interface publica. Configure `ADMIN_BOOTSTRAP_NAME`,
               `ADMIN_BOOTSTRAP_EMAIL` e `ADMIN_BOOTSTRAP_PASSWORD` no ambiente do servidor e faca um novo deploy.
             </p>
+            {missingBootstrapFields.length > 0 && (
+              <p className="mt-4 text-sm text-red-300">
+                Variaveis ausentes no runtime: {missingBootstrapFields.join(', ')}
+              </p>
+            )}
+            {bootstrapNameFallbackApplied && (
+              <p className="mt-4 text-sm text-amber-200">
+                `ADMIN_BOOTSTRAP_NAME` pode ficar vazio. O sistema vai usar "Administrador do Sistema" como nome padrao.
+              </p>
+            )}
             {bootstrapConfigured && (
               <p className="mt-4 text-sm text-emerald-300">
                 As credenciais de provisionamento ja estao configuradas no ambiente. Basta publicar o deploy atualizado para concluir a criacao do administrador.

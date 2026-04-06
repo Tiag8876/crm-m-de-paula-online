@@ -5,6 +5,8 @@ export interface SetupStatusResponse {
   needsSetup: boolean;
   publicSetupAllowed?: boolean;
   bootstrapConfigured?: boolean;
+  missingBootstrapFields?: string[];
+  bootstrapNameFallbackApplied?: boolean;
 }
 
 const getErrorMessage = async (response: Response): Promise<string> => {

@@ -16,6 +16,7 @@ const bootstrapAdmin = {
   email: (process.env.ADMIN_BOOTSTRAP_EMAIL || "").trim().toLowerCase(),
   password: (process.env.ADMIN_BOOTSTRAP_PASSWORD || "").trim(),
 };
+const fallbackBootstrapName = "Administrador do Sistema";
 
 let pool = null;
 let databaseReadyPromise = null;
@@ -155,8 +156,16 @@ const runMigrations = async () => {
   );
 };
 
-const shouldBootstrapAdmin = () =>
-  Boolean(bootstrapAdmin.name && bootstrapAdmin.email && bootstrapAdmin.password);
+const getMissingBootstrapFields = () => {
+  const missing = [];
+  if (!bootstrapAdmin.email) missing.push("ADMIN_BOOTSTRAP_EMAIL");
+  if (!bootstrapAdmin.password) missing.push("ADMIN_BOOTSTRAP_PASSWORD");
+  return missing;
+};
+
+const getBootstrapAdminName = () => bootstrapAdmin.name || fallbackBootstrapName;
+
+const shouldBootstrapAdmin = () => getMissingBootstrapFields().length === 0;
 
 const seedInitialAdminIfConfigured = async () => {
   if (!shouldBootstrapAdmin()) return false;
@@ -173,7 +182,7 @@ const seedInitialAdminIfConfigured = async () => {
     await client.query(
       `INSERT INTO users (id, name, email, password_hash, role, sector, active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'admin', 'Diretoria', TRUE, $5, $6)`,
-      [adminId, bootstrapAdmin.name, bootstrapAdmin.email, bcrypt.hashSync(bootstrapAdmin.password, 10), now, now]
+      [adminId, getBootstrapAdminName(), bootstrapAdmin.email, bcrypt.hashSync(bootstrapAdmin.password, 10), now, now]
     );
 
     await client.query(
@@ -411,6 +420,8 @@ app.get(["/api/setup/status", "/setup/status", "/api/setup-status", "/setup-stat
     needsSetup: !initialized,
     publicSetupAllowed: allowPublicSetup,
     bootstrapConfigured: shouldBootstrapAdmin(),
+    missingBootstrapFields: getMissingBootstrapFields(),
+    bootstrapNameFallbackApplied: !bootstrapAdmin.name,
   });
 });
 
