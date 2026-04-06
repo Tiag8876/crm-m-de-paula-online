@@ -755,7 +755,7 @@ export function Leads() {
                         </td>
                         <td className="px-8 py-5">
                           <div className="flex flex-col gap-1">
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'NÃ£o definido'}</span>
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'Não definido'}</span>
                             {getLeadServiceIds(lead).length > 0 && (
                               <span className="text-[10px] text-muted-foreground">
                                 {getLeadServiceIds(lead)

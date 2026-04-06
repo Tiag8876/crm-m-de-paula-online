@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
+import { getBaseFieldKeys } from '@/lib/funnelFieldSchema';
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
@@ -125,7 +126,10 @@ export function LeadDetails() {
   const visibleLogs = sortedLogs.slice(0, 5);
   const hasMoreLogs = sortedLogs.length > 5;
   const sortedStages = [...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order);
-  const currentFieldSchema = [...(currentFunnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
+  const baseFieldKeys = getBaseFieldKeys(currentFunnel?.operation);
+  const currentFieldSchema = [...(currentFunnel?.fieldSchema || [])]
+    .filter((field) => !baseFieldKeys.has(field.key))
+    .sort((a, b) => a.order - b.order);
   const currentStage = sortedStages.find(s => s.id === lead.status);
   const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
   const updateCustomField = (key: string, value: string) => {
@@ -381,7 +385,7 @@ export function LeadDetails() {
                 onChange={(e) => updateLead(lead.id, { areaOfLawId: e.target.value, serviceId: undefined, serviceIds: [] })}
                 className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="">Selecione a Ãrea</option>
+                <option value="">Selecione a Área</option>
                 {areasOfLaw.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               {lead.areaOfLawId && (
@@ -520,9 +524,8 @@ export function LeadDetails() {
         <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
           <div className="border-b border-border bg-accent px-8 py-5">
             <h2 className="text-lg font-serif font-bold">Campos específicos do funil</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Estes campos acompanham o funil atual e deixam o cadastro aderente ao contexto dele.
-            </p>
+
+
           </div>
           <div className="grid grid-cols-1 gap-5 p-8 md:grid-cols-2">
             {currentFieldSchema.map((field) => (
