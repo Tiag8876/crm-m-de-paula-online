@@ -1,22 +1,47 @@
-Ôªøimport { useState, useRef, useCallback, useEffect } from 'react';
-import { useStore } from '@/store/useStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { Link } from 'react-router-dom';
-import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign, CheckCircle2 } from 'lucide-react';
+
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign, CheckCircle2, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { isAdminUser } from '@/lib/access';
+import { buildWhatsAppUrl } from '@/lib/whatsapp';
+import { useStore } from '@/store/useStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import type { FunnelConfig, Lead } from '@/types/crm';
+
+const sortFunnels = (items: FunnelConfig[]) =>
+  [...items].sort((a, b) => {
+    if (a.operation !== b.operation) {
+      return a.operation === 'commercial' ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
 
 export function Leads() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
-  const { leads, campaigns, addLead, updateLead, funnels, commercialDefaultFunnelId, areasOfLaw, services } = useStore();
+  const {
+    leads,
+    prospectLeads,
+    campaigns,
+    addLead,
+    updateLead,
+    addProspectLead,
+    updateProspectLead,
+    funnels,
+    commercialDefaultFunnelId,
+    prospectingDefaultFunnelId,
+    areasOfLaw,
+    services,
+  } = useStore();
   const isAdmin = isAdminUser(user);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSavingLead, setIsSavingLead] = useState(false);
-  const [showLeadSaveSuccess, setShowLeadSaveSuccess] = useState(false);
-  const [leadSaveError, setLeadSaveError] = useState<string | null>(null);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterCampaignId, setFilterCampaignId] = useState('');
@@ -29,11 +54,7 @@ export function Leads() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
 
-  const commercialFunnels = (funnels || []).filter((funnel) => funnel.operation === 'commercial');
-  const activeFunnel = commercialFunnels.find((funnel) => funnel.id === selectedFunnelId)
-    || commercialFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
-    || commercialFunnels[0];
-  const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+  const allFunnels = sortFunnels(funnels || []);
   const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
 
   useEffect(() => {
@@ -41,16 +62,43 @@ export function Leads() {
   }, [fetchAssignableUsers]);
 
   useEffect(() => {
-    if (activeFunnel?.id && activeFunnel.id !== selectedFunnelId) {
-      setSelectedFunnelId(activeFunnel.id);
-    }
-  }, [activeFunnel?.id, selectedFunnelId]);
+    const funnelParam = searchParams.get('funnel');
+    const operationParam = searchParams.get('operation');
 
-  const scopedLeads = isAdmin
+    const preferredByOperation = operationParam === 'prospecting'
+      ? allFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
+      : operationParam === 'commercial'
+        ? allFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
+        : undefined;
+
+    const fallback = preferredByOperation
+      || allFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
+      || allFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
+      || allFunnels[0];
+
+    const nextFunnel = allFunnels.find((funnel) => funnel.id === funnelParam) || fallback;
+    if (nextFunnel?.id && nextFunnel.id !== selectedFunnelId) {
+      setSelectedFunnelId(nextFunnel.id);
+    }
+  }, [allFunnels, commercialDefaultFunnelId, prospectingDefaultFunnelId, searchParams, selectedFunnelId]);
+
+  const activeFunnel = allFunnels.find((funnel) => funnel.id === selectedFunnelId)
+    || allFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
+    || allFunnels.find((funnel) => funnel.id === prospectingDefaultFunnelId)
+    || allFunnels[0];
+
+  const isProspecting = activeFunnel?.operation === 'prospecting';
+  const sortedStages = [...(activeFunnel?.stages || [])].sort((a, b) => a.order - b.order);
+
+  const scopedCommercialLeads = isAdmin
     ? (leads || [])
     : (leads || []).filter((lead) => !lead.ownerUserId || lead.ownerUserId === user?.id);
 
-  const filteredLeads = scopedLeads.filter((lead) => {
+  const scopedProspectLeads = isAdmin
+    ? (prospectLeads || [])
+    : (prospectLeads || []).filter((lead) => !lead.ownerUserId || lead.ownerUserId === user?.id);
+
+  const filteredCommercialLeads = scopedCommercialLeads.filter((lead) => {
     const funnelId = lead.funnelId || commercialDefaultFunnelId;
     const bySearch =
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -61,118 +109,119 @@ export function Leads() {
     const byArea = !filterAreaId || lead.areaOfLawId === filterAreaId;
     const byService = !filterServiceId || lead.serviceId === filterServiceId;
     const byStatus = !filterStatus || lead.status === filterStatus;
-    const byFunnel = !activeFunnel || funnelId === activeFunnel.id;
+    const byFunnel = funnelId === activeFunnel?.id;
 
     return bySearch && byCampaign && byArea && byService && byStatus && byFunnel;
   });
 
-  const handleAddLead = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (isSavingLead) return;
+  const filteredProspectLeads = scopedProspectLeads.filter((lead) => {
+    const funnelId = lead.funnelId || prospectingDefaultFunnelId;
+    const term = searchTerm.toLowerCase();
+    const bySearch =
+      lead.clinicName.toLowerCase().includes(term) ||
+      lead.contactName.toLowerCase().includes(term) ||
+      lead.phone.includes(searchTerm) ||
+      (lead.cnpj || '').includes(searchTerm);
+    const byService = !filterServiceId || lead.serviceId === filterServiceId;
+    const byStatus = !filterStatus || lead.status === filterStatus;
+    const byFunnel = funnelId === activeFunnel?.id;
 
-    setIsSavingLead(true);
-    setLeadSaveError(null);
+    return bySearch && byService && byStatus && byFunnel;
+  });
+
+  const syncFunnelSearchParams = useCallback((funnelId: string) => {
+    const nextFunnel = allFunnels.find((funnel) => funnel.id === funnelId);
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (!nextFunnel) {
+        params.delete('funnel');
+        params.delete('operation');
+        return params;
+      }
+      params.set('funnel', nextFunnel.id);
+      params.set('operation', nextFunnel.operation);
+      return params;
+    }, { replace: true });
+  }, [allFunnels, setSearchParams]);
+
+  const handleFunnelChange = (value: string) => {
+    setSelectedFunnelId(value);
+    syncFunnelSearchParams(value);
+    setFilterCampaignId('');
+    setFilterAreaId('');
+    setFilterServiceId('');
+    setFilterStatus('');
+    setSearchTerm('');
+  };
+
+  const resetModalState = () => {
+    setSaveError(null);
+    setIsSavingRecord(false);
+    setShowSaveSuccess(false);
+  };
+  const handleCreateRecord = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSavingRecord) return;
+
+    setIsSavingRecord(true);
+    setSaveError(null);
+
     try {
-      const formData = new FormData(e.currentTarget);
-      addLead({
-        name: formData.get('name') as string,
-        phone: formData.get('phone') as string,
-        email: formData.get('email') as string,
-        cpf: formData.get('cpf') as string,
-        legalArea: formData.get('legalArea') as string,
-        areaOfLawId: formData.get('areaOfLawId') as string,
-        serviceId: formData.get('serviceId') as string,
-        funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
-        estimatedValue: Number(formData.get('estimatedValue')) || 0,
-        status: sortedStages[0]?.id || 'novo',
-        ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
-      });
-      setShowLeadSaveSuccess(true);
+      const formData = new FormData(event.currentTarget);
+      if (isProspecting) {
+        addProspectLead({
+          clinicName: String(formData.get('clinicName') || ''),
+          contactName: String(formData.get('contactName') || ''),
+          receptionistName: String(formData.get('receptionistName') || '') || undefined,
+          phone: String(formData.get('phone') || ''),
+          email: String(formData.get('email') || ''),
+          cnpj: String(formData.get('cnpj') || ''),
+          city: String(formData.get('city') || ''),
+          neighborhood: String(formData.get('neighborhood') || '') || undefined,
+          serviceId: String(formData.get('serviceId') || '') || undefined,
+          funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
+          status: sortedStages[0]?.id || 'p_novo',
+          ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+        });
+      } else {
+        addLead({
+          name: String(formData.get('name') || ''),
+          phone: String(formData.get('phone') || ''),
+          email: String(formData.get('email') || ''),
+          cpf: String(formData.get('cpf') || ''),
+          legalArea: String(formData.get('legalArea') || ''),
+          areaOfLawId: String(formData.get('areaOfLawId') || ''),
+          serviceId: String(formData.get('serviceId') || ''),
+          funnelId: String(formData.get('funnelId') || '') || activeFunnel?.id,
+          estimatedValue: Number(formData.get('estimatedValue')) || 0,
+          status: sortedStages[0]?.id || 'novo',
+          ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+        });
+      }
+
+      setShowSaveSuccess(true);
       window.setTimeout(() => {
-        setShowLeadSaveSuccess(false);
-        setIsSavingLead(false);
+        setShowSaveSuccess(false);
+        setIsSavingRecord(false);
         setIsModalOpen(false);
-      }, 850);
+      }, 800);
     } catch (error) {
-      setIsSavingLead(false);
-      setShowLeadSaveSuccess(false);
-      setLeadSaveError(error instanceof Error ? error.message : 'Falha ao salvar lead');
+      setIsSavingRecord(false);
+      setShowSaveSuccess(false);
+      setSaveError(error instanceof Error ? error.message : 'Falha ao salvar registro');
     }
   };
 
-  const onDragStart = (e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('leadId', id);
+  const onDragStart = (event: React.DragEvent, id: string) => {
+    event.dataTransfer.setData('recordId', id);
   };
 
-  const onDrop = (e: React.DragEvent, status: string) => {
-    const leadId = e.dataTransfer.getData('leadId');
-    const lead = leads.find((item) => item.id === leadId);
-    if (!lead) {
-      stopAutoScroll();
-      return;
+  const stopAutoScroll = useCallback(() => {
+    if (scrollIntervalRef.current !== null) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
     }
-
-    if (status === 'perdido') {
-      const reasonLabel = prompt(`Motivo de perda:\n${LOSS_REASON_OPTIONS.map((o) => `- ${o.label}`).join('\n')}`);
-      if (!reasonLabel) {
-        stopAutoScroll();
-        return;
-      }
-      const matched = LOSS_REASON_OPTIONS.find((o) => o.label.toLowerCase() === reasonLabel.trim().toLowerCase());
-      if (!matched) {
-        alert('Motivo inv√°lido. Use um dos motivos listados.');
-        stopAutoScroll();
-        return;
-      }
-      const detail = prompt('Descreva o motivo da perda com clareza (m√≠nimo 12 caracteres):') || '';
-      if (!isValidLossReasonDetail(detail)) {
-        alert('Motivo de perda inv√°lido. Evite justificativa gen√©rica como "n√£o respondeu".');
-        stopAutoScroll();
-        return;
-      }
-      const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
-      const lockMessage = validateLeadStatusChange(nextLead as typeof lead, status);
-      if (lockMessage) {
-        alert(lockMessage);
-        stopAutoScroll();
-        return;
-      }
-      updateLead(leadId, { status, lossReasonCode: matched.value, lossReasonDetail: detail.trim() });
-      stopAutoScroll();
-      return;
-    }
-
-    const lockMessage = validateLeadStatusChange(lead, status);
-    if (lockMessage) {
-      alert(lockMessage);
-      stopAutoScroll();
-      return;
-    }
-    updateLead(leadId, { status });
-    stopAutoScroll();
-  };
-
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const scrollZone = 100;
-    const scrollSpeed = 15;
-
-    if (e.clientX < rect.left + scrollZone) {
-      startAutoScroll(-scrollSpeed);
-    } else if (e.clientX > rect.right - scrollZone) {
-      startAutoScroll(scrollSpeed);
-    } else {
-      stopAutoScroll();
-    }
-  };
-
-  const onDragEnd = () => {
-    stopAutoScroll();
-  };
+  }, []);
 
   const startAutoScroll = useCallback((speed: number) => {
     if (scrollIntervalRef.current !== null) return;
@@ -182,29 +231,107 @@ export function Leads() {
     }, 16);
   }, []);
 
-  const stopAutoScroll = useCallback(() => {
-    if (scrollIntervalRef.current !== null) {
-      clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
+  const onDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const scrollZone = 100;
+    const scrollSpeed = 15;
+
+    if (event.clientX < rect.left + scrollZone) {
+      startAutoScroll(-scrollSpeed);
+    } else if (event.clientX > rect.right - scrollZone) {
+      startAutoScroll(scrollSpeed);
+    } else {
+      stopAutoScroll();
     }
-  }, []);
+  };
+
+  const handleCommercialDrop = (lead: Lead, status: string) => {
+    if (status === 'perdido') {
+      const reasonLabel = prompt(`Motivo de perda:\n${LOSS_REASON_OPTIONS.map((option) => `- ${option.label}`).join('\n')}`);
+      if (!reasonLabel) return;
+      const matched = LOSS_REASON_OPTIONS.find((option) => option.label.toLowerCase() === reasonLabel.trim().toLowerCase());
+      if (!matched) {
+        alert('Motivo inv·lido. Use um dos motivos listados.');
+        return;
+      }
+      const detail = prompt('Descreva o motivo da perda com clareza (mÌnimo 12 caracteres):') || '';
+      if (!isValidLossReasonDetail(detail)) {
+        alert('Motivo de perda inv·lido. Evite justificativa genÈrica como "n„o respondeu".');
+        return;
+      }
+      const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
+      const lockMessage = validateLeadStatusChange(nextLead, status);
+      if (lockMessage) {
+        alert(lockMessage);
+        return;
+      }
+      updateLead(lead.id, { status, lossReasonCode: matched.value, lossReasonDetail: detail.trim() });
+      return;
+    }
+
+    const lockMessage = validateLeadStatusChange(lead, status);
+    if (lockMessage) {
+      alert(lockMessage);
+      return;
+    }
+    updateLead(lead.id, { status });
+  };
+
+  const onDrop = (event: React.DragEvent, status: string) => {
+    const recordId = event.dataTransfer.getData('recordId');
+    if (!recordId) {
+      stopAutoScroll();
+      return;
+    }
+
+    if (isProspecting) {
+      const lead = prospectLeads.find((item) => item.id === recordId);
+      if (lead) updateProspectLead(lead.id, { status });
+      stopAutoScroll();
+      return;
+    }
+
+    const lead = leads.find((item) => item.id === recordId);
+    if (lead) handleCommercialDrop(lead, status);
+    stopAutoScroll();
+  };
+
+  const commercialFunnels = allFunnels.filter((funnel) => funnel.operation === 'commercial');
+  const prospectingFunnels = allFunnels.filter((funnel) => funnel.operation === 'prospecting');
+
+  const searchPlaceholder = isProspecting
+    ? 'Buscar por clÌnica, contato, telefone ou CNPJ...'
+    : 'Buscar por nome, telefone ou CPF...';
 
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-10">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-5xl font-serif font-bold gold-text-gradient tracking-tight">Gest√£o de Leads</h1>
-          <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-xs">Pipeline de Vendas & Convers√£o</p>
+          <h1 className="text-5xl font-serif font-bold gold-text-gradient tracking-tight">Gest„o de Leads</h1>
+          <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-xs">
+            Um ˙nico kanban para operar qualquer funil do escritÛrio
+          </p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <select
             value={selectedFunnelId}
-            onChange={(e) => setSelectedFunnelId(e.target.value)}
-            className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground"
+            onChange={(event) => handleFunnelChange(event.target.value)}
+            className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[260px]"
           >
-            {commercialFunnels.map((funnel) => (
-              <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-            ))}
+            <optgroup label="Funis Comerciais">
+              {commercialFunnels.map((funnel) => (
+                <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Funis de ProspecÁ„o">
+              {prospectingFunnels.map((funnel) => (
+                <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+              ))}
+            </optgroup>
           </select>
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button
@@ -222,13 +349,13 @@ export function Leads() {
           </div>
           <button
             onClick={() => {
-              setLeadSaveError(null);
+              resetModalState();
               setIsModalOpen(true);
             }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
           >
             <Plus className="w-5 h-5" />
-            Novo Lead
+            {isProspecting ? 'Nova Conta' : 'Novo Lead'}
           </button>
         </div>
       </header>
@@ -238,9 +365,9 @@ export function Leads() {
           <Search className="w-5 h-5 text-gold-500/50 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por nome, telefone ou CPF..."
+            placeholder={searchPlaceholder}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(event) => setSearchTerm(event.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-muted-foreground/50"
           />
         </div>
@@ -250,40 +377,44 @@ export function Leads() {
           className="flex items-center gap-2 px-6 py-3 bg-background/40 border border-border rounded-xl text-muted-foreground font-bold text-xs uppercase tracking-widest hover:text-primary transition-all"
         >
           <Filter className="w-5 h-5" />
-          Filtros Avan√ßados
+          Filtros
         </button>
       </div>
 
       {showAdvancedFilters && (
         <div className="bg-card p-4 rounded-2xl border border-border shadow-2xl grid grid-cols-1 md:grid-cols-5 gap-3">
-          <select value={filterCampaignId} onChange={(e) => setFilterCampaignId(e.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-            <option value="">Todas as campanhas</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-            ))}
-          </select>
-          <select
-            value={filterAreaId}
-            onChange={(e) => {
-              setFilterAreaId(e.target.value);
-              setFilterServiceId('');
-            }}
-            className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
-          >
-            <option value="">Todas as √°reas</option>
-            {areasOfLaw.map((area) => (
-              <option key={area.id} value={area.id}>{area.name}</option>
-            ))}
-          </select>
-          <select value={filterServiceId} onChange={(e) => setFilterServiceId(e.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-            <option value="">Todos os servi√ßos</option>
+          {!isProspecting && (
+            <select value={filterCampaignId} onChange={(event) => setFilterCampaignId(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
+              <option value="">Todas as campanhas</option>
+              {campaigns.map((campaign) => (
+                <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+              ))}
+            </select>
+          )}
+          {!isProspecting && (
+            <select
+              value={filterAreaId}
+              onChange={(event) => {
+                setFilterAreaId(event.target.value);
+                setFilterServiceId('');
+              }}
+              className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
+            >
+              <option value="">Todas as ·reas</option>
+              {areasOfLaw.map((area) => (
+                <option key={area.id} value={area.id}>{area.name}</option>
+              ))}
+            </select>
+          )}
+          <select value={filterServiceId} onChange={(event) => setFilterServiceId(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
+            <option value="">Todos os serviÁos</option>
             {services
-              .filter((service) => !filterAreaId || service.areaOfLawId === filterAreaId)
+              .filter((service) => isProspecting || !filterAreaId || service.areaOfLawId === filterAreaId)
               .map((service) => (
                 <option key={service.id} value={service.id}>{service.name}</option>
               ))}
           </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
+          <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
             <option value="">Todos os status</option>
             {sortedStages.map((stage) => (
               <option key={stage.id} value={stage.id}>{stage.name}</option>
@@ -303,232 +434,329 @@ export function Leads() {
           </button>
         </div>
       )}
-
-      {viewMode === 'kanban' ? (
-        <div
-          ref={scrollContainerRef}
-          data-scroll-rail-id="main-leads-kanban"
-          className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[600px]"
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          onDragLeave={stopAutoScroll}
-        >
-          {sortedStages.map((column) => (
-            <div
-              key={column.id}
-              className="flex-shrink-0 w-80 flex flex-col gap-4"
-              onDragOver={onDragOver}
-              onDrop={(e) => onDrop(e, column.id)}
-            >
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)]" style={{ backgroundColor: column.color }}></div>
-                  <h3 className="font-serif font-bold text-foreground tracking-wide">{column.name}</h3>
+      {isProspecting ? (
+        viewMode === 'kanban' ? (
+          <div
+            ref={scrollContainerRef}
+            data-scroll-rail-id="unified-leads-kanban"
+            className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[560px]"
+            onDragOver={onDragOver}
+            onDragEnd={stopAutoScroll}
+            onDragLeave={stopAutoScroll}
+          >
+            {sortedStages.map((stage) => (
+              <div key={stage.id} className="flex-shrink-0 w-80 space-y-4" onDrop={(event) => onDrop(event, stage.id)} onDragOver={onDragOver}>
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="font-serif font-bold">{stage.name}</h3>
+                  <span className="text-[10px] bg-accent px-2 py-1 rounded-full">
+                    {filteredProspectLeads.filter((lead) => lead.status === stage.id).length}
+                  </span>
                 </div>
-                <span className="text-[10px] font-black text-gold-500/40 bg-accent px-2 py-0.5 rounded-full">
-                  {filteredLeads.filter((l) => l.status === column.id).length}
-                </span>
-              </div>
-
-              <div className="flex-1 space-y-4 bg-accent/50 rounded-2xl p-3 border border-border min-h-[500px]">
-                {filteredLeads.filter((l) => l.status === column.id).map((lead) => (
-                  <div
-                    key={lead.id}
-                    draggable
-                    onDragStart={(e) => onDragStart(e, lead.id)}
-                    onDragEnd={onDragEnd}
-                    className="bg-muted p-5 rounded-xl border border-border shadow-lg cursor-grab active:cursor-grabbing hover:border-gold-500/40 transition-all group"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <h4 className="font-serif font-bold text-foreground group-hover:text-primary transition-colors">{lead.name}</h4>
-                      <Link to={`/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gold-500/70 hover:text-primary">
-                        Editar
-                        <ChevronRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                        <Phone className="w-3 h-3 text-gold-500/50" />
-                        {lead.phone}
-                      </div>
-                      {lead.areaOfLawId && (
-                        <div className="inline-block px-2 py-0.5 bg-accent border border-border rounded text-[9px] font-bold text-gold-400 uppercase tracking-widest">
-                          {areasOfLaw.find((a) => a.id === lead.areaOfLawId)?.name}
+                <div className="min-h-[500px] rounded-2xl border border-border bg-accent/40 p-3 space-y-3">
+                  {filteredProspectLeads.filter((lead) => lead.status === stage.id).map((lead) => {
+                    const whatsappUrl = buildWhatsAppUrl(lead.phone);
+                    return (
+                      <div key={lead.id} draggable onDragStart={(event) => onDragStart(event, lead.id)} onDragEnd={stopAutoScroll} className="rounded-xl border border-border bg-card p-4 space-y-3 cursor-grab active:cursor-grabbing">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-serif font-bold text-foreground">{lead.clinicName}</p>
+                            <p className="text-xs text-muted-foreground">{lead.contactName}</p>
+                          </div>
+                          <Link to={`/prospecting/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary">
+                            Editar
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
                         </div>
-                      )}
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
-                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{format(new Date(lead.createdAt), 'dd MMM')}</span>
-                      {lead.estimatedValue ? <span className="text-xs font-bold text-emerald-500">R$ {lead.estimatedValue.toLocaleString()}</span> : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-          <table className="w-full text-left text-sm text-muted-foreground">
-            <thead className="bg-accent text-primary font-black text-[10px] uppercase tracking-[0.2em] border-b border-border">
-              <tr>
-                <th className="px-8 py-5">Nome do Cliente</th>
-                <th className="px-8 py-5">√Årea Jur√≠dica</th>
-                <th className="px-8 py-5">Status</th>
-                <th className="px-8 py-5">Valor Est.</th>
-                <th className="px-8 py-5 text-right">A√ß√µes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredLeads.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-8 py-16 text-center text-muted-foreground italic font-serif text-lg">Nenhum lead encontrado no pipeline.</td>
-                </tr>
-              ) : (
-                filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-accent transition-all group">
-                    <td className="px-8 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-serif font-bold text-foreground text-base group-hover:text-primary transition-colors">{lead.name}</span>
-                        <span className="text-[10px] text-muted-foreground mt-1 font-medium">{lead.phone}</span>
+                        <div className="space-y-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-3 h-3" /> {lead.phone}
+                          </div>
+                          {lead.cnpj && <p>CNPJ: {lead.cnpj}</p>}
+                          {lead.serviceId && (
+                            <p className="text-[10px] uppercase tracking-widest text-gold-500/70">
+                              {services.find((service) => service.id === lead.serviceId)?.name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          {whatsappUrl && (
+                            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border hover:border-emerald-500 hover:text-emerald-500">
+                              <MessageCircle className="w-3 h-3" />
+                              WhatsApp
+                            </a>
+                          )}
+                          <select
+                            value={lead.status}
+                            onChange={(event) => updateProspectLead(lead.id, { status: event.target.value })}
+                            className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-border bg-background"
+                          >
+                            {sortedStages.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((a) => a.id === lead.areaOfLawId)?.name || 'N√£o def.'}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span
-                        className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border"
-                        style={{
-                          backgroundColor: `${kanbanStages.find((s) => s.id === lead.status)?.color}20`,
-                          color: kanbanStages.find((s) => s.id === lead.status)?.color,
-                          borderColor: `${kanbanStages.find((s) => s.id === lead.status)?.color}40`,
-                        }}
-                      >
-                        {kanbanStages.find((s) => s.id === lead.status)?.name || lead.status}
-                      </span>
-                    </td>
-                    <td className="px-8 py-5 font-bold text-emerald-500">{lead.estimatedValue ? `R$ ${lead.estimatedValue.toLocaleString()}` : '-'}</td>
-                    <td className="px-8 py-5 text-right">
-                      <Link to={`/leads/${lead.id}`} className="text-primary font-black text-[10px] uppercase tracking-widest hover:text-gold-400 transition-colors">Editar Lead</Link>
-                    </td>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-accent text-xs uppercase tracking-[0.2em]">
+                <tr>
+                  <th className="px-6 py-4">Conta</th>
+                  <th className="px-6 py-4">Contato</th>
+                  <th className="px-6 py-4">Telefone</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">AÁıes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProspectLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-16 text-center text-muted-foreground italic font-serif text-lg">Nenhum registro encontrado neste funil.</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  filteredProspectLeads.map((lead) => {
+                    const stage = sortedStages.find((item) => item.id === lead.status);
+                    const whatsappUrl = buildWhatsAppUrl(lead.phone);
+                    return (
+                      <tr key={lead.id} className="border-t border-border">
+                        <td className="px-6 py-4 font-semibold">{lead.clinicName}</td>
+                        <td className="px-6 py-4">{lead.contactName}</td>
+                        <td className="px-6 py-4">{lead.phone}</td>
+                        <td className="px-6 py-4">{stage?.name || lead.status}</td>
+                        <td className="px-6 py-4 text-right space-x-4">
+                          {whatsappUrl && <a href={whatsappUrl} target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">WhatsApp</a>}
+                          <Link to={`/prospecting/leads/${lead.id}`} className="text-primary hover:underline">Editar</Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        viewMode === 'kanban' ? (
+          <div
+            ref={scrollContainerRef}
+            data-scroll-rail-id="unified-leads-kanban"
+            className="scrollbar-visible flex gap-6 overflow-x-auto pb-6 custom-scrollbar min-h-[600px]"
+            onDragOver={onDragOver}
+            onDragEnd={stopAutoScroll}
+            onDragLeave={stopAutoScroll}
+          >
+            {sortedStages.map((column) => (
+              <div key={column.id} className="flex-shrink-0 w-80 flex flex-col gap-4" onDragOver={onDragOver} onDrop={(event) => onDrop(event, column.id)}>
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(212,175,55,0.4)]" style={{ backgroundColor: column.color }}></div>
+                    <h3 className="font-serif font-bold text-foreground tracking-wide">{column.name}</h3>
+                  </div>
+                  <span className="text-[10px] font-black text-gold-500/40 bg-accent px-2 py-0.5 rounded-full">
+                    {filteredCommercialLeads.filter((lead) => lead.status === column.id).length}
+                  </span>
+                </div>
+                <div className="flex-1 space-y-4 bg-accent/50 rounded-2xl p-3 border border-border min-h-[500px]">
+                  {filteredCommercialLeads.filter((lead) => lead.status === column.id).map((lead) => (
+                    <div key={lead.id} draggable onDragStart={(event) => onDragStart(event, lead.id)} onDragEnd={stopAutoScroll} className="bg-muted p-5 rounded-xl border border-border shadow-lg cursor-grab active:cursor-grabbing hover:border-gold-500/40 transition-all group">
+                      <div className="flex justify-between items-start mb-3 gap-3">
+                        <h4 className="font-serif font-bold text-foreground group-hover:text-primary transition-colors">{lead.name}</h4>
+                        <Link to={`/leads/${lead.id}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gold-500/70 hover:text-primary">
+                          Editar
+                          <ChevronRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                          <Phone className="w-3 h-3 text-gold-500/50" />
+                          {lead.phone}
+                        </div>
+                        {lead.areaOfLawId && (
+                          <div className="inline-block px-2 py-0.5 bg-accent border border-border rounded text-[9px] font-bold text-gold-400 uppercase tracking-widest">
+                            {areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{format(new Date(lead.createdAt), 'dd MMM')}</span>
+                        {lead.estimatedValue ? <span className="text-xs font-bold text-emerald-500">R$ {lead.estimatedValue.toLocaleString()}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+            <table className="w-full text-left text-sm text-muted-foreground">
+              <thead className="bg-accent text-primary font-black text-[10px] uppercase tracking-[0.2em] border-b border-border">
+                <tr>
+                  <th className="px-8 py-5">Nome do Cliente</th>
+                  <th className="px-8 py-5">¡rea JurÌdica</th>
+                  <th className="px-8 py-5">Status</th>
+                  <th className="px-8 py-5">Valor Est.</th>
+                  <th className="px-8 py-5 text-right">AÁıes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredCommercialLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-16 text-center text-muted-foreground italic font-serif text-lg">Nenhum lead encontrado neste funil.</td>
+                  </tr>
+                ) : (
+                  filteredCommercialLeads.map((lead) => {
+                    const stage = sortedStages.find((item) => item.id === lead.status);
+                    return (
+                      <tr key={lead.id} className="hover:bg-accent transition-all group">
+                        <td className="px-8 py-5">
+                          <div className="flex flex-col">
+                            <span className="font-serif font-bold text-foreground text-base group-hover:text-primary transition-colors">{lead.name}</span>
+                            <span className="text-[10px] text-muted-foreground mt-1 font-medium">{lead.phone}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'N„o definido'}</span>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span
+                            className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border"
+                            style={{
+                              backgroundColor: `${stage?.color || '#D4AF37'}20`,
+                              color: stage?.color || '#D4AF37',
+                              borderColor: `${stage?.color || '#D4AF37'}40`,
+                            }}
+                          >
+                            {stage?.name || lead.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 font-bold text-emerald-500">{lead.estimatedValue ? `R$ ${lead.estimatedValue.toLocaleString()}` : '-'}</td>
+                        <td className="px-8 py-5 text-right">
+                          <Link to={`/leads/${lead.id}`} className="text-primary font-black text-[10px] uppercase tracking-widest hover:text-gold-400 transition-colors">Editar Lead</Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
 
-      {isModalOpen && (
+      {isModalOpen && activeFunnel && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-2xl p-8 w-full max-w-2xl shadow-2xl border border-border relative max-h-[90vh] overflow-y-auto scrollbar-none">
-            {showLeadSaveSuccess && (
+            {showSaveSuccess && (
               <div className="absolute inset-0 z-50 bg-card flex flex-col items-center justify-center animate-fade-in">
                 <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4 animate-scale-in">
                   <CheckCircle2 className="w-10 h-10 text-emerald-500" />
                 </div>
-                <p className="text-lg font-serif font-bold text-foreground">Lead salvo com sucesso!</p>
+                <p className="text-lg font-serif font-bold text-foreground">Registro salvo com sucesso!</p>
               </div>
             )}
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-serif font-bold gold-text-gradient">Registrar Novo Lead</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-primary" disabled={isSavingLead}>
+              <div>
+                <h2 className="text-3xl font-serif font-bold gold-text-gradient">{isProspecting ? 'Nova Conta em ProspecÁ„o' : 'Registrar Novo Lead'}</h2>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mt-2">Funil atual: {activeFunnel.name}</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-primary" disabled={isSavingRecord}>
                 <Plus className="w-6 h-6 rotate-45" />
               </button>
             </div>
-            <form onSubmit={handleAddLead} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Nome Completo</label>
-                  <input required name="name" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Telefone (WhatsApp)</label>
-                  <input required name="phone" type="tel" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">E-mail</label>
-                  <input name="email" type="email" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">√Årea de Atua√ß√£o</label>
-                  <select
-                    name="areaOfLawId"
-                    onChange={(e) => setSelectedArea(e.target.value)}
-                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
-                  >
-                    <option value="">Selecione a √Årea</option>
-                    {areasOfLaw.map((area) => (
-                      <option key={area.id} value={area.id}>{area.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Servi√ßo</label>
-                  <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all">
-                    <option value="">Selecione o Servi√ßo</option>
-                    {services.filter((s) => s.areaOfLawId === selectedArea).map((service) => (
+            <form onSubmit={handleCreateRecord} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {isProspecting ? (
+                <>
+                  <input name="clinicName" required placeholder="Nome da conta ou clÌnica" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="contactName" required placeholder="Respons·vel principal" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="phone" required placeholder="Telefone ou WhatsApp" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="cnpj" placeholder="CNPJ" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="email" placeholder="E-mail" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="city" placeholder="Cidade" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="neighborhood" placeholder="Bairro" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <input name="receptionistName" placeholder="RecepÁ„o ou contato secund·rio" className="px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                  <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
+                    <option value="">ServiÁo ofertado</option>
+                    {services.map((service) => (
                       <option key={service.id} value={service.id}>{service.name}</option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
-                  <select name="funnelId" defaultValue={activeFunnel?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all">
-                    {commercialFunnels.map((funnel) => (
-                      <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor Estimado do Contrato</label>
-                  <div className="relative">
-                    <DollarSign className="w-4 h-4 text-gold-500/50 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input name="estimatedValue" type="number" className="w-full pl-10 pr-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
+                </>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Nome Completo</label>
+                      <input required name="name" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Telefone</label>
+                      <input required name="phone" type="tel" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">E-mail</label>
+                      <input name="email" type="email" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CPF</label>
-                  <input name="cpf" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Respons?vel</label>
-                  <select
-                    name="ownerUserId"
-                    defaultValue={isAdmin ? '' : user?.id || ''}
-                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
-                  >
-                    <option value="">Sem atribui??o definida</option>
-                    {activeAssignableUsers.map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">¡rea de AtuaÁ„o</label>
+                      <select name="areaOfLawId" onChange={(event) => setSelectedArea(event.target.value)} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
+                        <option value="">Selecione a ¡rea</option>
+                        {areasOfLaw.map((area) => (
+                          <option key={area.id} value={area.id}>{area.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">ServiÁo</label>
+                      <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
+                        <option value="">Selecione o ServiÁo</option>
+                        {services.filter((service) => service.areaOfLawId === selectedArea).map((service) => (
+                          <option key={service.id} value={service.id}>{service.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor Estimado</label>
+                      <div className="relative">
+                        <DollarSign className="w-4 h-4 text-gold-500/50 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <input name="estimatedValue" type="number" className="w-full pl-10 pr-4 py-3 bg-background/40 border border-border rounded-xl" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CPF</label>
+                      <input name="cpf" type="text" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl" />
+                    </div>
+                  </div>
+                </>
+              )}
+              <select name="funnelId" defaultValue={activeFunnel.id} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
+                {allFunnels.filter((funnel) => funnel.operation === activeFunnel.operation).map((funnel) => (
+                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                ))}
+              </select>
+              <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
+                <option value="">Sem atribuiÁ„o definida</option>
+                {activeAssignableUsers.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                ))}
+              </select>
               <div className="md:col-span-2 flex justify-end gap-4 mt-8 pt-6 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setLeadSaveError(null);
-                  }}
-                  className="px-8 py-3 text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:text-foreground transition-all"
-                  disabled={isSavingLead}
-                >
+                <button type="button" onClick={() => { setIsModalOpen(false); resetModalState(); }} className="px-8 py-3 text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:text-foreground transition-all" disabled={isSavingRecord}>
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="px-10 py-3 bg-primary text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gold-400 transition-all shadow-xl disabled:opacity-70"
-                  disabled={isSavingLead}
-                >
-                  {isSavingLead ? 'Salvando...' : 'Confirmar Registro'}
+                <button type="submit" className="px-10 py-3 bg-primary text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gold-400 transition-all shadow-xl disabled:opacity-70" disabled={isSavingRecord}>
+                  {isSavingRecord ? 'Salvando...' : 'Confirmar Registro'}
                 </button>
               </div>
-              {leadSaveError && <p className="md:col-span-2 text-xs text-red-400">{leadSaveError}</p>}
+              {saveError && <p className="md:col-span-2 text-xs text-red-400">{saveError}</p>}
             </form>
           </div>
         </div>

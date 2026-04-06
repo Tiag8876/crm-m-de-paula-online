@@ -1,613 +1,288 @@
-ï»¿import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useMemo, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Download, FileSpreadsheet, TrendingUp, CheckCircle2, AlertTriangle, Clock3, GitBranchPlus } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { FileSpreadsheet, Download, TrendingUp, Users, CheckCircle2, AlertTriangle, Clock3, CalendarRange } from 'lucide-react';
 import { getLeadIdleHours } from '@/lib/leadMetrics';
-import { isAdminUser } from '@/lib/access';
+import type { FunnelConfig } from '@/types/crm';
 
 type PeriodFilter = '7' | '30' | '90' | 'all';
+const ALL_SCOPE = '__all__';
 
-const getCurrentWeekKey = (): string => {
-  const now = new Date();
-  const day = now.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() + diffToMonday);
-  return monday.toISOString().slice(0, 10);
+const sortFunnels = (items: FunnelConfig[]) =>
+  [...items].sort((a, b) => {
+    if (a.operation !== b.operation) return a.operation === 'commercial' ? -1 : 1;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
+
+const getProspectIdleHours = (lead: { createdAt: string; lastInteractionAt?: string; followUps?: Array<{ date: string }>; tasks?: Array<{ date: string }>; notes?: Array<{ createdAt: string }> }, nowMs = Date.now()) => {
+  const candidates = [Date.parse(lead.createdAt || ''), Date.parse(lead.lastInteractionAt || '')].filter((value) => !Number.isNaN(value));
+  for (const followUp of lead.followUps || []) {
+    const time = Date.parse(followUp.date || '');
+    if (!Number.isNaN(time)) candidates.push(time);
+  }
+  for (const task of lead.tasks || []) {
+    const time = Date.parse(task.date || '');
+    if (!Number.isNaN(time)) candidates.push(time);
+  }
+  for (const note of lead.notes || []) {
+    const time = Date.parse(note.createdAt || '');
+    if (!Number.isNaN(time)) candidates.push(time);
+  }
+  const base = candidates.length > 0 ? Math.max(...candidates) : nowMs;
+  return Math.max(0, (nowMs - base) / 36e5);
 };
 
-const isInWeek = (dateValue: string, weekKey: string): boolean => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return false;
-  const monday = new Date(`${weekKey}T00:00:00`);
-  const nextMonday = new Date(monday);
-  nextMonday.setDate(nextMonday.getDate() + 7);
-  return date >= monday && date < nextMonday;
-};
-
-const escapeHtml = (value: string | number) =>
-  String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+const escapeHtml = (value: string | number) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 export function SalesReports() {
-  const { leads, campaigns, weeklySnapshots, ensureWeeklySnapshot } = useStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, users, fetchUsers } = useAuthStore();
+  const { funnels, leads, prospectLeads, campaigns, services } = useStore();
+  const [selectedScope, setSelectedScope] = useState<string>(ALL_SCOPE);
   const [period, setPeriod] = useState<PeriodFilter>('30');
-  const isAdmin = isAdminUser(user);
+
+  const allFunnels = sortFunnels(funnels || []);
 
   useEffect(() => {
-    if (isAdminUser(user)) {
-      fetchUsers().catch(() => null);
+    fetchUsers().catch(() => null);
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    const funnelParam = searchParams.get('funnel');
+    const operationParam = searchParams.get('operation');
+    if (funnelParam && allFunnels.some((funnel) => funnel.id === funnelParam)) {
+      setSelectedScope(funnelParam);
+      return;
     }
-  }, [fetchUsers, user]);
+    if (operationParam === 'prospecting') {
+      setSelectedScope(allFunnels.find((funnel) => funnel.operation === 'prospecting')?.id || ALL_SCOPE);
+      return;
+    }
+    setSelectedScope(ALL_SCOPE);
+  }, [allFunnels, searchParams]);
 
-  useEffect(() => {
-    ensureWeeklySnapshot();
-  }, [ensureWeeklySnapshot]);
+  const activeFunnel = allFunnels.find((funnel) => funnel.id === selectedScope);
+  const now = Date.now();
 
-  const scopedLeads = useMemo(() => {
-    if (!user) return [];
-    if (isAdminUser(user)) return leads;
-    return leads.filter((lead) => !lead.ownerUserId || lead.ownerUserId === user.id);
-  }, [leads, user]);
+  const records = useMemo(() => {
+    const start = period === 'all' ? null : (() => {
+      const date = new Date();
+      date.setDate(date.getDate() - Number(period));
+      return date;
+    })();
 
-  const filteredLeads = useMemo(() => {
-    if (period === 'all') return scopedLeads;
-    const days = Number(period);
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    return scopedLeads.filter((lead) => new Date(lead.createdAt) >= start);
-  }, [scopedLeads, period]);
+    const base = [
+      ...(leads || []).map((lead) => ({
+        id: lead.id,
+        kind: 'commercial' as const,
+        createdAt: lead.createdAt,
+        funnelId: lead.funnelId,
+        ownerUserId: lead.ownerUserId,
+        status: lead.status,
+        closed: lead.status === 'fechado',
+        lost: lead.status === 'perdido',
+        sourceName: campaigns.find((campaign) => campaign.id === lead.campaignId)?.name || 'Sem campanha',
+        idleHours: getLeadIdleHours(lead, now),
+        followUps: lead.followUps || [],
+        tasks: lead.tasks || [],
+      })),
+      ...(prospectLeads || []).map((lead) => ({
+        id: lead.id,
+        kind: 'prospecting' as const,
+        createdAt: lead.createdAt,
+        funnelId: lead.funnelId,
+        ownerUserId: lead.ownerUserId,
+        status: lead.status,
+        closed: lead.status === 'p_fechada',
+        lost: lead.status === 'p_perdida',
+        sourceName: services.find((service) => service.id === lead.serviceId)?.name || 'Sem serviço',
+        idleHours: getProspectIdleHours(lead, now),
+        followUps: lead.followUps || [],
+        tasks: lead.tasks || [],
+      })),
+    ]
+      .filter((item) => !item.ownerUserId || item.ownerUserId === user?.id || user?.role === 'admin')
+      .filter((item) => !start || new Date(item.createdAt) >= start);
+
+    if (selectedScope === ALL_SCOPE) return base;
+    return base.filter((item) => item.funnelId === selectedScope);
+  }, [campaigns, leads, now, period, prospectLeads, selectedScope, services, user?.id, user?.role]);
 
   const metrics = useMemo(() => {
-    const total = filteredLeads.length;
-    const won = filteredLeads.filter((l) => l.status === 'fechado').length;
-    const lost = filteredLeads.filter((l) => l.status === 'perdido').length;
-    const inProgress = total - won - lost;
-    const conversion = total > 0 ? (won / total) * 100 : 0;
-    const estimatedWon = filteredLeads
-      .filter((l) => l.status === 'fechado')
-      .reduce((acc, l) => acc + (l.estimatedValue || 0), 0);
+    const total = records.length;
+    const won = records.filter((item) => item.closed).length;
+    const lost = records.filter((item) => item.lost).length;
+    const stalled = records.filter((item) => !item.closed && !item.lost && item.idleHours >= 24).length;
+    const overdue = records.reduce((acc, item) => acc + item.followUps.filter((followUp) => followUp.status === 'pendente' && new Date(followUp.date).getTime() < now).length, 0);
+    return { total, won, lost, stalled, overdue, conversion: total > 0 ? (won / total) * 100 : 0 };
+  }, [now, records]);
 
-    const rows = campaigns
-      .map((campaign) => {
-        const group = filteredLeads.filter((lead) => lead.campaignId === campaign.id);
-        const entries = group.length;
-        const closed = group.filter((lead) => lead.status === 'fechado').length;
-        const conversionRate = entries > 0 ? (closed / entries) * 100 : 0;
-        return {
-          id: campaign.id,
-          name: campaign.name,
-          entries,
-          closed,
-          conversionRate,
-        };
-      })
-      .sort((a, b) => b.entries - a.entries);
-
-    return { total, won, lost, inProgress, conversion, estimatedWon, rows };
-  }, [filteredLeads, campaigns]);
-
-  const generalFilteredLeads = useMemo(() => {
-    if (period === 'all') return leads;
-    const days = Number(period);
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    return (leads || []).filter((lead) => new Date(lead.createdAt) >= start);
-  }, [leads, period]);
-
-  const generalMetrics = useMemo(() => {
-    const total = generalFilteredLeads.length;
-    const won = generalFilteredLeads.filter((l) => l.status === 'fechado').length;
-    const lost = generalFilteredLeads.filter((l) => l.status === 'perdido').length;
-    const inProgress = total - won - lost;
-    const conversion = total > 0 ? (won / total) * 100 : 0;
-    const rows = campaigns
-      .map((campaign) => {
-        const group = generalFilteredLeads.filter((lead) => lead.campaignId === campaign.id);
-        const entries = group.length;
-        const closed = group.filter((lead) => lead.status === 'fechado').length;
-        const conversionRate = entries > 0 ? (closed / entries) * 100 : 0;
-        return { id: campaign.id, name: campaign.name, entries, closed, conversionRate };
-      })
-      .sort((a, b) => b.entries - a.entries);
-    return { total, won, lost, inProgress, conversion, rows };
-  }, [generalFilteredLeads, campaigns]);
+  const groupedRows = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; won: number }>();
+    for (const record of records) {
+      const key = selectedScope === ALL_SCOPE ? (record.funnelId || 'sem_funil') : record.sourceName;
+      const name = selectedScope === ALL_SCOPE
+        ? (allFunnels.find((funnel) => funnel.id === record.funnelId)?.name || 'Sem funil')
+        : record.sourceName;
+      if (!map.has(key)) map.set(key, { name, total: 0, won: 0 });
+      const row = map.get(key)!;
+      row.total += 1;
+      if (record.closed) row.won += 1;
+    }
+    return Array.from(map.values())
+      .map((row) => ({ ...row, conversion: row.total > 0 ? (row.won / row.total) * 100 : 0 }))
+      .sort((a, b) => b.total - a.total);
+  }, [allFunnels, records, selectedScope]);
 
   const disciplineRows = useMemo(() => {
-    const now = Date.now();
-    const ownerMap = new Map<string, { name: string; sector: string }>();
-
-    if (user) {
-      ownerMap.set(user.id, { name: user.name, sector: user.sector });
-    }
-
-    for (const appUser of users) {
-      ownerMap.set(appUser.id, { name: appUser.name, sector: appUser.sector });
-    }
-
-    const rows = new Map<
-      string,
-      {
-        ownerId: string;
-        ownerName: string;
-        sector: string;
-        total: number;
-        closed: number;
-        idle24h: number;
-        overdueFollowUps: number;
-        pendingTasks: number;
-      }
-    >();
-
-    const ensureRow = (ownerId: string, ownerName: string, sector: string) => {
-      if (!rows.has(ownerId)) {
-        rows.set(ownerId, {
-          ownerId,
-          ownerName,
-          sector,
-          total: 0,
-          closed: 0,
-          idle24h: 0,
-          overdueFollowUps: 0,
-          pendingTasks: 0,
-        });
-      }
-      return rows.get(ownerId)!;
-    };
-
-    for (const lead of filteredLeads) {
-      const ownerId = lead.ownerUserId || user?.id || 'unassigned';
-      const ownerInfo = ownerMap.get(ownerId);
-      const row = ensureRow(ownerId, ownerInfo?.name || 'Sem responsavel', ownerInfo?.sector || 'N/A');
-
+    const byUser = new Map<string, { name: string; total: number; won: number; stalled: number; overdue: number }>();
+    for (const record of records) {
+      const owner = users.find((item) => item.id === record.ownerUserId);
+      const key = record.ownerUserId || 'unassigned';
+      const name = owner?.name || (key === 'unassigned' ? 'Sem responsável' : 'Usuário');
+      if (!byUser.has(key)) byUser.set(key, { name, total: 0, won: 0, stalled: 0, overdue: 0 });
+      const row = byUser.get(key)!;
       row.total += 1;
-      if (lead.status === 'fechado') row.closed += 1;
-      if (lead.status !== 'fechado' && lead.status !== 'perdido' && getLeadIdleHours(lead, now) >= 24) row.idle24h += 1;
-
-      row.overdueFollowUps += (lead.followUps || []).filter(
-        (followUp) => followUp.status === 'pendente' && new Date(followUp.date).getTime() < now
-      ).length;
-
-      row.pendingTasks += (lead.tasks || []).filter((task) => task.status === 'pendente').length;
+      if (record.closed) row.won += 1;
+      if (!record.closed && !record.lost && record.idleHours >= 24) row.stalled += 1;
+      row.overdue += record.followUps.filter((followUp) => followUp.status === 'pendente' && new Date(followUp.date).getTime() < now).length;
     }
+    return Array.from(byUser.values()).map((row) => ({ ...row, conversion: row.total > 0 ? (row.won / row.total) * 100 : 0 })).sort((a, b) => b.total - a.total);
+  }, [now, records, users]);
 
-    return Array.from(rows.values())
-      .map((row) => ({
-        ...row,
-        conversion: row.total > 0 ? (row.closed / row.total) * 100 : 0,
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [filteredLeads, users, user]);
-
-  const sellerDiscipline = useMemo(() => {
-    if (isAdmin) return null;
-    const row = disciplineRows.find((item) => item.ownerId === user?.id);
-    if (row) return row;
-    return {
-      ownerId: user?.id || 'self',
-      ownerName: user?.name || 'Vendedor',
-      sector: user?.sector || 'Comercial',
-      total: 0,
-      closed: 0,
-      idle24h: 0,
-      overdueFollowUps: 0,
-      pendingTasks: 0,
-      conversion: 0,
-    };
-  }, [disciplineRows, isAdmin, user?.id, user?.name, user?.sector]);
-
-  const latestWeekly = useMemo(() => weeklySnapshots?.[0] || null, [weeklySnapshots]);
-  const weeklyCommercialData = useMemo(() => {
-    const weekKey = getCurrentWeekKey();
-    const weekLeads = scopedLeads.filter((lead) => isInWeek(lead.createdAt, weekKey));
-    const rows = campaigns
-      .map((campaign) => {
-        const group = weekLeads.filter((lead) => lead.campaignId === campaign.id);
-        const entries = group.length;
-        const closed = group.filter((lead) => lead.status === 'fechado').length;
-        return {
-          id: campaign.id,
-          name: campaign.name,
-          entries,
-          closed,
-          conversionRate: entries > 0 ? (closed / entries) * 100 : 0,
-        };
-      })
-      .sort((a, b) => b.entries - a.entries);
-
-    const total = weekLeads.length;
-    const won = weekLeads.filter((lead) => lead.status === 'fechado').length;
-    const lost = weekLeads.filter((lead) => lead.status === 'perdido').length;
-    return {
-      weekKey,
-      total,
-      won,
-      lost,
-      conversion: total > 0 ? (won / total) * 100 : 0,
-      rows,
-    };
-  }, [campaigns, scopedLeads]);
-
-  const exportCsv = () => {
-    const reportTitle = isAdmin ? 'Relatorio Comercial Geral' : `Relatorio Comercial - ${user?.name || 'Vendedor'}`;
-    const ownerName = isAdmin ? 'Equipe completa' : user?.name || 'Vendedor';
-    const generatedAt = new Date().toLocaleString('pt-BR');
-
-    const disciplineTableRows = isAdmin
-      ? disciplineRows
-      : sellerDiscipline
-        ? [sellerDiscipline]
-        : [];
-
+  const exportReport = () => {
+    const title = activeFunnel ? `Relatório do ${activeFunnel.name}` : 'Relatório Geral de Funis';
     const html = `
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            body { font-family: Segoe UI, Arial, sans-serif; padding: 16px; color: #1f2937; }
-            h1 { margin: 0 0 8px 0; font-size: 20px; }
-            .meta { margin-bottom: 16px; font-size: 12px; color: #4b5563; }
-            table { border-collapse: collapse; width: 100%; margin-top: 10px; margin-bottom: 16px; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
-            th { background: #111827; color: #f9fafb; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-            .section { margin-top: 8px; font-size: 14px; font-weight: 700; color: #111827; }
-            .summary { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
-            .card { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px; }
-            .card-label { font-size: 10px; text-transform: uppercase; color: #6b7280; letter-spacing: .04em; }
-            .card-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(reportTitle)}</h1>
-          <div class="meta">Responsavel: ${escapeHtml(ownerName)} | Periodo: ${escapeHtml(period)} | Gerado em: ${escapeHtml(generatedAt)}</div>
-
-          <div class="summary">
-            <div class="card"><div class="card-label">Entradas</div><div class="card-value">${escapeHtml(metrics.total)}</div></div>
-            <div class="card"><div class="card-label">Fechados</div><div class="card-value">${escapeHtml(metrics.won)}</div></div>
-            <div class="card"><div class="card-label">Conversao</div><div class="card-value">${escapeHtml(metrics.conversion.toFixed(1))}%</div></div>
-            <div class="card"><div class="card-label">Em pipeline</div><div class="card-value">${escapeHtml(metrics.inProgress)}</div></div>
-            <div class="card"><div class="card-label">Valor fechado</div><div class="card-value">R$ ${escapeHtml(metrics.estimatedWon.toLocaleString('pt-BR'))}</div></div>
-          </div>
-
-          <div class="section">Disciplina Comercial</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Vendedor</th>
-                <th>Leads</th>
-                <th>Fechados</th>
-                <th>Conversao</th>
-                <th>Sem acao 24h+</th>
-                <th>Follow-up atrasado</th>
-                <th>Tarefas pendentes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${disciplineTableRows.map((row) => `
-                <tr>
-                  <td>${escapeHtml(row.ownerName)}</td>
-                  <td>${escapeHtml(row.total)}</td>
-                  <td>${escapeHtml(row.closed)}</td>
-                  <td>${escapeHtml(row.conversion.toFixed(1))}%</td>
-                  <td>${escapeHtml(row.idle24h)}</td>
-                  <td>${escapeHtml(row.overdueFollowUps)}</td>
-                  <td>${escapeHtml(row.pendingTasks)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <div class="section">Fechamento por Campanha</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Campanha</th>
-                <th>Leads</th>
-                <th>Fechados</th>
-                <th>Conversao</th>
-                <th>Indice comercial</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${metrics.rows.map((row) => `
-                <tr>
-                  <td>${escapeHtml(row.name)}</td>
-                  <td>${escapeHtml(row.entries)}</td>
-                  <td>${escapeHtml(row.closed)}</td>
-                  <td>${escapeHtml(row.conversionRate.toFixed(1))}%</td>
-                  <td>${escapeHtml(row.entries > 0 ? Math.round((row.closed / row.entries) * 100) : 0)} / 100</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
+      <html><head><meta charset="utf-8" />
+      <style>body{font-family:Segoe UI,Arial,sans-serif;padding:16px;color:#111827}table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;font-size:12px}th{background:#111827;color:#fff;text-transform:uppercase;font-size:10px}h1{font-size:20px} .summary{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:8px;margin:12px 0} .card{border:1px solid #d1d5db;border-radius:8px;padding:8px} .label{font-size:10px;text-transform:uppercase;color:#6b7280} .value{font-size:18px;font-weight:700;margin-top:4px}</style>
+      </head><body>
+      <h1>${escapeHtml(title)}</h1>
+      <p>Período: ${escapeHtml(period)} | Gerado em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
+      <div class="summary">
+        <div class="card"><div class="label">Entradas</div><div class="value">${escapeHtml(metrics.total)}</div></div>
+        <div class="card"><div class="label">Fechados</div><div class="value">${escapeHtml(metrics.won)}</div></div>
+        <div class="card"><div class="label">Perdidos</div><div class="value">${escapeHtml(metrics.lost)}</div></div>
+        <div class="card"><div class="label">Conversão</div><div class="value">${escapeHtml(metrics.conversion.toFixed(1))}%</div></div>
+        <div class="card"><div class="label">Follow-up atrasado</div><div class="value">${escapeHtml(metrics.overdue)}</div></div>
+      </div>
+      <table><thead><tr><th>${selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'Serviço' : 'Campanha'}</th><th>Entradas</th><th>Fechados</th><th>Conversão</th></tr></thead><tbody>
+      ${groupedRows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.total)}</td><td>${escapeHtml(row.won)}</td><td>${escapeHtml(row.conversion.toFixed(1))}%</td></tr>`).join('')}
+      </tbody></table>
+      </body></html>`;
 
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `relatorio-comercial-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `relatorio-funis-${new Date().toISOString().slice(0, 10)}.xls`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const exportWeeklyCommercialCsv = () => {
-    const source = isAdmin && latestWeekly
-      ? {
-          weekKey: latestWeekly.weekKey,
-          total: latestWeekly.commercial.total,
-          won: latestWeekly.commercial.won,
-          lost: latestWeekly.commercial.lost,
-          conversion: latestWeekly.commercial.conversion,
-          rows: latestWeekly.commercial.rows,
-        }
-      : weeklyCommercialData;
-
-    const reportTitle = isAdmin ? 'Relatorio Semanal Comercial Geral' : `Relatorio Semanal Comercial - ${user?.name || 'Vendedor'}`;
-    const generatedAt = new Date().toLocaleString('pt-BR');
-
-    const html = `
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            body { font-family: Segoe UI, Arial, sans-serif; padding: 16px; color: #1f2937; }
-            h1 { margin: 0 0 8px 0; font-size: 20px; }
-            .meta { margin-bottom: 16px; font-size: 12px; color: #4b5563; }
-            table { border-collapse: collapse; width: 100%; margin-top: 10px; margin-bottom: 16px; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
-            th { background: #111827; color: #f9fafb; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-            .summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
-            .card { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px; }
-            .card-label { font-size: 10px; text-transform: uppercase; color: #6b7280; letter-spacing: .04em; }
-            .card-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(reportTitle)}</h1>
-          <div class="meta">Semana: ${escapeHtml(source.weekKey)} | Gerado em: ${escapeHtml(generatedAt)}</div>
-          <div class="summary">
-            <div class="card"><div class="card-label">Total leads</div><div class="card-value">${escapeHtml(source.total)}</div></div>
-            <div class="card"><div class="card-label">Fechados</div><div class="card-value">${escapeHtml(source.won)}</div></div>
-            <div class="card"><div class="card-label">Perdidos</div><div class="card-value">${escapeHtml(source.lost)}</div></div>
-            <div class="card"><div class="card-label">Conversao</div><div class="card-value">${escapeHtml(source.conversion.toFixed(1))}%</div></div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Campanha</th>
-                <th>Leads</th>
-                <th>Fechados</th>
-                <th>Conversao</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(source.rows || []).map((row) => `
-                <tr>
-                  <td>${escapeHtml(row.name)}</td>
-                  <td>${escapeHtml(row.entries)}</td>
-                  <td>${escapeHtml(row.closed)}</td>
-                  <td>${escapeHtml(row.conversionRate.toFixed(1))}%</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `relatorio-semanal-comercial-${source.weekKey}.xls`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleScopeChange = (value: string) => {
+    setSelectedScope(value);
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (value === ALL_SCOPE) {
+        params.delete('funnel');
+        params.delete('operation');
+        return params;
+      }
+      const nextFunnel = allFunnels.find((funnel) => funnel.id === value);
+      if (nextFunnel) {
+        params.set('funnel', nextFunnel.id);
+        params.set('operation', nextFunnel.operation);
+      }
+      return params;
+    }, { replace: true });
   };
 
   return (
     <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
-      <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">
-            {isAdmin ? 'Relatorios Comerciais' : `Relatorios Comerciais de ${user?.name || 'Vendedor'}`}
-          </h1>
-          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
-            {isAdmin
-              ? 'Visao por periodo para saber se o gargalo esta no trafego ou no comercial'
-              : 'Sua performance comercial personalizada por periodo'}
-          </p>
+          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">Relatórios</h1>
+          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">Uma única área de leitura, orientada por funil</p>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as PeriodFilter)}
-            className="px-3 py-2 rounded-lg bg-card border border-border text-sm"
-          >
-            <option value="7">Ultimos 7 dias</option>
-            <option value="30">Ultimos 30 dias</option>
-            <option value="90">Ultimos 90 dias</option>
-            <option value="all">Todo periodo</option>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select value={selectedScope} onChange={(event) => handleScopeChange(event.target.value)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[260px]">
+            <option value={ALL_SCOPE}>Todos os Funis</option>
+            <optgroup label="Funis Comerciais">{allFunnels.filter((funnel) => funnel.operation === 'commercial').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}</optgroup>
+            <optgroup label="Funis de Prospecção">{allFunnels.filter((funnel) => funnel.operation === 'prospecting').map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.name}</option>)}</optgroup>
           </select>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs uppercase tracking-widest font-black flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Exportar Planilha
-          </button>
+          <select value={period} onChange={(event) => setPeriod(event.target.value as PeriodFilter)} className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground">
+            <option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="all">Todo o período</option>
+          </select>
+          <button onClick={exportReport} className="px-4 py-3 rounded-xl bg-primary text-primary-foreground text-xs uppercase tracking-widest font-black inline-flex items-center gap-2"><Download className="w-4 h-4" />Exportar</button>
         </div>
       </header>
 
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <CalendarRange className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-serif font-bold">Relatorio Semanal Automatico</h2>
-          </div>
-          <button
-            type="button"
-            onClick={exportWeeklyCommercialCsv}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs uppercase tracking-widest font-black flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Exportar Semanal
-          </button>
-        </div>
-        <div className="p-6 text-sm text-muted-foreground">
-          <p>
-            Semana {(isAdmin && latestWeekly ? latestWeekly.weekKey : weeklyCommercialData.weekKey)}:{' '}
-            {(isAdmin && latestWeekly ? latestWeekly.commercial.total : weeklyCommercialData.total)} leads,{' '}
-            {(isAdmin && latestWeekly ? latestWeekly.commercial.won : weeklyCommercialData.won)} fechados, conversao{' '}
-            {(isAdmin && latestWeekly ? latestWeekly.commercial.conversion : weeklyCommercialData.conversion).toFixed(1)}%.
-          </p>
-        </div>
-      </section>
-
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <MetricCard icon={Users} label={isAdmin ? 'Entradas' : 'Suas entradas'} value={metrics.total} />
-        <MetricCard icon={CheckCircle2} label={isAdmin ? 'Fechados' : 'Seus fechados'} value={metrics.won} />
-        <MetricCard icon={TrendingUp} label={isAdmin ? 'Conversao' : 'Sua conversao'} value={`${metrics.conversion.toFixed(1)}%`} />
-        <MetricCard icon={FileSpreadsheet} label={isAdmin ? 'Em pipeline' : 'No seu pipeline'} value={metrics.inProgress} />
-        <MetricCard icon={FileSpreadsheet} label={isAdmin ? 'Valor fechado' : 'Seu valor fechado'} value={`R$ ${metrics.estimatedWon.toLocaleString('pt-BR')}`} />
+        <MetricCard icon={FileSpreadsheet} label="Entradas" value={metrics.total} />
+        <MetricCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
+        <MetricCard icon={TrendingUp} label="Conversão" value={`${metrics.conversion.toFixed(1)}%`} />
+        <MetricCard icon={Clock3} label="Follow-up atrasado" value={metrics.overdue} />
+        <MetricCard icon={AlertTriangle} label="Sem ação 24h+" value={metrics.stalled} />
       </section>
-
-      {!isAdmin && (
-        <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-          <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
-            <Users className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-serif font-bold">Comparativo Geral da Operacao</h2>
-          </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <MetricCard icon={Users} label="Entradas gerais" value={generalMetrics.total} />
-            <MetricCard icon={CheckCircle2} label="Fechados gerais" value={generalMetrics.won} />
-            <MetricCard icon={TrendingUp} label="Conversao geral" value={`${generalMetrics.conversion.toFixed(1)}%`} />
-            <MetricCard icon={FileSpreadsheet} label="Pipeline geral" value={generalMetrics.inProgress} />
-          </div>
-          <div className="px-6 pb-6 overflow-x-auto scrollbar-none">
-            <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
-                <tr>
-                  <th className="px-2 py-3 text-left">Campanha</th>
-                  <th className="px-2 py-3 text-left">Leads</th>
-                  <th className="px-2 py-3 text-left">Fechados</th>
-                  <th className="px-2 py-3 text-left">Conversao</th>
-                </tr>
-              </thead>
-              <tbody>
-                {generalMetrics.rows.slice(0, 6).map((row) => (
-                  <tr key={row.id} className="border-b border-border/40">
-                    <td className="px-2 py-2">{row.name}</td>
-                    <td className="px-2 py-2">{row.entries}</td>
-                    <td className="px-2 py-2">{row.closed}</td>
-                    <td className="px-2 py-2">{row.conversionRate.toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
 
       <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
         <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">{isAdmin ? 'Disciplina Comercial por Vendedor' : 'Sua Disciplina Comercial'}</h2>
-        </div>
-        {isAdmin ? (
-          <div className="overflow-x-auto scrollbar-none">
-            <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
-                <tr>
-                  <th className="px-4 py-3 text-left">Vendedor</th>
-                  <th className="px-4 py-3 text-left">Leads</th>
-                  <th className="px-4 py-3 text-left">Fechados</th>
-                  <th className="px-4 py-3 text-left">Conversao</th>
-                  <th className="px-4 py-3 text-left">Sem acao 24h+</th>
-                  <th className="px-4 py-3 text-left">Follow-up atrasado</th>
-                  <th className="px-4 py-3 text-left">Tarefas pendentes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {disciplineRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhum dado de disciplina para este periodo.</td>
-                  </tr>
-                ) : (
-                  disciplineRows.map((row) => (
-                    <tr key={row.ownerId} className="border-b border-border/50 hover:bg-accent/40">
-                      <td className="px-4 py-3">
-                        <p className="font-semibold">{row.ownerName}</p>
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{row.sector}</p>
-                      </td>
-                      <td className="px-4 py-3">{row.total}</td>
-                      <td className="px-4 py-3">{row.closed}</td>
-                      <td className="px-4 py-3">{row.conversion.toFixed(1)}%</td>
-                      <td className="px-4 py-3 text-amber-400">{row.idle24h}</td>
-                      <td className="px-4 py-3 text-amber-400">{row.overdueFollowUps}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock3 className="w-3 h-3" />
-                          {row.pendingTasks}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-6 grid grid-cols-2 md:grid-cols-5 gap-4">
-            <MetricCard icon={Users} label="Seus leads" value={sellerDiscipline?.total || 0} />
-            <MetricCard icon={CheckCircle2} label="Seus fechados" value={sellerDiscipline?.closed || 0} />
-            <MetricCard icon={TrendingUp} label="Sua conversao" value={`${(sellerDiscipline?.conversion || 0).toFixed(1)}%`} />
-            <MetricCard icon={AlertTriangle} label="Sem acao 24h+" value={sellerDiscipline?.idle24h || 0} />
-            <MetricCard icon={Clock3} label="Pendencias" value={(sellerDiscipline?.overdueFollowUps || 0) + (sellerDiscipline?.pendingTasks || 0)} />
-          </div>
-        )}
-      </section>
-
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent">
-          <h2 className="text-lg font-serif font-bold">{isAdmin ? 'Fechamento por Campanha' : 'Fechamento das Suas Campanhas'}</h2>
+          <GitBranchPlus className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-serif font-bold">{selectedScope === ALL_SCOPE ? 'Fechamento por Funil' : activeFunnel?.operation === 'prospecting' ? 'Fechamento por Serviço' : 'Fechamento por Campanha'}</h2>
         </div>
         <div className="overflow-x-auto scrollbar-none">
           <table className="w-full text-sm">
             <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
               <tr>
-                <th className="px-4 py-3 text-left">Campanha</th>
-                <th className="px-4 py-3 text-left">Leads</th>
+                <th className="px-4 py-3 text-left">{selectedScope === ALL_SCOPE ? 'Funil' : activeFunnel?.operation === 'prospecting' ? 'Serviço' : 'Campanha'}</th>
+                <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Fechados</th>
-                <th className="px-4 py-3 text-left">Conversao</th>
-                <th className="px-4 py-3 text-left">Indice comercial</th>
+                <th className="px-4 py-3 text-left">Conversão</th>
               </tr>
             </thead>
             <tbody>
-              {metrics.rows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Nenhum dado para este periodo.</td>
+              {groupedRows.length === 0 ? <tr><td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">Nenhum dado para este filtro.</td></tr> : groupedRows.map((row) => (
+                <tr key={row.name} className="border-b border-border/50 hover:bg-accent/40">
+                  <td className="px-4 py-3 font-semibold">{row.name}</td>
+                  <td className="px-4 py-3">{row.total}</td>
+                  <td className="px-4 py-3">{row.won}</td>
+                  <td className="px-4 py-3">{row.conversion.toFixed(1)}%</td>
                 </tr>
-              ) : (
-                metrics.rows.map((row) => (
-                  <tr key={row.id} className="border-b border-border/50 hover:bg-accent/40">
-                    <td className="px-4 py-3 font-semibold">{row.name}</td>
-                    <td className="px-4 py-3">{row.entries}</td>
-                    <td className="px-4 py-3">{row.closed}</td>
-                    <td className="px-4 py-3">{row.conversionRate.toFixed(1)}%</td>
-                    <td className="px-4 py-3">{row.entries > 0 ? `${Math.round((row.closed / row.entries) * 100)} / 100` : '0 / 100'}</td>
-                  </tr>
-                ))
-              )}
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-serif font-bold">Disciplina por Responsável</h2>
+        </div>
+        <div className="overflow-x-auto scrollbar-none">
+          <table className="w-full text-sm">
+            <thead className="text-[10px] uppercase tracking-widest text-gold-500/60 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left">Responsável</th>
+                <th className="px-4 py-3 text-left">Entradas</th>
+                <th className="px-4 py-3 text-left">Fechados</th>
+                <th className="px-4 py-3 text-left">Conversão</th>
+                <th className="px-4 py-3 text-left">Sem ação 24h+</th>
+                <th className="px-4 py-3 text-left">Follow-up atrasado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {disciplineRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Nenhum responsável encontrado para este filtro.</td></tr> : disciplineRows.map((row) => (
+                <tr key={row.name} className="border-b border-border/50 hover:bg-accent/40">
+                  <td className="px-4 py-3 font-semibold">{row.name}</td>
+                  <td className="px-4 py-3">{row.total}</td>
+                  <td className="px-4 py-3">{row.won}</td>
+                  <td className="px-4 py-3">{row.conversion.toFixed(1)}%</td>
+                  <td className="px-4 py-3">{row.stalled}</td>
+                  <td className="px-4 py-3">{row.overdue}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -616,16 +291,6 @@ export function SalesReports() {
   );
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: string | number }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-xl">
-      <div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary">
-        <Icon className="w-4 h-4" />
-      </div>
-      <div>
-        <p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p>
-        <p className="text-lg font-serif font-bold">{value}</p>
-      </div>
-    </div>
-  );
+function MetricCard({ icon: Icon, label, value }: { icon: typeof FileSpreadsheet; label: string; value: string | number }) {
+  return <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-xl"><div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary"><Icon className="w-4 h-4" /></div><div><p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p><p className="text-lg font-serif font-bold">{value}</p></div></div>;
 }

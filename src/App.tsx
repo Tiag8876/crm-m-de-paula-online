@@ -18,10 +18,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { OfflineSnapshotPage } from "./pages/OfflineSnapshotPage";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
-import { ProspectingDashboard } from "./pages/ProspectingDashboard";
-import { ProspectingLeads } from "./pages/ProspectingLeads";
 import { ProspectingLeadDetails } from "./pages/ProspectingLeadDetails";
-import { ProspectingReports } from "./pages/ProspectingReports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,19 +42,19 @@ const App = () => (
                   <Route path="leads" element={<Leads />} />
                   <Route path="leads/:id" element={<LeadDetails />} />
                   <Route path="campaigns" element={<Campaigns />} />
-                <Route path="traffic" element={<TrafficAnalytics />} />
+                  <Route path="traffic" element={<TrafficAnalytics />} />
                   <Route path="reports" element={<SalesReports />} />
                   <Route path="calendar" element={<CalendarPage />} />
                   <Route path="settings" element={<Settings />} />
-                  <Route path="prospecting" element={<ProspectingDashboard />} />
-                  <Route path="prospecting/leads" element={<ProspectingLeads />} />
+                  <Route path="prospecting" element={<Navigate to="/?operation=prospecting" replace />} />
+                  <Route path="prospecting/leads" element={<Navigate to="/leads?operation=prospecting" replace />} />
                   <Route path="prospecting/leads/:id" element={<ProspectingLeadDetails />} />
-                  <Route path="prospecting/reports" element={<ProspectingReports />} />
-                  <Route path="prospecting/settings" element={<Navigate to="/settings?tab=operations&section=prospecting" replace />} />
-                <Route element={<AdminGate />}>
+                  <Route path="prospecting/reports" element={<Navigate to="/reports?operation=prospecting" replace />} />
+                  <Route path="prospecting/settings" element={<Navigate to="/settings?tab=operations&section=funnels" replace />} />
+                  <Route element={<AdminGate />}>
                     <Route path="admin/users" element={<UsersAdminPage />} />
+                  </Route>
                 </Route>
-              </Route>
               </Route>
             </Route>
           </Route>

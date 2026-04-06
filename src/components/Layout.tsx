@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Users, Megaphone, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck, Building2, KanbanSquare, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, Megaphone, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
@@ -16,12 +16,6 @@ const baseNavItems = [
   { icon: FileText, label: 'Relatorios', path: '/reports' },
   { icon: Calendar, label: 'Agenda', path: '/calendar' },
   { icon: Settings, label: 'Configuracoes', path: '/settings' },
-];
-
-const prospectingNavItems = [
-  { icon: Building2, label: 'Visao Geral', path: '/prospecting' },
-  { icon: KanbanSquare, label: 'Kanban', path: '/prospecting/leads' },
-  { icon: ClipboardList, label: 'Relatorios', path: '/prospecting/reports' },
 ];
 
 export function Layout() {
@@ -41,7 +35,6 @@ export function Layout() {
         return ['/', '/leads', '/reports', '/calendar', '/settings'].includes(item.path);
       });
 
-  const showProspecting = isAdminUser(user) || profile === 'commercial';
   const userInitials = (user?.name || 'U')
     .split(' ')
     .filter(Boolean)
@@ -54,7 +47,7 @@ export function Layout() {
   useEffect(() => {
     const onBeforeUnload = () => {
       if (!localStorage.getItem('lawcrm-token')) return;
-        api.post('/api/backup-now').catch(() => null);
+      api.post('/api/backup-now').catch(() => null);
     };
 
     window.addEventListener('beforeunload', onBeforeUnload);
@@ -103,32 +96,6 @@ export function Layout() {
               {item.label}
             </NavLink>
           ))}
-
-          {showProspecting && (
-            <div className="pt-3 mt-2 border-t border-border/60">
-              <p className="px-4 pb-2 text-[10px] uppercase tracking-[0.22em] text-gold-500/60">Prospecção</p>
-              <div className="space-y-2">
-                {prospectingNavItems.map((item) => (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    end={item.path === '/prospecting'}
-                    className={({ isActive }) =>
-                      cn(
-                        'ml-4 flex items-center gap-3 px-4 py-2.5 rounded-lg text-[11px] font-semibold tracking-wider uppercase transition-all duration-300 group',
-                        isActive
-                          ? 'bg-primary text-primary-foreground shadow-[0_0_15px_rgba(212,175,55,0.25)]'
-                          : 'text-muted-foreground hover:text-gold-400 hover:bg-accent'
-                      )
-                    }
-                  >
-                    <item.icon className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          )}
         </nav>
 
         <div className="p-6 border-t border-border">
@@ -204,7 +171,7 @@ export function Layout() {
                         )}
                         <div>
                           <p className="text-sm font-semibold leading-tight">
-                            {alert.title} {!alert.read && <span className="text-primary">•</span>}
+                            {alert.title} {!alert.read && <span className="text-primary">�</span>}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1 leading-tight">{alert.description}</p>
                         </div>
