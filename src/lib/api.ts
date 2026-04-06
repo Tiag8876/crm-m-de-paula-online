@@ -3,6 +3,16 @@ import { normalizePtBrDeep } from '@/lib/text';
 
 const getToken = () => localStorage.getItem('lawcrm-token');
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const apiBase = getApiBase();
   if (!apiBase) {
@@ -32,7 +42,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const json = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(json?.message || 'Erro na requisicao');
+    throw new ApiError(json?.message || 'Erro na requisicao', response.status);
   }
 
   return normalizePtBrDeep(json) as T;

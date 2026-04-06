@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { useSystemStore } from '@/store/useSystemStore';
 import { normalizePtBrDeep } from '@/lib/text';
-import { saveOfflineSnapshot } from '@/lib/offlineSnapshot';
+import { getOfflineSnapshot, saveOfflineSnapshot } from '@/lib/offlineSnapshot';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
 const pickState = (state: ReturnType<typeof useStore.getState>) => ({
@@ -60,7 +60,9 @@ export function StateSyncProvider() {
         syncState: 'error',
         syncError: error instanceof Error ? error.message : 'Falha ao sincronizar dados',
       });
-      await pullLatestState();
+      if (error instanceof ApiError && error.status === 409) {
+        await pullLatestState();
+      }
     } finally {
       syncingRef.current = false;
     }
@@ -106,6 +108,12 @@ export function StateSyncProvider() {
         lastServerUpdatedAtRef.current = data.updatedAt || null;
         setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
       } catch {
+        const snapshot = getOfflineSnapshot();
+        if (snapshot?.state) {
+          const normalizedState = normalizePtBrDeep(snapshot.state);
+          skipNextRef.current = true;
+          useStore.setState((current) => ({ ...current, ...normalizedState }));
+        }
         setSyncState({ syncState: 'error', syncError: 'Falha ao carregar dados iniciais do servidor' });
         // fallback: keep local state
       } finally {

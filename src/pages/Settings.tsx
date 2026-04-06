@@ -200,11 +200,11 @@ export function Settings() {
               <p>setor: <span className="text-gold-100">{user?.sector || '-'}</span></p>
               <p>perfil resolvido: <span className="text-gold-100">{accessProfile}</span></p>
               <p>admin reconhecido: <span className="text-gold-100">{isAdmin ? 'sim' : 'nao'}</span></p>
-              <p>modo do sistema: <span className="text-gold-100">local neste computador</span></p>
+              <p>modo do sistema: <span className="text-gold-100">{mode}</span></p>
             </div>
 
             <div className="mb-4 rounded-lg border border-border bg-background/40 p-4 text-sm text-muted-foreground">
-              Este aplicativo está configurado para funcionar apenas neste computador. Não existe mais configuração de servidor, cliente ou rede interna.
+              Este ambiente reflete o estado real do backend online. As informacoes acima sao carregadas da API e da sincronizacao do sistema, nao de texto fixo.
             </div>
 
             <button
@@ -599,3 +599,4 @@ export function Settings() {
     </div>
   );
 }
+
