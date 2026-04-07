@@ -425,14 +425,14 @@ export function LeadDetails() {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Área de atuação</p>
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">?rea de atua??o</p>
             <div className="mt-1">
               <PremiumSelect
                 options={areaOptions}
                 value={lead.areaOfLawId || ''}
                 onChange={(nextValue) => updateLead(lead.id, { areaOfLawId: nextValue || undefined, serviceId: undefined, serviceIds: [] })}
-                placeholder="Buscar área"
-                emptyLabel="Selecione a área"
+                placeholder="Buscar ?rea"
+                emptyLabel="Selecione a ?rea"
                 className="bg-background/40 shadow-none"
               />
             </div>
@@ -444,20 +444,20 @@ export function LeadDetails() {
             )}
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Serviços</p>
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Servi?os</p>
             <div className="mt-1">
               <PremiumMultiSelect
                 options={serviceOptions}
                 values={leadServiceIds}
                 onChange={updateLeadServices}
-                placeholder="Buscar serviço"
-                emptyLabel={lead.areaOfLawId ? (availableServices.length === 0 ? 'Nenhum serviço nesta área' : 'Selecione um ou mais serviços') : 'Selecione a área primeiro'}
-                emptyDescription={lead.areaOfLawId ? (availableServices.length === 0 ? 'Cadastre serviços dentro da área de atuação' : 'Serviços vinculados à área') : 'Escolha uma área de atuação para carregar os serviços'}
+                placeholder="Buscar servi?o"
+                emptyLabel={lead.areaOfLawId ? (availableServices.length === 0 ? 'Nenhum servi?o nesta ?rea' : 'Selecione um ou mais servi?os') : 'Selecione a ?rea primeiro'}
+                emptyDescription={lead.areaOfLawId ? (availableServices.length === 0 ? 'Cadastre servi?os dentro da ?rea de atua??o' : 'Servi?os vinculados ? ?rea') : 'Escolha uma ?rea de atua??o para carregar os servi?os'}
                 className="bg-background/40 shadow-none"
               />
             </div>
             {lead.areaOfLawId && availableServices.length === 0 ? (
-              <p className="text-xs text-muted-foreground mt-2">Esta área ainda não tem serviços vinculados.</p>
+              <p className="text-xs text-muted-foreground mt-2">Esta ?rea ainda n?o tem servi?os vinculados.</p>
             ) : null}
           </div>
           <div className="space-y-1">
@@ -481,25 +481,8 @@ export function LeadDetails() {
               />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Responsável</p>
-            <div className="mt-1">
-              <AssigneeSelect
-                users={selectableUsers}
-                value={lead.ownerUserId}
-                onChange={(nextValue) => updateLead(lead.id, { ownerUserId: nextValue || undefined })}
-                placeholder="Selecione um vendedor"
-                unassignedLabel="Sem atribuição definida"
-              />
-            </div>
-            {lead.status === 'perdido' && lead.lossReasonCode && (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
-              </p>
-            )}
-          </div>
           {selectedSource?.kind === 'campaign' ? (
-            <div className="space-y-1 lg:col-span-2">
+            <div className="space-y-1">
               <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Campanha</p>
               <div className="mt-1">
                 <PremiumSelect
@@ -525,7 +508,7 @@ export function LeadDetails() {
               </div>
             </div>
           ) : selectedSource ? (
-            <div className="space-y-1 lg:col-span-2">
+            <div className="space-y-1">
               <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Detalhe da origem</p>
               <input
                 type="text"
@@ -536,6 +519,23 @@ export function LeadDetails() {
               />
             </div>
           ) : null}
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Respons?vel</p>
+            <div className="mt-1">
+              <AssigneeSelect
+                users={selectableUsers}
+                value={lead.ownerUserId}
+                onChange={(nextValue) => updateLead(lead.id, { ownerUserId: nextValue || undefined })}
+                placeholder="Selecione um vendedor"
+                unassignedLabel="Sem atribui??o definida"
+              />
+            </div>
+            {lead.status === 'perdido' && lead.lossReasonCode && (
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
+              </p>
+            )}
+          </div>
           {selectedSource?.kind === 'campaign' ? (
             <div className="space-y-1 lg:col-span-2">
               <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Criativo</p>
@@ -585,21 +585,6 @@ export function LeadDetails() {
               {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
             </div>
           ))}
-          <div className="space-y-1">
-            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Responsável</p>
-            <AssigneeSelect
-              users={selectableUsers}
-              value={lead.ownerUserId}
-              onChange={(nextValue) => updateLead(lead.id, { ownerUserId: nextValue || undefined })}
-              placeholder="Selecione um vendedor"
-              unassignedLabel="Sem atribuição definida"
-            />
-            {lead.status === 'perdido' && lead.lossReasonCode && (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
-              </p>
-            )}
-          </div>
         </div>
       </section>
 
