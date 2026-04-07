@@ -25,6 +25,15 @@ export interface FunnelFieldOption {
   label: string;
 }
 
+export type FieldTemplateSource =
+  | 'static-options'
+  | 'areas-of-law'
+  | 'services-by-area'
+  | 'lead-sources'
+  | 'campaigns'
+  | 'users'
+  | 'none';
+
 export interface FieldTemplate {
   id: string;
   key: string;
@@ -37,7 +46,8 @@ export interface FieldTemplate {
   order: number;
   operation: 'commercial' | 'prospecting' | 'shared';
   system?: boolean;
- }
+  source?: FieldTemplateSource;
+}
 
 export interface FunnelFieldConfig {
   id: string;

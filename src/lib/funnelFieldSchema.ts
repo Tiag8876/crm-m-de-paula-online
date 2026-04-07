@@ -9,30 +9,30 @@ const createOptions = (items: string[]): FunnelFieldOption[] =>
   }));
 
 const commercialTemplates: FieldTemplate[] = [
-  { id: 'template-name', key: 'name', label: 'Nome completo', type: 'text', required: true, placeholder: 'Nome do cliente', order: 0, operation: 'commercial', system: true },
-  { id: 'template-phone', key: 'phone', label: 'Telefone', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 1, operation: 'commercial', system: true },
-  { id: 'template-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 2, operation: 'commercial', system: true },
-  { id: 'template-area-of-law', key: 'areaOfLawId', label: 'Área de atuação', type: 'select', placeholder: 'Selecione a área', order: 3, operation: 'commercial', system: true },
-  { id: 'template-service-ids', key: 'serviceIds', label: 'Serviços', type: 'multiselect', placeholder: 'Selecione um ou mais serviços', order: 4, operation: 'commercial', system: true },
-  { id: 'template-source-id', key: 'sourceId', label: 'Origem do lead', type: 'select', placeholder: 'Selecione a origem', order: 5, operation: 'commercial', system: true },
-  { id: 'template-campaign-id', key: 'campaignId', label: 'Campanha', type: 'select', placeholder: 'Selecione a campanha', order: 6, operation: 'commercial', system: true },
-  { id: 'template-source-details', key: 'sourceDetails', label: 'Detalhe da origem', type: 'textarea', placeholder: 'Descreva a origem', order: 7, operation: 'commercial', system: true },
-  { id: 'template-estimated-value', key: 'estimatedValue', label: 'Valor estimado', type: 'currency', placeholder: 'Valor estimado', order: 8, operation: 'commercial', system: true },
-  { id: 'template-cpf', key: 'cpf', label: 'CPF', type: 'cpf', placeholder: 'CPF', order: 9, operation: 'commercial', system: true },
-  { id: 'template-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 10, operation: 'commercial', system: true },
+  { id: 'template-name', key: 'name', label: 'Nome completo', type: 'text', required: true, placeholder: 'Nome do cliente', order: 0, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-phone', key: 'phone', label: 'Telefone', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 1, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 2, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-area-of-law', key: 'areaOfLawId', label: 'Área de atuação', type: 'select', placeholder: 'Selecione a área', order: 3, operation: 'commercial', system: true, source: 'areas-of-law' },
+  { id: 'template-service-ids', key: 'serviceIds', label: 'Serviços', type: 'multiselect', placeholder: 'Selecione um ou mais serviços', order: 4, operation: 'commercial', system: true, source: 'services-by-area' },
+  { id: 'template-source-id', key: 'sourceId', label: 'Origem do lead', type: 'select', placeholder: 'Selecione a origem', order: 5, operation: 'commercial', system: true, source: 'lead-sources' },
+  { id: 'template-campaign-id', key: 'campaignId', label: 'Campanha', type: 'select', placeholder: 'Selecione a campanha', order: 6, operation: 'commercial', system: true, source: 'campaigns' },
+  { id: 'template-source-details', key: 'sourceDetails', label: 'Detalhe da origem', type: 'textarea', placeholder: 'Descreva a origem', order: 7, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-estimated-value', key: 'estimatedValue', label: 'Valor estimado', type: 'currency', placeholder: 'Valor estimado', order: 8, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-cpf', key: 'cpf', label: 'CPF', type: 'cpf', placeholder: 'CPF', order: 9, operation: 'commercial', system: true, source: 'none' },
+  { id: 'template-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 10, operation: 'commercial', system: true, source: 'users' },
 ];
 
 const prospectingTemplates: FieldTemplate[] = [
-  { id: 'template-clinic-name', key: 'clinicName', label: 'Conta ou clínica', type: 'text', required: true, placeholder: 'Nome da conta ou clínica', order: 0, operation: 'prospecting', system: true },
-  { id: 'template-contact-name', key: 'contactName', label: 'Responsável principal', type: 'text', required: true, placeholder: 'Responsável principal', order: 1, operation: 'prospecting', system: true },
-  { id: 'template-prospect-phone', key: 'phone', label: 'Telefone ou WhatsApp', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 2, operation: 'prospecting', system: true },
-  { id: 'template-prospect-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 3, operation: 'prospecting', system: true },
-  { id: 'template-cnpj', key: 'cnpj', label: 'CNPJ', type: 'cnpj', placeholder: 'CNPJ', order: 4, operation: 'prospecting', system: true },
-  { id: 'template-city', key: 'city', label: 'Cidade', type: 'text', placeholder: 'Cidade', order: 5, operation: 'prospecting', system: true },
-  { id: 'template-neighborhood', key: 'neighborhood', label: 'Bairro', type: 'text', placeholder: 'Bairro', order: 6, operation: 'prospecting', system: true },
-  { id: 'template-receptionist-name', key: 'receptionistName', label: 'Recepção ou contato secundário', type: 'text', placeholder: 'Recepção ou contato secundário', order: 7, operation: 'prospecting', system: true },
-  { id: 'template-service-id', key: 'serviceId', label: 'Serviço ofertado', type: 'select', placeholder: 'Selecione o serviço', order: 8, operation: 'prospecting', system: true },
-  { id: 'template-prospect-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 9, operation: 'prospecting', system: true },
+  { id: 'template-clinic-name', key: 'clinicName', label: 'Conta ou clínica', type: 'text', required: true, placeholder: 'Nome da conta ou clínica', order: 0, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-contact-name', key: 'contactName', label: 'Responsável principal', type: 'text', required: true, placeholder: 'Responsável principal', order: 1, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-prospect-phone', key: 'phone', label: 'Telefone ou WhatsApp', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 2, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-prospect-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 3, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-cnpj', key: 'cnpj', label: 'CNPJ', type: 'cnpj', placeholder: 'CNPJ', order: 4, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-city', key: 'city', label: 'Cidade', type: 'text', placeholder: 'Cidade', order: 5, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-neighborhood', key: 'neighborhood', label: 'Bairro', type: 'text', placeholder: 'Bairro', order: 6, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-receptionist-name', key: 'receptionistName', label: 'Recepção ou contato secundário', type: 'text', placeholder: 'Recepção ou contato secundário', order: 7, operation: 'prospecting', system: true, source: 'none' },
+  { id: 'template-service-id', key: 'serviceId', label: 'Serviço ofertado', type: 'select', placeholder: 'Selecione o serviço', order: 8, operation: 'prospecting', system: true, source: 'services-by-area' },
+  { id: 'template-prospect-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 9, operation: 'prospecting', system: true, source: 'users' },
 ];
 
 export const DEFAULT_FIELD_TEMPLATES: FieldTemplate[] = [...commercialTemplates, ...prospectingTemplates];
@@ -52,6 +52,7 @@ export const normalizeFieldTemplates = (templates: FieldTemplate[] = []): FieldT
       required: Boolean(template.required),
       placeholder: template.placeholder || '',
       helpText: template.helpText || '',
+      source: template.source || (template.options?.length ? 'static-options' : 'none'),
       options: (template.options || []).map((option, optionIndex) => ({
         id: option.id || `${template.id}-option-${optionIndex}`,
         value: option.value || option.label,

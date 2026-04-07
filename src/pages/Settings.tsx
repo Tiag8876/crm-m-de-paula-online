@@ -19,7 +19,7 @@ import {
 import { isAdminUser } from '@/lib/access';
 import { buildEffectiveFieldSchema, createFieldOptions, getTemplatesForOperation } from '@/lib/funnelFieldSchema';
 import { UsersAdminPage } from '@/pages/UsersAdminPage';
-import type { FieldTemplate, FunnelConfig, FunnelFieldOption, FunnelFieldType } from '@/types/crm';
+import type { FieldTemplate, FunnelConfig, FunnelFieldOption, FunnelFieldType, FieldTemplateSource } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'team' | 'operations';
 type OperationsSection = 'funnels' | 'areas' | 'sources' | 'tasks';
@@ -99,6 +99,16 @@ const normalizeFieldKey = (value: string) =>
 
 const serializeOptions = (options: FunnelFieldOption[] = []) =>
   options.map((option) => option.label).join(', ');
+
+const SOURCE_LABELS: Record<FieldTemplateSource, string> = {
+  'none': 'Campo livre do formulário',
+  'static-options': 'Lista definida manualmente',
+  'areas-of-law': 'Puxa as áreas de atuação cadastradas',
+  'services-by-area': 'Puxa os serviços da área selecionada',
+  'lead-sources': 'Puxa as origens de lead cadastradas',
+  'campaigns': 'Puxa as campanhas cadastradas',
+  'users': 'Puxa os usuários ativos da equipe',
+};
 
 export function Settings() {
   const { user, updateOwnProfile } = useAuthStore();
@@ -337,7 +347,7 @@ export function Settings() {
   };
 
   const buildTemplateSummary = (template: FieldTemplate) => {
-    if (template.system) return 'Modelo padrão do sistema';
+    if (template.system) return SOURCE_LABELS[template.source || 'none'];
     if (template.type === 'select' || template.type === 'multiselect') {
       return `${template.options?.length || 0} opção(ões) configurada(s)`;
     }
@@ -825,12 +835,13 @@ export function Settings() {
                                     (template) => template.id === field.templateId || template.key === field.key,
                                   );
                                   const optionsText = serializeOptions(field.options || linkedTemplate?.options || []);
+                                  const isSystemField = Boolean(linkedTemplate?.system);
                                   return (
                                     <div key={field.id} className="rounded-xl border border-border bg-background/40 p-4">
                                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
-                                            {linkedTemplate?.system ? 'Modelo padr?o' : 'Modelo do funil'}
+                                            {isSystemField ? 'Modelo padrão' : 'Modelo do funil'}
                                           </p>
                                           <span className="rounded-full border border-border px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
                                             {linkedTemplate ? buildTemplateSummary(linkedTemplate) : 'Campo ativo'}
@@ -876,13 +887,14 @@ export function Settings() {
                                           value={field.label}
                                           onChange={(event) => updateFunnelField(funnel.id, field.id, {
                                             label: event.target.value,
-                                            key: linkedTemplate?.system ? field.key : normalizeFieldKey(event.target.value || field.key),
+                                            key: isSystemField ? field.key : normalizeFieldKey(event.target.value || field.key),
                                           })}
-                                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                                          disabled={isSystemField}
+                                          className="w-full rounded-lg border border-border bg-background px-3 py-2 disabled:cursor-not-allowed disabled:opacity-70"
                                         />
                                         <select
                                           value={field.type}
-                                          disabled={Boolean(linkedTemplate?.system)}
+                                          disabled={isSystemField}
                                           onChange={(event) => updateFunnelField(funnel.id, field.id, { type: event.target.value as FunnelFieldType })}
                                           className="w-full rounded-lg border border-border bg-background px-3 py-2 disabled:cursor-not-allowed disabled:opacity-60"
                                         >
@@ -897,15 +909,21 @@ export function Settings() {
                                             onChange={(event) => updateFunnelField(funnel.id, field.id, { required: event.target.checked })}
                                             className="rounded border-border bg-background"
                                           />
-                                          Obrigat?rio
+                                          Obrigatório
                                         </label>
                                       </div>
 
-                                      {(field.type === 'select' || field.type === 'multiselect') && (
+                                      {isSystemField && linkedTemplate?.source && linkedTemplate.source !== 'none' ? (
+                                        <p className="mt-3 rounded-lg border border-border bg-card/70 px-3 py-2 text-xs text-muted-foreground">
+                                          {SOURCE_LABELS[linkedTemplate.source]}
+                                        </p>
+                                      ) : null}
+
+                                      {!isSystemField && (field.type === 'select' || field.type === 'multiselect') && (
                                         <textarea
                                           value={optionsText}
                                           onChange={(event) => updateFieldOptions(funnel.id, field.id, event.target.value)}
-                                          placeholder="Op??es separadas por v?rgula ou por linha"
+                                          placeholder="Opções separadas por vírgula ou por linha"
                                           className="mt-3 min-h-[88px] w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
                                         />
                                       )}
