@@ -1,4 +1,4 @@
-
+Ôªø
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Plus, Filter, LayoutGrid, List, ChevronRight, Phone, DollarSign, CheckCircle2, MessageCircle } from 'lucide-react';
@@ -944,22 +944,22 @@ export function Leads() {
                 <>
                   {hasCreateField('clinicName') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Conta ou clÌnica</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Conta ou cl√≠nica</label>
                       <input
                         name="clinicName"
                         required
-                        placeholder="Nome da conta ou clÌnica"
+                        placeholder="Nome da conta ou cl√≠nica"
                         className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                       />
                     </div>
                   )}
                   {hasCreateField('contactName') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Respons·vel principal</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Respons√°vel principal</label>
                       <input
                         name="contactName"
                         required
-                        placeholder="Respons·vel principal"
+                        placeholder="Respons√°vel principal"
                         className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                       />
                     </div>
@@ -1017,24 +1017,24 @@ export function Leads() {
                   )}
                   {hasCreateField('receptionistName') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">RecepÁ„o ou contato secund·rio</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Recep√ß√£o ou contato secund√°rio</label>
                       <input
                         name="receptionistName"
-                        placeholder="RecepÁ„o ou contato secund·rio"
+                        placeholder="Recep√ß√£o ou contato secund√°rio"
                         className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                       />
                     </div>
                   )}
                   {hasCreateField('serviceId') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceId', 'ServiÁo ofertado', 'Selecione o serviÁo').label}</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceId', 'Servi√ßo ofertado', 'Selecione o servi√ßo').label}</label>
                       <PremiumSelect
                         name="serviceId"
                         options={createServiceOptions}
                         value={createProspectServiceId}
                         onChange={setCreateProspectServiceId}
-                        placeholder="Buscar serviÁo"
-                        emptyLabel={createServiceOptions.length > 0 ? (getBaseField('serviceId', 'ServiÁo ofertado', 'Selecione o serviÁo').placeholder || 'Selecione o serviÁo') : 'Nenhum serviÁo vinculado a esta ·rea'}
+                        placeholder="Buscar servi√ßo"
+                        emptyLabel={createServiceOptions.length > 0 ? (getBaseField('serviceId', 'Servi√ßo ofertado', 'Selecione o servi√ßo').placeholder || 'Selecione o servi√ßo') : 'Nenhum servi√ßo vinculado a esta √°rea'}
                       />
                     </div>
                   )}
@@ -1055,7 +1055,7 @@ export function Leads() {
                   )}
                   {hasCreateField('areaOfLawId') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('areaOfLawId', '¡rea de atuaÁ„o', 'Selecione a ·rea').label}</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('areaOfLawId', '√Årea de atua√ß√£o', 'Selecione a √°rea').label}</label>
                       <PremiumSelect
                         name="areaOfLawId"
                         options={createAreaOptions}
@@ -1064,8 +1064,8 @@ export function Leads() {
                           setSelectedArea(nextValue);
                           setCreateServiceIds([]);
                         }}
-                        placeholder="Buscar ·rea"
-                        emptyLabel={getBaseField('areaOfLawId', '¡rea de atuaÁ„o', 'Selecione a ·rea').placeholder || 'Selecione a ·rea'}
+                        placeholder="Buscar √°rea"
+                        emptyLabel={getBaseField('areaOfLawId', '√Årea de atua√ß√£o', 'Selecione a √°rea').placeholder || 'Selecione a √°rea'}
                       />
                     </div>
                   )}
@@ -1083,19 +1083,19 @@ export function Leads() {
                   )}
                   {hasCreateField('serviceIds') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceIds', 'ServiÁos', 'Selecione um ou mais serviÁos').label}</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceIds', 'Servi√ßos', 'Selecione um ou mais servi√ßos').label}</label>
                       <PremiumMultiSelect
                         options={createCommercialServices.map((service) => ({
                           value: service.id,
                           label: service.name,
-                          description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'ServiÁo',
-                          group: 'ServiÁos da ·rea',
+                          description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'Servi√ßo',
+                          group: 'Servi√ßos da √°rea',
                         }))}
                         values={createServiceIds}
                         onChange={setCreateServiceIds}
-                        placeholder="Buscar serviÁo"
-                        emptyLabel={createCommercialServices.length > 0 ? (getBaseField('serviceIds', 'ServiÁos', 'Selecione um ou mais serviÁos').placeholder || 'Selecione um ou mais serviÁos') : 'Nenhum serviÁo vinculado a esta ·rea'}
-                        emptyDescription={createCommercialServices.length > 0 ? 'Nenhum serviÁo selecionado' : 'Cadastre serviÁos nesta ·rea para usar neste funil'}
+                        placeholder="Buscar servi√ßo"
+                        emptyLabel={createCommercialServices.length > 0 ? (getBaseField('serviceIds', 'Servi√ßos', 'Selecione um ou mais servi√ßos').placeholder || 'Selecione um ou mais servi√ßos') : 'Nenhum servi√ßo vinculado a esta √°rea'}
+                        emptyDescription={createCommercialServices.length > 0 ? 'Nenhum servi√ßo selecionado' : 'Cadastre servi√ßos nesta √°rea para usar neste funil'}
                       />
                     </div>
                   )}
@@ -1193,7 +1193,7 @@ export function Leads() {
                         value: option.value,
                         label: option.label,
                         description: field.label,
-                        group: 'OpÁıes',
+                        group: 'Op√ß√µes',
                       }))}
                       value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
                       onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
@@ -1206,7 +1206,7 @@ export function Leads() {
                         value: option.value,
                         label: option.label,
                         description: field.label,
-                        group: 'OpÁıes',
+                        group: 'Op√ß√µes',
                       }))}
                       values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
                       onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
@@ -1230,13 +1230,13 @@ export function Leads() {
 
               {hasCreateField('ownerUserId') && (
                 <div>
-                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir respons·vel</label>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir respons√°vel</label>
                   <AssigneeSelect
                     users={activeAssignableUsers}
                     value={createOwnerUserId}
                     onChange={(nextValue) => setCreateOwnerUserId(nextValue || '')}
                     placeholder="Selecione um vendedor"
-                    unassignedLabel="Sem atribuiÁ„o definida"
+                    unassignedLabel="Sem atribui√ß√£o definida"
                     className="bg-background/40"
                   />
                 </div>
@@ -1270,3 +1270,6 @@ export function Leads() {
     </div>
   );
 }
+
+
+
