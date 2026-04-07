@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   Lead,
   Campaign,
+  CampaignSpendEntry,
   AdGroup,
   Ad,
   LeadNote,
@@ -218,6 +219,7 @@ const isDateInWeek = (dateValue: string, weekKey: string): boolean => {
 interface AppState {
   leads: Lead[];
   campaigns: Campaign[];
+  campaignSpendEntries: CampaignSpendEntry[];
   adGroups: AdGroup[];
   ads: Ad[];
   areasOfLaw: AreaOfLaw[];
@@ -262,6 +264,9 @@ interface AppState {
   addCampaign: (name: string, areaOfLawId?: string, serviceId?: string) => string;
   updateCampaign: (id: string, data: Partial<Campaign>) => void;
   deleteCampaign: (id: string) => void;
+  addCampaignSpendEntry: (campaignId: string, entry: Omit<CampaignSpendEntry, 'id' | 'campaignId' | 'createdAt'>) => void;
+  updateCampaignSpendEntry: (id: string, data: Partial<Omit<CampaignSpendEntry, 'id' | 'campaignId' | 'createdAt'>>) => void;
+  deleteCampaignSpendEntry: (id: string) => void;
   addAdGroup: (campaignId: string, name: string) => void;
   updateAdGroup: (id: string, data: Partial<AdGroup>) => void;
   deleteAdGroup: (id: string) => void;
@@ -336,6 +341,7 @@ export const useStore = create<AppState>()(
       ...buildFunnelAliases(buildDefaultFunnels(), DEFAULT_COMMERCIAL_FUNNEL_ID, DEFAULT_PROSPECTING_FUNNEL_ID),
       leads: [],
       campaigns: [],
+      campaignSpendEntries: [],
       adGroups: [],
       ads: [],
       areasOfLaw: [],
@@ -914,6 +920,7 @@ export const useStore = create<AppState>()(
         const adGroupIds = state.adGroups.filter(ag => ag.campaignId === id).map(ag => ag.id);
         return {
           campaigns: state.campaigns.filter(c => c.id !== id),
+          campaignSpendEntries: state.campaignSpendEntries.filter((entry) => entry.campaignId !== id),
           adGroups: state.adGroups.filter(ag => ag.campaignId !== id),
           ads: state.ads.filter(ad => !adGroupIds.includes(ad.adGroupId)),
           leads: state.leads.map((lead) => (
@@ -923,6 +930,37 @@ export const useStore = create<AppState>()(
           )),
         };
       }),
+
+      addCampaignSpendEntry: (campaignId, entry) => set((state) => ({
+        campaignSpendEntries: [
+          ...(state.campaignSpendEntries || []),
+          {
+            id: uuidv4(),
+            campaignId,
+            amount: Number(entry.amount) || 0,
+            startDate: entry.startDate,
+            endDate: entry.endDate,
+            notes: entry.notes || '',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      })),
+
+      updateCampaignSpendEntry: (id, data) => set((state) => ({
+        campaignSpendEntries: (state.campaignSpendEntries || []).map((entry) =>
+          entry.id === id
+            ? {
+                ...entry,
+                ...data,
+                amount: data.amount !== undefined ? Number(data.amount) || 0 : entry.amount,
+              }
+            : entry,
+        ),
+      })),
+
+      deleteCampaignSpendEntry: (id) => set((state) => ({
+        campaignSpendEntries: (state.campaignSpendEntries || []).filter((entry) => entry.id !== id),
+      })),
 
       addAdGroup: (campaignId, name) => set((state) => ({
         adGroups: [...state.adGroups, { id: uuidv4(), campaignId, name }]

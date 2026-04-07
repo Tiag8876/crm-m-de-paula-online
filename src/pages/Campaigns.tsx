@@ -1,10 +1,10 @@
-﻿import { useState, useRef } from 'react';
+﻿import { useMemo, useRef, useState } from 'react';
 import { useStore } from '@/store/useStore';
-import { Plus, ChevronDown, ChevronRight, Image as ImageIcon, Video, Folder, LayoutGrid, X, Upload, Megaphone, Target, MousePointer2, Edit2, CheckCircle2, Trash2 } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Image as ImageIcon, Video, Folder, LayoutGrid, X, Upload, Megaphone, Target, MousePointer2, Edit2, CheckCircle2, Trash2, WalletCards, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Campaigns() {
-  const { campaigns, adGroups, ads, areasOfLaw, services, addCampaign, updateCampaign, deleteCampaign, addAdGroup, updateAdGroup, deleteAdGroup, addAd, updateAd, deleteAd } = useStore();
+  const { campaigns, campaignSpendEntries, adGroups, ads, areasOfLaw, services, addCampaign, updateCampaign, deleteCampaign, addCampaignSpendEntry, updateCampaignSpendEntry, deleteCampaignSpendEntry, addAdGroup, updateAdGroup, deleteAdGroup, addAd, updateAd, deleteAd } = useStore();
 
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
@@ -31,6 +31,13 @@ export function Campaigns() {
   const [adGroupNameInput, setAdGroupNameInput] = useState('');
   const [adGroupCampaignId, setAdGroupCampaignId] = useState('');
   const [editingAdGroupId, setEditingAdGroupId] = useState<string | null>(null);
+  const [isSpendModalOpen, setIsSpendModalOpen] = useState(false);
+  const [editingSpendEntryId, setEditingSpendEntryId] = useState<string | null>(null);
+  const [spendCampaignId, setSpendCampaignId] = useState('');
+  const [spendAmount, setSpendAmount] = useState('');
+  const [spendStartDate, setSpendStartDate] = useState('');
+  const [spendEndDate, setSpendEndDate] = useState('');
+  const [spendNotes, setSpendNotes] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,6 +45,34 @@ export function Campaigns() {
   const toggleAdGroup = (id: string) => setExpandedAdGroups(prev => ({ ...prev, [id]: !prev[id] }));
 
   const availableServices = services.filter(s => s.areaOfLawId === newCampaignAreaId);
+  const spendEntriesByCampaign = useMemo(() => (campaignSpendEntries || []).reduce<Record<string, typeof campaignSpendEntries>>((acc, entry) => {
+    if (!acc[entry.campaignId]) acc[entry.campaignId] = [];
+    acc[entry.campaignId].push(entry);
+    return acc;
+  }, {}), [campaignSpendEntries]);
+
+  const getCampaignTotalSpend = (campaignId: string) => (spendEntriesByCampaign[campaignId] || []).reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+
+  const openCreateSpendModal = (campaignId: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setEditingSpendEntryId(null);
+    setSpendCampaignId(campaignId);
+    setSpendAmount('');
+    setSpendStartDate(today);
+    setSpendEndDate(today);
+    setSpendNotes('');
+    setIsSpendModalOpen(true);
+  };
+
+  const openEditSpendModal = (entry: { id: string; campaignId: string; amount: number; startDate: string; endDate: string; notes?: string }) => {
+    setEditingSpendEntryId(entry.id);
+    setSpendCampaignId(entry.campaignId);
+    setSpendAmount(String(entry.amount));
+    setSpendStartDate(entry.startDate);
+    setSpendEndDate(entry.endDate);
+    setSpendNotes(entry.notes || '');
+    setIsSpendModalOpen(true);
+  };
 
   const openEditCampaignModal = (campaign: any) => {
     setEditingCampaignId(campaign.id);
@@ -154,6 +189,8 @@ export function Campaigns() {
           (campaigns || []).map(campaign => {
             const area = areasOfLaw.find(a => a.id === campaign.areaOfLawId);
             const service = services.find(s => s.id === campaign.serviceId);
+            const spendEntries = [...(spendEntriesByCampaign[campaign.id] || [])].sort((a, b) => b.startDate.localeCompare(a.startDate));
+            const totalSpend = getCampaignTotalSpend(campaign.id);
             return (
               <div key={campaign.id} className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden group">
                 <div className="w-full flex items-center justify-between p-6 hover:bg-accent transition-all">
@@ -177,6 +214,9 @@ export function Campaigns() {
                             {service.name}
                           </span>
                         )}
+                        <span className="text-[10px] bg-gold-500/10 text-gold-500 px-2 rounded uppercase tracking-widest">
+                          Investimento R$ {totalSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -203,6 +243,62 @@ export function Campaigns() {
 
                 {expandedCampaigns[campaign.id] && (
                   <div className="p-6 pt-0 space-y-4 bg-background/20 border-t border-border">
+                    <div className="bg-muted rounded-2xl border border-border p-4 space-y-4">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gold-500/60">Investimento por período</p>
+                          <h3 className="text-lg font-serif font-bold">Histórico de custos da campanha</h3>
+                        </div>
+                        <button
+                          onClick={() => openCreateSpendModal(campaign.id)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar investimento
+                        </button>
+                      </div>
+                      {spendEntries.length === 0 ? (
+                        <div className="border border-dashed border-border rounded-2xl px-4 py-6 text-sm text-muted-foreground">
+                          Nenhum período de investimento cadastrado nesta campanha ainda.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {spendEntries.map((entry) => (
+                            <div key={entry.id} className="rounded-2xl border border-border bg-background/40 px-4 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl border border-border bg-accent flex items-center justify-center text-primary">
+                                  <WalletCards className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    R$ {Number(entry.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                  <p className="text-[11px] uppercase tracking-widest text-gold-500/60">
+                                    {new Date(`${entry.startDate}T00:00:00`).toLocaleDateString('pt-BR')} até {new Date(`${entry.endDate}T00:00:00`).toLocaleDateString('pt-BR')}
+                                  </p>
+                                  {entry.notes && <p className="text-sm text-muted-foreground mt-1">{entry.notes}</p>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => openEditSpendModal(entry)} className="px-3 py-2 rounded-lg border border-border text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary hover:border-gold-500/30">
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Excluir este lançamento de investimento?')) {
+                                      deleteCampaignSpendEntry(entry.id);
+                                    }
+                                  }}
+                                  className="px-3 py-2 rounded-lg border border-border text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-red-400 hover:border-red-500/30"
+                                >
+                                  Excluir
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {(adGroups || []).filter(ag => ag.campaignId === campaign.id).map(ag => (
                       <div key={ag.id} className="bg-muted rounded-2xl border border-border overflow-hidden">
                         <div className="w-full flex items-center justify-between p-4 hover:bg-accent transition-all">
@@ -407,6 +503,105 @@ export function Campaigns() {
         </div>
       )}
 
+      {isSpendModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-border max-h-[90vh] overflow-y-auto scrollbar-none">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gold-500/60 font-black">Investimento de campanha</p>
+                <h2 className="text-2xl font-serif font-bold gold-text-gradient">{editingSpendEntryId ? 'Editar período' : 'Novo período'}</h2>
+              </div>
+              <button onClick={() => setIsSpendModalOpen(false)} className="p-2 text-muted-foreground hover:text-primary rounded-lg">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!spendCampaignId || !spendStartDate || !spendEndDate) return;
+                const payload = {
+                  amount: Number(spendAmount) || 0,
+                  startDate: spendStartDate,
+                  endDate: spendEndDate,
+                  notes: spendNotes.trim(),
+                };
+                if (editingSpendEntryId) {
+                  updateCampaignSpendEntry(editingSpendEntryId, payload);
+                } else {
+                  addCampaignSpendEntry(spendCampaignId, payload);
+                }
+                setIsSpendModalOpen(false);
+              }}
+              className="space-y-6"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor investido</label>
+                  <input
+                    value={spendAmount}
+                    onChange={(e) => setSpendAmount(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0,00"
+                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Campanha</label>
+                  <div className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground">
+                    {(campaigns || []).find((campaign) => campaign.id === spendCampaignId)?.name || 'Campanha selecionada'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Início do período</label>
+                  <div className="relative">
+                    <input
+                      value={spendStartDate}
+                      onChange={(e) => setSpendStartDate(e.target.value)}
+                      type="date"
+                      className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
+                    />
+                    <CalendarRange className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Fim do período</label>
+                  <div className="relative">
+                    <input
+                      value={spendEndDate}
+                      onChange={(e) => setSpendEndDate(e.target.value)}
+                      type="date"
+                      className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all"
+                    />
+                    <CalendarRange className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Observação</label>
+                <textarea
+                  value={spendNotes}
+                  onChange={(e) => setSpendNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: verba Meta Ads da primeira quinzena"
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none transition-all resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-4 pt-6 border-t border-border">
+                <button type="button" onClick={() => setIsSpendModalOpen(false)} className="px-6 py-2 text-muted-foreground font-black text-[10px] uppercase tracking-widest">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-primary text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gold-400 transition-all shadow-xl">
+                  {editingSpendEntryId ? 'Salvar período' : 'Adicionar período'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Ad Modal with success animation */}
       {isAdModalOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -572,5 +767,6 @@ export function Campaigns() {
     </div>
   );
 }
+
 
 

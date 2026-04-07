@@ -10,6 +10,7 @@ import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 const pickState = (state: ReturnType<typeof useStore.getState>) => ({
   leads: state.leads,
   campaigns: state.campaigns,
+  campaignSpendEntries: state.campaignSpendEntries,
   adGroups: state.adGroups,
   ads: state.ads,
   areasOfLaw: state.areasOfLaw,

@@ -73,6 +73,16 @@ export interface Campaign {
   serviceId?: string;
 }
 
+export interface CampaignSpendEntry {
+  id: string;
+  campaignId: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface AdGroup {
   id: string;
   campaignId: string;
