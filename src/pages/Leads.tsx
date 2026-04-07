@@ -6,13 +6,14 @@ import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getLeadServiceIds, leadMatchesService } from '@/lib/leadServices';
 import { isAdminUser } from '@/lib/access';
-import { buildEffectiveFieldSchema, getBaseFieldKeys } from '@/lib/funnelFieldSchema';
+import { buildEffectiveFieldSchema, getTemplatesForOperation } from '@/lib/funnelFieldSchema';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { FunnelConfig, Lead } from '@/types/crm';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
 import { PremiumSelect } from '@/components/PremiumSelect';
+import { PremiumMultiSelect } from '@/components/PremiumMultiSelect';
 
 const sortFunnels = (items: FunnelConfig[]) =>
   [...items].sort((a, b) => {
@@ -57,6 +58,7 @@ export function Leads() {
     areasOfLaw,
     services,
     leadSources,
+    fieldTemplates,
   } = useStore();
   const isAdmin = isAdminUser(user);
 
@@ -78,6 +80,7 @@ export function Leads() {
   const [createOwnerUserId, setCreateOwnerUserId] = useState('');
   const [createCampaignId, setCreateCampaignId] = useState('');
   const [createProspectServiceId, setCreateProspectServiceId] = useState('');
+  const [createCustomFieldValues, setCreateCustomFieldValues] = useState<Record<string, string | string[]>>({});
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
@@ -134,8 +137,11 @@ export function Leads() {
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createEffectiveFieldSchema = buildEffectiveFieldSchema(createFunnel);
   const createFieldMap = new Map(createEffectiveFieldSchema.map((field) => [field.key, field]));
-  const createBaseFieldKeys = getBaseFieldKeys(createFunnel?.operation);
-  const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => !createBaseFieldKeys.has(field.key));
+  const createTemplateLibrary = getTemplatesForOperation(fieldTemplates || [], createFunnel?.operation);
+  const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => {
+    const linkedTemplate = createTemplateLibrary.find((template) => template.id === field.templateId || template.key === field.key);
+    return !linkedTemplate?.system;
+  });
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAreaScopedServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
   const createAvailableServices = createAreaScopedServices;
@@ -294,11 +300,25 @@ export function Leads() {
     setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
     setCreateCampaignId('');
     setCreateProspectServiceId('');
+    setCreateCustomFieldValues({});
   };
 
-  const collectCustomFields = (formData: FormData) =>
-    createCustomFieldSchema.reduce<Record<string, string>>((acc, field) => {
-      const rawValue = formData.get(`customField:${field.key}`);
+  const updateCreateCustomField = (key: string, value: string | string[]) => {
+    setCreateCustomFieldValues((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const collectCustomFields = () =>
+    createCustomFieldSchema.reduce<Record<string, string | string[]>>((acc, field) => {
+      const rawValue = createCustomFieldValues[field.key];
+      if (Array.isArray(rawValue)) {
+        if (rawValue.length) {
+          acc[field.key] = rawValue;
+        }
+        return acc;
+      }
       const value = typeof rawValue === 'string' ? rawValue.trim() : '';
       if (value) {
         acc[field.key] = value;
@@ -315,7 +335,7 @@ export function Leads() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      const customFields = collectCustomFields(formData);
+      const customFields = collectCustomFields();
       const selectedServiceIds = formData
         .getAll('serviceIds')
         .map((value) => String(value))
@@ -967,15 +987,43 @@ export function Leads() {
                       </label>
                       {field.type === 'textarea' ? (
                         <textarea
-                          name={`customField:${field.key}`}
                           required={Boolean(field.required)}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
                           placeholder={field.placeholder || field.helpText || ''}
                           className="min-h-[96px] w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                         />
+                      ) : field.type === 'select' ? (
+                        <PremiumSelect
+                          options={(field.options || []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                            description: field.label,
+                            group: 'Opções',
+                          }))}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
+                          placeholder={`Buscar ${field.label.toLowerCase()}`}
+                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                        />
+                      ) : field.type === 'multiselect' ? (
+                        <PremiumMultiSelect
+                          options={(field.options || []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                            description: field.label,
+                            group: 'Opções',
+                          }))}
+                          values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
+                          onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
+                          placeholder={`Buscar ${field.label.toLowerCase()}`}
+                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                        />
                       ) : (
                         <input
-                          name={`customField:${field.key}`}
                           required={Boolean(field.required)}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
                           type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
                           inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
                           placeholder={field.placeholder || field.helpText || ''}
@@ -1084,15 +1132,43 @@ export function Leads() {
                       </label>
                       {field.type === 'textarea' ? (
                         <textarea
-                          name={`customField:${field.key}`}
                           required={Boolean(field.required)}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
                           placeholder={field.placeholder || field.helpText || ''}
                           className="min-h-[96px] w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                         />
+                      ) : field.type === 'select' ? (
+                        <PremiumSelect
+                          options={(field.options || []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                            description: field.label,
+                            group: 'Opções',
+                          }))}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
+                          placeholder={`Buscar ${field.label.toLowerCase()}`}
+                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                        />
+                      ) : field.type === 'multiselect' ? (
+                        <PremiumMultiSelect
+                          options={(field.options || []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                            description: field.label,
+                            group: 'Opções',
+                          }))}
+                          values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
+                          onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
+                          placeholder={`Buscar ${field.label.toLowerCase()}`}
+                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                        />
                       ) : (
                         <input
-                          name={`customField:${field.key}`}
                           required={Boolean(field.required)}
+                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
                           type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
                           inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
                           placeholder={field.placeholder || field.helpText || ''}
@@ -1131,5 +1207,3 @@ export function Leads() {
     </div>
   );
 }
-
-

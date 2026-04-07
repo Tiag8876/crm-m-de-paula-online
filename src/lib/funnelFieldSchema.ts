@@ -1,60 +1,148 @@
-import type { FunnelConfig, FunnelFieldConfig } from '@/types/crm';
+import { v4 as uuidv4 } from 'uuid';
+import type { FieldTemplate, FunnelConfig, FunnelFieldConfig, FunnelFieldOption } from '@/types/crm';
 
-const commercialBaseFields: FunnelFieldConfig[] = [
-  { id: 'base-name', key: 'name', label: 'Nome completo', type: 'text', required: true, placeholder: 'Nome do cliente', helpText: '', order: 0 },
-  { id: 'base-phone', key: 'phone', label: 'Telefone', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', helpText: '', order: 1 },
-  { id: 'base-email', key: 'email', label: 'E-mail', type: 'email', required: false, placeholder: 'E-mail', helpText: '', order: 2 },
-  { id: 'base-areaOfLawId', key: 'areaOfLawId', label: 'Área de atuação', type: 'select', required: false, placeholder: 'Selecione a área', helpText: '', order: 3 },
-  { id: 'base-serviceIds', key: 'serviceIds', label: 'Serviços', type: 'multiselect', required: false, placeholder: 'Selecione um ou mais serviços', helpText: '', order: 4 },
-  { id: 'base-sourceId', key: 'sourceId', label: 'Origem do lead', type: 'select', required: false, placeholder: 'Selecione a origem', helpText: '', order: 5 },
-  { id: 'base-campaignId', key: 'campaignId', label: 'Campanha', type: 'select', required: false, placeholder: 'Selecione a campanha', helpText: '', order: 6 },
-  { id: 'base-sourceDetails', key: 'sourceDetails', label: 'Detalhe da origem', type: 'textarea', required: false, placeholder: 'Descreva a origem', helpText: '', order: 7 },
-  { id: 'base-estimatedValue', key: 'estimatedValue', label: 'Valor estimado', type: 'currency', required: false, placeholder: 'Valor estimado', helpText: '', order: 8 },
-  { id: 'base-cpf', key: 'cpf', label: 'CPF', type: 'cpf', required: false, placeholder: 'CPF', helpText: '', order: 9 },
-  { id: 'base-ownerUserId', key: 'ownerUserId', label: 'Responsável', type: 'user', required: false, placeholder: 'Selecione um vendedor', helpText: '', order: 10 },
+const createOptions = (items: string[]): FunnelFieldOption[] =>
+  items.map((item) => ({
+    id: uuidv4(),
+    value: item,
+    label: item,
+  }));
+
+const commercialTemplates: FieldTemplate[] = [
+  { id: 'template-name', key: 'name', label: 'Nome completo', type: 'text', required: true, placeholder: 'Nome do cliente', order: 0, operation: 'commercial', system: true },
+  { id: 'template-phone', key: 'phone', label: 'Telefone', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 1, operation: 'commercial', system: true },
+  { id: 'template-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 2, operation: 'commercial', system: true },
+  { id: 'template-area-of-law', key: 'areaOfLawId', label: 'Área de atuação', type: 'select', placeholder: 'Selecione a área', order: 3, operation: 'commercial', system: true },
+  { id: 'template-service-ids', key: 'serviceIds', label: 'Serviços', type: 'multiselect', placeholder: 'Selecione um ou mais serviços', order: 4, operation: 'commercial', system: true },
+  { id: 'template-source-id', key: 'sourceId', label: 'Origem do lead', type: 'select', placeholder: 'Selecione a origem', order: 5, operation: 'commercial', system: true },
+  { id: 'template-campaign-id', key: 'campaignId', label: 'Campanha', type: 'select', placeholder: 'Selecione a campanha', order: 6, operation: 'commercial', system: true },
+  { id: 'template-source-details', key: 'sourceDetails', label: 'Detalhe da origem', type: 'textarea', placeholder: 'Descreva a origem', order: 7, operation: 'commercial', system: true },
+  { id: 'template-estimated-value', key: 'estimatedValue', label: 'Valor estimado', type: 'currency', placeholder: 'Valor estimado', order: 8, operation: 'commercial', system: true },
+  { id: 'template-cpf', key: 'cpf', label: 'CPF', type: 'cpf', placeholder: 'CPF', order: 9, operation: 'commercial', system: true },
+  { id: 'template-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 10, operation: 'commercial', system: true },
 ];
 
-const prospectingBaseFields: FunnelFieldConfig[] = [
-  { id: 'base-clinicName', key: 'clinicName', label: 'Conta ou clínica', type: 'text', required: true, placeholder: 'Nome da conta ou clínica', helpText: '', order: 0 },
-  { id: 'base-contactName', key: 'contactName', label: 'Responsável principal', type: 'text', required: true, placeholder: 'Responsável principal', helpText: '', order: 1 },
-  { id: 'base-phone', key: 'phone', label: 'Telefone ou WhatsApp', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', helpText: '', order: 2 },
-  { id: 'base-email', key: 'email', label: 'E-mail', type: 'email', required: false, placeholder: 'E-mail', helpText: '', order: 3 },
-  { id: 'base-cnpj', key: 'cnpj', label: 'CNPJ', type: 'cnpj', required: false, placeholder: 'CNPJ', helpText: '', order: 4 },
-  { id: 'base-city', key: 'city', label: 'Cidade', type: 'text', required: false, placeholder: 'Cidade', helpText: '', order: 5 },
-  { id: 'base-neighborhood', key: 'neighborhood', label: 'Bairro', type: 'text', required: false, placeholder: 'Bairro', helpText: '', order: 6 },
-  { id: 'base-receptionistName', key: 'receptionistName', label: 'Recepção ou contato secundário', type: 'text', required: false, placeholder: 'Recepção ou contato secundário', helpText: '', order: 7 },
-  { id: 'base-serviceId', key: 'serviceId', label: 'Serviço ofertado', type: 'select', required: false, placeholder: 'Selecione o serviço', helpText: '', order: 8 },
-  { id: 'base-ownerUserId', key: 'ownerUserId', label: 'Responsável', type: 'user', required: false, placeholder: 'Selecione um vendedor', helpText: '', order: 9 },
+const prospectingTemplates: FieldTemplate[] = [
+  { id: 'template-clinic-name', key: 'clinicName', label: 'Conta ou clínica', type: 'text', required: true, placeholder: 'Nome da conta ou clínica', order: 0, operation: 'prospecting', system: true },
+  { id: 'template-contact-name', key: 'contactName', label: 'Responsável principal', type: 'text', required: true, placeholder: 'Responsável principal', order: 1, operation: 'prospecting', system: true },
+  { id: 'template-prospect-phone', key: 'phone', label: 'Telefone ou WhatsApp', type: 'phone', required: true, placeholder: 'Telefone ou WhatsApp', order: 2, operation: 'prospecting', system: true },
+  { id: 'template-prospect-email', key: 'email', label: 'E-mail', type: 'email', placeholder: 'E-mail', order: 3, operation: 'prospecting', system: true },
+  { id: 'template-cnpj', key: 'cnpj', label: 'CNPJ', type: 'cnpj', placeholder: 'CNPJ', order: 4, operation: 'prospecting', system: true },
+  { id: 'template-city', key: 'city', label: 'Cidade', type: 'text', placeholder: 'Cidade', order: 5, operation: 'prospecting', system: true },
+  { id: 'template-neighborhood', key: 'neighborhood', label: 'Bairro', type: 'text', placeholder: 'Bairro', order: 6, operation: 'prospecting', system: true },
+  { id: 'template-receptionist-name', key: 'receptionistName', label: 'Recepção ou contato secundário', type: 'text', placeholder: 'Recepção ou contato secundário', order: 7, operation: 'prospecting', system: true },
+  { id: 'template-service-id', key: 'serviceId', label: 'Serviço ofertado', type: 'select', placeholder: 'Selecione o serviço', order: 8, operation: 'prospecting', system: true },
+  { id: 'template-prospect-owner-user-id', key: 'ownerUserId', label: 'Responsável', type: 'user', placeholder: 'Selecione um vendedor', order: 9, operation: 'prospecting', system: true },
 ];
 
-export const getBaseFieldSchema = (operation?: FunnelConfig['operation']): FunnelFieldConfig[] => {
-  if (operation === 'prospecting') return prospectingBaseFields;
-  return commercialBaseFields;
-};
+export const DEFAULT_FIELD_TEMPLATES: FieldTemplate[] = [...commercialTemplates, ...prospectingTemplates];
 
-export const buildEffectiveFieldSchema = (funnel?: FunnelConfig): FunnelFieldConfig[] => {
-  const baseFields = getBaseFieldSchema(funnel?.operation);
-  const existing = [...(funnel?.fieldSchema || [])].sort((a, b) => a.order - b.order);
-  const baseKeys = new Set(baseFields.map((field) => field.key));
-  const overridesByKey = new Map(existing.filter((field) => baseKeys.has(field.key)).map((field) => [field.key, field]));
+export const getDefaultFieldTemplates = (): FieldTemplate[] =>
+  DEFAULT_FIELD_TEMPLATES.map((template) => ({
+    ...template,
+    options: template.options ? template.options.map((option) => ({ ...option })) : undefined,
+  }));
 
-  const mergedBase = baseFields.map((field, index) => {
-    const override = overridesByKey.get(field.key);
+export const normalizeFieldTemplates = (templates: FieldTemplate[] = []): FieldTemplate[] =>
+  [...templates]
+    .sort((a, b) => a.order - b.order)
+    .map((template, index) => ({
+      ...template,
+      order: index,
+      required: Boolean(template.required),
+      placeholder: template.placeholder || '',
+      helpText: template.helpText || '',
+      options: (template.options || []).map((option, optionIndex) => ({
+        id: option.id || `${template.id}-option-${optionIndex}`,
+        value: option.value || option.label,
+        label: option.label || option.value,
+      })),
+    }));
+
+export const getTemplatesForOperation = (
+  templates: FieldTemplate[],
+  operation?: FunnelConfig['operation'],
+): FieldTemplate[] =>
+  normalizeFieldTemplates(templates).filter((template) => template.operation === 'shared' || template.operation === operation);
+
+export const templateToFieldConfig = (template: FieldTemplate, order: number): FunnelFieldConfig => ({
+  id: uuidv4(),
+  templateId: template.id,
+  key: template.key,
+  label: template.label,
+  type: template.type,
+  required: template.required,
+  placeholder: template.placeholder,
+  helpText: template.helpText,
+  options: template.options ? template.options.map((option) => ({ ...option })) : undefined,
+  order,
+});
+
+export const getDefaultFieldSchema = (
+  operation: FunnelConfig['operation'],
+  templates: FieldTemplate[],
+): FunnelFieldConfig[] =>
+  getTemplatesForOperation(templates, operation)
+    .filter((template) => template.system)
+    .map((template, index) => templateToFieldConfig(template, index));
+
+export const normalizeFieldSchema = (fields: FunnelFieldConfig[] = []): FunnelFieldConfig[] =>
+  [...fields]
+    .sort((a, b) => a.order - b.order)
+    .map((field, index) => ({
+      ...field,
+      order: index,
+      required: Boolean(field.required),
+      placeholder: field.placeholder || '',
+      helpText: field.helpText || '',
+      options: (field.options || []).map((option, optionIndex) => ({
+        id: option.id || `${field.id}-option-${optionIndex}`,
+        value: option.value || option.label,
+        label: option.label || option.value,
+      })),
+    }));
+
+export const buildEffectiveFieldSchema = (funnel?: FunnelConfig): FunnelFieldConfig[] =>
+  normalizeFieldSchema(funnel?.fieldSchema || []);
+
+export const getBaseFieldKeys = (operation?: FunnelConfig['operation'], templates: FieldTemplate[] = getDefaultFieldTemplates()) =>
+  new Set(getTemplatesForOperation(templates, operation).filter((template) => template.system).map((template) => template.key));
+
+export const findTemplateByKey = (templates: FieldTemplate[], key: string, operation?: FunnelConfig['operation']) =>
+  getTemplatesForOperation(templates, operation).find((template) => template.key === key);
+
+export const ensureFunnelFieldSchema = (
+  funnel: FunnelConfig,
+  templates: FieldTemplate[],
+  legacyFields: FunnelFieldConfig[] = [],
+): FunnelFieldConfig[] => {
+  if (funnel.fieldSchema && funnel.fieldSchema.length > 0) {
+    return normalizeFieldSchema(funnel.fieldSchema);
+  }
+
+  const defaultFields = getDefaultFieldSchema(funnel.operation, templates);
+  const legacyByKey = new Map(legacyFields.map((field) => [field.key, field]));
+
+  return defaultFields.map((field, index) => {
+    const legacyField = legacyByKey.get(field.key);
+    if (!legacyField) return { ...field, order: index };
     return {
       ...field,
-      ...override,
-      key: field.key,
-      id: override?.id || field.id,
+      id: legacyField.id || field.id,
+      label: legacyField.label || field.label,
+      required: legacyField.required ?? field.required,
+      placeholder: legacyField.placeholder || field.placeholder,
+      helpText: legacyField.helpText || field.helpText,
+      options: legacyField.options?.length ? legacyField.options.map((option) => ({ ...option })) : field.options,
       order: index,
     };
-  });
-
-  const customFields = existing
-    .filter((field) => !baseKeys.has(field.key))
-    .map((field, index) => ({ ...field, order: mergedBase.length + index }));
-
-  return [...mergedBase, ...customFields];
+  }).concat(
+    normalizeFieldSchema(legacyFields.filter((field) => !defaultFields.some((baseField) => baseField.key === field.key))).map((field, index) => ({
+      ...field,
+      order: defaultFields.length + index,
+    })),
+  );
 };
 
-export const getBaseFieldKeys = (operation?: FunnelConfig['operation']) =>
-  new Set(getBaseFieldSchema(operation).map((field) => field.key));
+export const createFieldOptions = (labels: string[]): FunnelFieldOption[] =>
+  createOptions(labels.filter(Boolean).map((label) => label.trim()).filter(Boolean));

@@ -16,6 +16,7 @@ import {
   KanbanStage,
   FunnelConfig,
   FunnelFieldConfig,
+  FieldTemplate,
   SystemNotification,
   WeeklySnapshot,
   ProspectLead,
@@ -23,6 +24,13 @@ import {
   LeadSourceKind,
 } from '../types/crm';
 import { getLeadIdleHours } from '@/lib/leadMetrics';
+import {
+  ensureFunnelFieldSchema,
+  getDefaultFieldTemplates,
+  normalizeFieldSchema,
+  normalizeFieldTemplates,
+  templateToFieldConfig,
+} from '@/lib/funnelFieldSchema';
 
 const getSPTime = () => {
   return new Date().toLocaleString("pt-BR", {
@@ -130,18 +138,7 @@ const normalizeStages = (stages: KanbanStage[] = []): KanbanStage[] =>
     .sort((a, b) => a.order - b.order)
     .map((stage, index) => ({ ...stage, order: index }));
 
-const normalizeFieldSchema = (fields: FunnelFieldConfig[] = []): FunnelFieldConfig[] =>
-  [...fields]
-    .sort((a, b) => a.order - b.order)
-    .map((field, index) => ({
-      ...field,
-      order: index,
-      required: Boolean(field.required),
-      placeholder: field.placeholder || '',
-      helpText: field.helpText || '',
-    }));
-
-const ensureFunnels = (funnels?: FunnelConfig[]): FunnelConfig[] => {
+const ensureFunnels = (funnels?: FunnelConfig[], fieldTemplates: FieldTemplate[] = getDefaultFieldTemplates()): FunnelConfig[] => {
   const current = [...(funnels || [])];
   const defaults = buildDefaultFunnels();
 
@@ -154,7 +151,7 @@ const ensureFunnels = (funnels?: FunnelConfig[]): FunnelConfig[] => {
   return current.map((funnel) => ({
     ...funnel,
     stages: normalizeStages(funnel.stages),
-    fieldSchema: normalizeFieldSchema(funnel.fieldSchema),
+    fieldSchema: ensureFunnelFieldSchema(funnel, fieldTemplates, funnel.fieldSchema),
     objections: funnel.objections || [],
     playbook: funnel.playbook || '',
   }));
@@ -180,14 +177,17 @@ const getDefaultFunnel = (
 
 const buildFunnelAliases = (
   funnelsInput?: FunnelConfig[],
+  fieldTemplatesInput: FieldTemplate[] = getDefaultFieldTemplates(),
   commercialPreferredId?: string,
   prospectingPreferredId?: string,
 ) => {
-  const funnels = ensureFunnels(funnelsInput);
+  const fieldTemplates = normalizeFieldTemplates(fieldTemplatesInput);
+  const funnels = ensureFunnels(funnelsInput, fieldTemplates);
   const commercial = getDefaultFunnel(funnels, 'commercial', commercialPreferredId);
   const prospecting = getDefaultFunnel(funnels, 'prospecting', prospectingPreferredId);
 
   return {
+    fieldTemplates,
     funnels,
     commercialDefaultFunnelId: commercial.id,
     prospectingDefaultFunnelId: prospecting.id,
@@ -226,6 +226,7 @@ interface AppState {
   services: Service[];
   leadSources: LeadSource[];
   standardTasks: Omit<Task, 'date' | 'leadId' | 'status' | 'isStandard'>[];
+  fieldTemplates: FieldTemplate[];
   funnels: FunnelConfig[];
   commercialDefaultFunnelId: string;
   prospectingDefaultFunnelId: string;
@@ -289,6 +290,10 @@ interface AppState {
   addStandardTask: (title: string, description?: string) => void;
   deleteStandardTask: (id: string) => void;
 
+  addFieldTemplate: (template: Omit<FieldTemplate, 'id' | 'order'>) => string;
+  updateFieldTemplate: (id: string, data: Partial<Omit<FieldTemplate, 'id' | 'order'>>) => void;
+  deleteFieldTemplate: (id: string) => void;
+
   addKanbanStage: (name: string, color: string) => void;
   updateKanbanStage: (id: string, data: Partial<KanbanStage>) => void;
   deleteKanbanStage: (id: string) => void;
@@ -302,7 +307,7 @@ interface AppState {
   updateFunnelStage: (funnelId: string, stageId: string, data: Partial<KanbanStage>) => void;
   deleteFunnelStage: (funnelId: string, stageId: string) => void;
   reorderFunnelStages: (funnelId: string, stages: KanbanStage[]) => void;
-  addFunnelField: (funnelId: string, field: Omit<FunnelFieldConfig, 'id' | 'order'>) => void;
+  addFieldTemplateToFunnel: (funnelId: string, templateId: string) => void;
   updateFunnelField: (funnelId: string, fieldId: string, data: Partial<Omit<FunnelFieldConfig, 'id' | 'order'>>) => void;
   deleteFunnelField: (funnelId: string, fieldId: string) => void;
   reorderFunnelFields: (funnelId: string, fields: FunnelFieldConfig[]) => void;
@@ -338,7 +343,7 @@ interface AppState {
 
 export const useStore = create<AppState>()(
   (set) => ({
-      ...buildFunnelAliases(buildDefaultFunnels(), DEFAULT_COMMERCIAL_FUNNEL_ID, DEFAULT_PROSPECTING_FUNNEL_ID),
+      ...buildFunnelAliases(buildDefaultFunnels(), getDefaultFieldTemplates(), DEFAULT_COMMERCIAL_FUNNEL_ID, DEFAULT_PROSPECTING_FUNNEL_ID),
       leads: [],
       campaigns: [],
       campaignSpendEntries: [],
@@ -348,6 +353,7 @@ export const useStore = create<AppState>()(
       services: [],
       leadSources: ensureLeadSources(),
       standardTasks: [],
+      fieldTemplates: getDefaultFieldTemplates(),
       notifications: [],
       weeklySnapshots: [],
       prospectLeads: [],
@@ -356,7 +362,7 @@ export const useStore = create<AppState>()(
       addLead: (leadData) => set((state) => {
         const id = uuidv4();
         const timestamp = new Date().toISOString();
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const defaultFunnel = getDefaultFunnel(aliases.funnels, 'commercial', aliases.commercialDefaultFunnelId);
         const normalizedLead = normalizeLeadServices(leadData);
         return {
@@ -387,7 +393,7 @@ export const useStore = create<AppState>()(
             const normalizedData = normalizeLeadServices({ ...lead, ...data });
             const logs = [...(lead.logs || [])];
             if (normalizedData.status && normalizedData.status !== lead.status) {
-              const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+              const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
               const resolvedFunnel = getDefaultFunnel(
                 aliases.funnels,
                 'commercial',
@@ -1065,8 +1071,41 @@ export const useStore = create<AppState>()(
         standardTasks: (state.standardTasks || []).filter(t => t.id !== id)
       })),
 
+      addFieldTemplate: (template) => {
+        const id = uuidv4();
+        set((state) => ({
+          fieldTemplates: normalizeFieldTemplates([
+            ...(state.fieldTemplates || getDefaultFieldTemplates()),
+            {
+              ...template,
+              id,
+              order: (state.fieldTemplates || []).length,
+            },
+          ]),
+        }));
+        return id;
+      },
+
+      updateFieldTemplate: (id, data) => set((state) => ({
+        fieldTemplates: normalizeFieldTemplates(
+          (state.fieldTemplates || []).map((template) =>
+            template.id === id ? { ...template, ...data } : template,
+          ),
+        ),
+      })),
+
+      deleteFieldTemplate: (id) => set((state) => ({
+        fieldTemplates: normalizeFieldTemplates(
+          (state.fieldTemplates || []).filter((template) => template.id !== id || template.system),
+        ),
+        funnels: (state.funnels || []).map((funnel) => ({
+          ...funnel,
+          fieldSchema: normalizeFieldSchema((funnel.fieldSchema || []).filter((field) => field.templateId !== id)),
+        })),
+      })),
+
       addKanbanStage: (name, color) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.commercialDefaultFunnelId
             ? {
@@ -1076,11 +1115,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       updateKanbanStage: (id, data) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.commercialDefaultFunnelId
             ? {
@@ -1090,11 +1129,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       deleteKanbanStage: (id) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.commercialDefaultFunnelId
             ? {
@@ -1104,23 +1143,23 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       reorderKanbanStages: (stages) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.commercialDefaultFunnelId
             ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages) }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       addFunnel: ({ name, operation, description, areaOfLawId }) => {
         const id = uuidv4();
         set((state) => {
-          const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+          const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
           const template = getDefaultFunnel(aliases.funnels, operation, operation === 'commercial' ? aliases.commercialDefaultFunnelId : aliases.prospectingDefaultFunnelId);
           const timestamp = new Date().toISOString();
           const nextFunnels = [
@@ -1139,13 +1178,13 @@ export const useStore = create<AppState>()(
               updatedAt: timestamp,
             },
           ];
-          return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+          return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
         });
         return id;
       },
 
       updateFunnel: (id, data) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === id
             ? {
@@ -1155,14 +1194,14 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       duplicateFunnel: (id) => {
         const nextId = uuidv4();
         let duplicated = false;
         set((state) => {
-          const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+          const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
           const source = aliases.funnels.find((funnel) => funnel.id === id);
           if (!source) return state;
           duplicated = true;
@@ -1179,19 +1218,19 @@ export const useStore = create<AppState>()(
               updatedAt: timestamp,
             },
           ];
-          return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+          return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
         });
         return duplicated ? nextId : null;
       },
 
       deleteFunnel: (id) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const target = aliases.funnels.find((funnel) => funnel.id === id);
         if (!target) return state;
         const sameOperationFunnels = aliases.funnels.filter((funnel) => funnel.operation === target.operation);
         if (sameOperationFunnels.length <= 1) return state;
         const nextFunnels = aliases.funnels.filter((funnel) => funnel.id !== id);
-        const nextAliases = buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        const nextAliases = buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
         const replacementId = target.operation === 'commercial' ? nextAliases.commercialDefaultFunnelId : nextAliases.prospectingDefaultFunnelId;
         return {
           ...nextAliases,
@@ -1207,6 +1246,7 @@ export const useStore = create<AppState>()(
       setDefaultFunnel: (operation, funnelId) => set((state) => {
         const aliases = buildFunnelAliases(
           state.funnels,
+          state.fieldTemplates,
           operation === 'commercial' ? funnelId : state.commercialDefaultFunnelId,
           operation === 'prospecting' ? funnelId : state.prospectingDefaultFunnelId,
         );
@@ -1214,7 +1254,7 @@ export const useStore = create<AppState>()(
       }),
 
       addFunnelStage: (funnelId, name, color) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1224,11 +1264,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       updateFunnelStage: (funnelId, stageId, data) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1238,11 +1278,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       deleteFunnelStage: (funnelId, stageId) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1252,11 +1292,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       reorderFunnelStages: (funnelId, stages) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1266,28 +1306,33 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
-      addFunnelField: (funnelId, field) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
-        const nextFunnels = aliases.funnels.map((funnel) =>
-          funnel.id === funnelId
-            ? {
-                ...funnel,
-                updatedAt: new Date().toISOString(),
-                fieldSchema: normalizeFieldSchema([
-                  ...(funnel.fieldSchema || []),
-                  { ...field, id: uuidv4(), order: (funnel.fieldSchema || []).length },
-                ]),
-              }
-            : funnel,
-        );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+      addFieldTemplateToFunnel: (funnelId, templateId) => set((state) => {
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const template = (state.fieldTemplates || []).find((item) => item.id === templateId);
+        if (!template) return state;
+
+        const nextFunnels = aliases.funnels.map((funnel) => {
+          if (funnel.id !== funnelId) return funnel;
+          const exists = (funnel.fieldSchema || []).some((field) => field.templateId === templateId || field.key === template.key);
+          if (exists) return funnel;
+          return {
+            ...funnel,
+            updatedAt: new Date().toISOString(),
+            fieldSchema: normalizeFieldSchema([
+              ...(funnel.fieldSchema || []),
+              templateToFieldConfig(template, (funnel.fieldSchema || []).length),
+            ]),
+          };
+        });
+
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       updateFunnelField: (funnelId, fieldId, data) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1299,11 +1344,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       deleteFunnelField: (funnelId, fieldId) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1313,11 +1358,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       reorderFunnelFields: (funnelId, fields) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1327,13 +1372,13 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       addFunnelObjection: (funnelId, value) => set((state) => {
         const trimmed = value.trim();
         if (!trimmed) return state;
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) => {
           if (funnel.id !== funnelId) return funnel;
           if ((funnel.objections || []).includes(trimmed)) return funnel;
@@ -1343,11 +1388,11 @@ export const useStore = create<AppState>()(
             objections: [...(funnel.objections || []), trimmed],
           };
         });
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       removeFunnelObjection: (funnelId, value) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1357,11 +1402,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       setFunnelPlaybook: (funnelId, value) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
@@ -1371,13 +1416,13 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       addProspectLead: (leadData) => set((state) => {
         const id = uuidv4();
         const timestamp = new Date().toISOString();
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const defaultFunnel = getDefaultFunnel(aliases.funnels, 'prospecting', aliases.prospectingDefaultFunnelId);
         return {
           prospectLeads: [...(state.prospectLeads || []), {
@@ -1405,7 +1450,7 @@ export const useStore = create<AppState>()(
           if (lead.id !== id) return lead;
           const logs = [...(lead.logs || [])];
           if (data.status && data.status !== lead.status) {
-            const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+            const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
             const resolvedFunnel = getDefaultFunnel(
               aliases.funnels,
               'prospecting',
@@ -1622,7 +1667,7 @@ export const useStore = create<AppState>()(
       })),
 
       addProspectKanbanStage: (name, color) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? {
@@ -1632,11 +1677,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       updateProspectKanbanStage: (id, data) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? {
@@ -1646,11 +1691,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       deleteProspectKanbanStage: (id) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? {
@@ -1660,21 +1705,21 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       reorderProspectKanbanStages: (stages) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages) }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       addProspectObjection: (value) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? {
@@ -1686,11 +1731,11 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       removeProspectObjection: (value) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? {
@@ -1700,17 +1745,17 @@ export const useStore = create<AppState>()(
               }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       setProspectPlaybook: (value) => set((state) => {
-        const aliases = buildFunnelAliases(state.funnels, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+        const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
             ? { ...funnel, updatedAt: new Date().toISOString(), playbook: value }
             : funnel,
         );
-        return buildFunnelAliases(nextFunnels, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
+        return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
       setDailyInsight: (insight) => set({ dailyInsight: insight })

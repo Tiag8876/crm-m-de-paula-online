@@ -16,9 +16,16 @@ export type FunnelFieldType =
   | 'multiselect'
   | 'user'
   | 'cpf'
-  | 'cnpj';
+  | 'cnpj'
+  | 'date';
 
-export interface FunnelFieldConfig {
+export interface FunnelFieldOption {
+  id: string;
+  value: string;
+  label: string;
+}
+
+export interface FieldTemplate {
   id: string;
   key: string;
   label: string;
@@ -26,6 +33,22 @@ export interface FunnelFieldConfig {
   required?: boolean;
   placeholder?: string;
   helpText?: string;
+  options?: FunnelFieldOption[];
+  order: number;
+  operation: 'commercial' | 'prospecting' | 'shared';
+  system?: boolean;
+ }
+
+export interface FunnelFieldConfig {
+  id: string;
+  templateId?: string;
+  key: string;
+  label: string;
+  type: FunnelFieldType;
+  required?: boolean;
+  placeholder?: string;
+  helpText?: string;
+  options?: FunnelFieldOption[];
   order: number;
 }
 
@@ -172,7 +195,7 @@ export interface Lead {
   estimatedValue?: number;
   legalArea?: string;
   aiInsight?: string;
-  customFields?: Record<string, string>;
+  customFields?: Record<string, string | string[]>;
 }
 
 export interface ProspectLead {
@@ -196,7 +219,7 @@ export interface ProspectLead {
   logs: LeadLog[];
   createdAt: string;
   lastInteractionAt?: string;
-  customFields?: Record<string, string>;
+  customFields?: Record<string, string | string[]>;
 }
 
 export interface SystemNotification {

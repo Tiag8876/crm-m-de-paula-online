@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
-import { getBaseFieldKeys } from '@/lib/funnelFieldSchema';
+import { getTemplatesForOperation } from '@/lib/funnelFieldSchema';
 import { isAdminUser } from '@/lib/access';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
 import { PremiumSelect } from '@/components/PremiumSelect';
@@ -24,7 +24,7 @@ export function LeadDetails() {
   const navigate = useNavigate();
   const { user, users, assignableUsers, fetchAssignableUsers, fetchUsers } = useAuthStore();
   const {
-    leads, campaigns, adGroups, ads, areasOfLaw, services, leadSources, standardTasks, funnels, commercialDefaultFunnelId,
+    leads, campaigns, adGroups, ads, areasOfLaw, services, leadSources, standardTasks, funnels, fieldTemplates, commercialDefaultFunnelId,
     updateLead, deleteLead, addNoteToLead, updateNoteInLead, deleteNoteFromLead,
     addDocumentToLead, updateDocumentInLead, deleteDocumentFromLead,
     addFollowUpToLead, updateFollowUpInLead, deleteFollowUpFromLead, updateFollowUpStatus,
@@ -167,9 +167,12 @@ export function LeadDetails() {
   const visibleLogs = sortedLogs.slice(0, 5);
   const hasMoreLogs = sortedLogs.length > 5;
   const sortedStages = [...(currentFunnel?.stages || [])].sort((a, b) => a.order - b.order);
-  const baseFieldKeys = getBaseFieldKeys(currentFunnel?.operation);
+  const currentTemplateLibrary = getTemplatesForOperation(fieldTemplates || [], currentFunnel?.operation);
   const currentFieldSchema = [...(currentFunnel?.fieldSchema || [])]
-    .filter((field) => !baseFieldKeys.has(field.key))
+    .filter((field) => {
+      const linkedTemplate = currentTemplateLibrary.find((template) => template.id === field.templateId || template.key === field.key);
+      return !linkedTemplate?.system;
+    })
     .sort((a, b) => a.order - b.order);
   const currentStage = sortedStages.find(s => s.id === lead.status);
   const selectableUsers = Array.from(
@@ -179,7 +182,7 @@ export function LeadDetails() {
         .map((candidate) => [candidate.id, candidate]),
     ).values(),
   );
-  const updateCustomField = (key: string, value: string) => {
+  const updateCustomField = (key: string, value: string | string[]) => {
     updateLead(lead.id, {
       customFields: {
         ...(lead.customFields || {}),
@@ -567,14 +570,40 @@ export function LeadDetails() {
               <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">{field.label}</p>
               {field.type === 'textarea' ? (
                 <textarea
-                  value={lead.customFields?.[field.key] || ''}
+                  value={typeof lead.customFields?.[field.key] === 'string' ? String(lead.customFields?.[field.key] || '') : ''}
                   onChange={(e) => updateCustomField(field.key, e.target.value)}
                   placeholder={field.placeholder || field.helpText || ''}
                   className="min-h-[120px] w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm focus:border-primary focus:outline-none"
                 />
+              ) : field.type === 'select' ? (
+                <PremiumSelect
+                  options={(field.options || []).map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: field.label,
+                    group: 'Opções',
+                  }))}
+                  value={typeof lead.customFields?.[field.key] === 'string' ? String(lead.customFields?.[field.key] || '') : ''}
+                  onChange={(nextValue) => updateCustomField(field.key, nextValue)}
+                  placeholder={`Buscar ${field.label.toLowerCase()}`}
+                  emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                />
+              ) : field.type === 'multiselect' ? (
+                <PremiumMultiSelect
+                  options={(field.options || []).map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: field.label,
+                    group: 'Opções',
+                  }))}
+                  values={Array.isArray(lead.customFields?.[field.key]) ? (lead.customFields?.[field.key] as string[]) : []}
+                  onChange={(nextValues) => updateCustomField(field.key, nextValues)}
+                  placeholder={`Buscar ${field.label.toLowerCase()}`}
+                  emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                />
               ) : (
                 <input
-                  value={lead.customFields?.[field.key] || ''}
+                  value={typeof lead.customFields?.[field.key] === 'string' ? String(lead.customFields?.[field.key] || '') : ''}
                   onChange={(e) => updateCustomField(field.key, e.target.value)}
                   type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
                   inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
