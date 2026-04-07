@@ -73,7 +73,7 @@ export function Layout() {
   return (
     <div className="flex h-screen bg-background text-foreground font-sans">
       <aside className={cn('bg-card border-r border-border flex flex-col shadow-2xl z-20 transition-all duration-300', collapsed ? 'w-24' : 'w-72')}>
-        <div className={cn('border-b border-border relative', collapsed ? 'p-4' : 'p-8')}>
+        <div className={cn('border-b border-border relative', collapsed ? 'p-4' : 'px-5 py-4')}>
           <button
             type="button"
             onClick={toggleSidebar}
@@ -83,8 +83,8 @@ export function Layout() {
           >
             {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
-          <div className="flex flex-col items-center gap-4">
-            <div className={cn('rounded-full overflow-hidden border border-gold-500/30 shadow-[0_0_20px_rgba(212,175,55,0.25)]', collapsed ? 'w-12 h-12' : 'w-16 h-16')}>
+          <div className={cn('flex items-center', collapsed ? 'justify-center pt-10' : 'gap-3 pr-14')}>
+            <div className={cn('overflow-hidden border border-gold-500/25 shadow-[0_0_16px_rgba(212,175,55,0.16)] bg-background', collapsed ? 'w-12 h-12 rounded-2xl' : 'w-11 h-11 rounded-xl')}>
               <img
                 src={logoSrc}
                 alt="Logo CRM M de Paula"
@@ -97,9 +97,9 @@ export function Layout() {
             </div>
 
             {!collapsed ? (
-              <div className="text-center">
-                <h1 className="text-2xl font-serif font-bold tracking-[0.2em] gold-text-gradient uppercase">CRM M de Paula</h1>
-                <p className="text-[10px] text-gold-500/60 tracking-[0.4em] uppercase mt-1">Sistema Comercial</p>
+              <div className="min-w-0">
+                <h1 className="text-sm font-serif font-bold tracking-[0.18em] gold-text-gradient uppercase leading-none">CRM M DE PAULA</h1>
+                <p className="mt-1 text-[9px] text-gold-500/50 tracking-[0.28em] uppercase">Sistema comercial</p>
               </div>
             ) : null}
           </div>
@@ -224,5 +224,6 @@ export function Layout() {
     </div>
   );
 }
+
 
 
