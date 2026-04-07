@@ -73,7 +73,16 @@ export function Layout() {
   return (
     <div className="flex h-screen bg-background text-foreground font-sans">
       <aside className={cn('bg-card border-r border-border flex flex-col shadow-2xl z-20 transition-all duration-300', collapsed ? 'w-24' : 'w-72')}>
-        <div className={cn('border-b border-border', collapsed ? 'p-4' : 'p-8')}>
+        <div className={cn('border-b border-border relative', collapsed ? 'p-4' : 'p-8')}>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="absolute right-4 top-4 inline-flex items-center justify-center rounded-xl border border-border bg-accent text-muted-foreground hover:text-primary hover:border-gold-500/30 transition-all w-10 h-10"
+            aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+            title={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+          >
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
           <div className="flex flex-col items-center gap-4">
             <div className={cn('rounded-full overflow-hidden border border-gold-500/30 shadow-[0_0_20px_rgba(212,175,55,0.25)]', collapsed ? 'w-12 h-12' : 'w-16 h-16')}>
               <img
@@ -93,16 +102,6 @@ export function Layout() {
                 <p className="text-[10px] text-gold-500/60 tracking-[0.4em] uppercase mt-1">Sistema Comercial</p>
               </div>
             ) : null}
-
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              className="inline-flex items-center justify-center rounded-xl border border-border bg-accent text-muted-foreground hover:text-primary hover:border-gold-500/30 transition-all w-10 h-10"
-              aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-              title={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-            >
-              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-            </button>
           </div>
         </div>
 
@@ -225,4 +224,5 @@ export function Layout() {
     </div>
   );
 }
+
 
