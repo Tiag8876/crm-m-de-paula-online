@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore';
 import { Plus, ChevronDown, ChevronRight, Image as ImageIcon, Video, Folder, LayoutGrid, X, Upload, Megaphone, Target, MousePointer2, Edit2, CheckCircle2, Trash2, WalletCards, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function Campaigns() {
+export function Campaigns({ embedded = false }: { embedded?: boolean }) {
   const { campaigns, campaignSpendEntries, adGroups, ads, areasOfLaw, services, addCampaign, updateCampaign, deleteCampaign, addCampaignSpendEntry, updateCampaignSpendEntry, deleteCampaignSpendEntry, addAdGroup, updateAdGroup, deleteAdGroup, addAd, updateAd, deleteAd } = useStore();
 
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
@@ -144,10 +144,10 @@ export function Campaigns() {
   };
 
   return (
-    <div className="p-10 max-w-7xl mx-auto space-y-10">
+    <div className={embedded ? "space-y-10" : "p-10 max-w-7xl mx-auto space-y-10"}>
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-serif font-bold gold-text-gradient tracking-tight">Campanhas Ativas</h1>
+          <h1 className={embedded ? "text-3xl font-serif font-bold gold-text-gradient tracking-tight" : "text-4xl font-serif font-bold gold-text-gradient tracking-tight"}>Campanhas Ativas</h1>
           <p className="text-muted-foreground mt-2 font-medium tracking-widest uppercase text-[10px]">Arquitetura de Conversão & Criativos</p>
         </div>
         <button

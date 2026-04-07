@@ -1,4 +1,4 @@
-import { Toaster } from "@/components/ui/toaster";
+﻿import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ const App = () => (
                   <Route index element={<Dashboard />} />
                   <Route path="leads" element={<Leads />} />
                   <Route path="leads/:id" element={<LeadDetails />} />
-                  <Route path="campaigns" element={<Campaigns />} />
+                  <Route path="campaigns" element={<Navigate to="/traffic?view=campaigns" replace />} />
                   <Route path="traffic" element={<TrafficAnalytics />} />
                   <Route path="reports" element={<SalesReports />} />
                   <Route path="calendar" element={<CalendarPage />} />
@@ -66,3 +66,4 @@ const App = () => (
 );
 
 export default App;
+

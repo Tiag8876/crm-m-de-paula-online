@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Users, Megaphone, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings, LogOut, BarChart3, FileText, Bell, Clock3, AlertTriangle, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useStore } from '@/store/useStore';
@@ -10,12 +10,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const baseNavItems = [
   { icon: LayoutDashboard, label: 'Painel de Controle', path: '/' },
-  { icon: Users, label: 'Gestão de Leads', path: '/leads' },
-  { icon: Megaphone, label: 'Estrategia de Trafego', path: '/campaigns' },
+  { icon: Users, label: 'GestÃ£o de Leads', path: '/leads' },
   { icon: BarChart3, label: 'Painel de Trafego', path: '/traffic' },
-  { icon: FileText, label: 'Relatórios', path: '/reports' },
+  { icon: FileText, label: 'RelatÃ³rios', path: '/reports' },
   { icon: Calendar, label: 'Agenda', path: '/calendar' },
-  { icon: Settings, label: 'Configurações', path: '/settings' },
+  { icon: Settings, label: 'ConfiguraÃ§Ãµes', path: '/settings' },
 ];
 
 export function Layout() {
@@ -30,7 +29,7 @@ export function Layout() {
     ? baseNavItems
     : baseNavItems.filter((item) => {
         if (profile === 'traffic') {
-          return ['/', '/campaigns', '/traffic', '/calendar', '/settings'].includes(item.path);
+          return ['/', '/traffic', '/calendar', '/settings'].includes(item.path);
         }
         return ['/', '/leads', '/reports', '/calendar', '/settings'].includes(item.path);
       });
@@ -142,7 +141,7 @@ export function Layout() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[360px] p-0">
               <DropdownMenuLabel className="px-4 py-3 text-xs uppercase tracking-widest flex items-center justify-between gap-3">
-                Alertas da Operação
+                Alertas da OperaÃ§Ã£o
                 <button
                   type="button"
                   onClick={markAllNotificationsRead}
@@ -171,7 +170,7 @@ export function Layout() {
                         )}
                         <div>
                           <p className="text-sm font-semibold leading-tight">
-                            {alert.title} {!alert.read && <span className="text-primary">•</span>}
+                            {alert.title} {!alert.read && <span className="text-primary">â€¢</span>}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1 leading-tight">{alert.description}</p>
                         </div>
@@ -191,5 +190,6 @@ export function Layout() {
     </div>
   );
 }
+
 
 

@@ -1,7 +1,9 @@
 ﻿import { useEffect, useMemo, type ComponentType } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { BarChart3, Users, CheckCircle2, TrendingUp, AlertTriangle, Target, CalendarRange, WalletCards, BadgeDollarSign } from 'lucide-react';
+import { BarChart3, Users, CheckCircle2, TrendingUp, AlertTriangle, Target, CalendarRange, WalletCards, BadgeDollarSign, Megaphone } from 'lucide-react';
+import { Campaigns } from './Campaigns';
 
 const formatCurrency = (value: number) =>
   `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -25,6 +27,8 @@ const getOverlapAmount = (entry: { amount: number; startDate: string; endDate: s
 };
 
 export function TrafficAnalytics() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentView = searchParams.get('view') === 'campaigns' ? 'campaigns' : 'overview';
   const { user } = useAuthStore();
   const { leads, campaigns, campaignSpendEntries, adGroups, ads, weeklySnapshots, ensureWeeklySnapshot } = useStore();
 
@@ -43,7 +47,6 @@ export function TrafficAnalytics() {
     const total = leads.length;
     const closed = leads.filter((l) => l.status === 'fechado').length;
     const lost = leads.filter((l) => l.status === 'perdido').length;
-    const active = total - closed - lost;
     const conversion = total > 0 ? (closed / total) * 100 : 0;
 
     const spendByCampaign = new Map<string, number>();
@@ -102,110 +105,141 @@ export function TrafficAnalytics() {
       .sort((a, b) => b.leads - a.leads)
       .slice(0, 5);
 
-    return { total, closed, lost, active, conversion, totalSpend, totalRevenue, roi, campaignRows, topCreative };
+    return { total, closed, lost, conversion, totalSpend, totalRevenue, roi, campaignRows, topCreative };
   }, [adGroups, ads, campaignSpendEntries, campaigns, currentMonthRange.end, currentMonthRange.start, leads]);
 
   const latestWeekly = useMemo(() => weeklySnapshots?.[0] || null, [weeklySnapshots]);
 
+  const setView = (view: 'overview' | 'campaigns') => {
+    const next = new URLSearchParams(searchParams);
+    next.set('view', view);
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-4xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Tráfego</h1>
-        <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
-          Visão de performance para gestor de tráfego e direção comercial
-        </p>
-        {user?.sector && (
-          <p className="text-[10px] text-gold-500/60 uppercase tracking-widest mt-2">Perfil atual: {user.sector}</p>
-        )}
+      <header className="space-y-5">
+        <div>
+          <h1 className="text-4xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Tráfego</h1>
+          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
+            Visão unificada de performance, campanhas e retorno comercial
+          </p>
+          {user?.sector && (
+            <p className="text-[10px] text-gold-500/60 uppercase tracking-widest mt-2">Perfil atual: {user.sector}</p>
+          )}
+        </div>
+
+        <div className="inline-flex rounded-2xl border border-border bg-card p-1.5 shadow-xl gap-1.5">
+          <button
+            type="button"
+            onClick={() => setView('overview')}
+            className={currentView === 'overview' ? 'px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest' : 'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-accent'}
+          >
+            Visão geral
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('campaigns')}
+            className={currentView === 'campaigns' ? 'px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest' : 'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-accent'}
+          >
+            Campanhas
+          </button>
+        </div>
       </header>
 
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
-          <CalendarRange className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">Resumo mensal automático</h2>
-        </div>
-        <div className="p-6 text-sm text-muted-foreground">
-          {latestWeekly ? (
-            <p>Base semanal mais recente: {latestWeekly.weekKey}. O painel consolida investimento, receita e ROI do mês corrente.</p>
-          ) : (
-            <p>Nenhum snapshot semanal disponível ainda.</p>
-          )}
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard icon={Users} label="Entradas" value={stats.total} />
-        <StatCard icon={CheckCircle2} label="Fechados" value={stats.closed} />
-        <StatCard icon={AlertTriangle} label="Perdidos" value={stats.lost} />
-        <StatCard icon={TrendingUp} label="Conversão" value={formatPercent(stats.conversion)} />
-        <StatCard icon={WalletCards} label="Investimento" value={formatCurrency(stats.totalSpend)} />
-        <StatCard icon={BadgeDollarSign} label="ROI" value={formatPercent(stats.roi)} />
-      </section>
-
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
-          <BarChart3 className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">Campanhas e conversão</h2>
-        </div>
-        <div className="overflow-x-auto scrollbar-none">
-          <table className="w-full text-sm border-t-4 border-t-gold-500/70">
-            <thead className="bg-gold-500/10 text-[10px] uppercase tracking-widest text-gold-500/80 border-b border-border">
-              <tr>
-                <th className="px-4 py-3 text-left">Campanha</th>
-                <th className="px-4 py-3 text-left">Leads</th>
-                <th className="px-4 py-3 text-left">Fechados</th>
-                <th className="px-4 py-3 text-left">Conversão</th>
-                <th className="px-4 py-3 text-left">Investimento</th>
-                <th className="px-4 py-3 text-left">Receita</th>
-                <th className="px-4 py-3 text-left">ROI</th>
-                <th className="px-4 py-3 text-left">Notas</th>
-                <th className="px-4 py-3 text-left">Follow-ups concluídos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.campaignRows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhuma campanha cadastrada.</td>
-                </tr>
+      {currentView === 'campaigns' ? (
+        <Campaigns embedded />
+      ) : (
+        <>
+          <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+              <CalendarRange className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-serif font-bold">Resumo mensal automático</h2>
+            </div>
+            <div className="p-6 text-sm text-muted-foreground">
+              {latestWeekly ? (
+                <p>Base semanal mais recente: {latestWeekly.weekKey}. O painel consolida investimento, receita e ROI do mês corrente.</p>
               ) : (
-                stats.campaignRows.map((row) => (
-                  <tr key={row.id} className="border-b border-border/50 hover:bg-accent/40">
-                    <td className="px-4 py-3 font-semibold">{row.name}</td>
-                    <td className="px-4 py-3">{row.entries}</td>
-                    <td className="px-4 py-3">{row.won}</td>
-                    <td className="px-4 py-3">{formatPercent(row.conversion)}</td>
-                    <td className="px-4 py-3">{formatCurrency(row.spend)}</td>
-                    <td className="px-4 py-3">{formatCurrency(row.revenue)}</td>
-                    <td className="px-4 py-3">{formatPercent(row.roi)}</td>
-                    <td className="px-4 py-3">{row.notes}</td>
-                    <td className="px-4 py-3">{row.followUpsDone}</td>
+                <p>Nenhum snapshot semanal disponível ainda.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            <StatCard icon={Users} label="Entradas" value={stats.total} />
+            <StatCard icon={CheckCircle2} label="Fechados" value={stats.closed} />
+            <StatCard icon={AlertTriangle} label="Perdidos" value={stats.lost} />
+            <StatCard icon={TrendingUp} label="Conversão" value={formatPercent(stats.conversion)} />
+            <StatCard icon={WalletCards} label="Investimento" value={formatCurrency(stats.totalSpend)} />
+            <StatCard icon={BadgeDollarSign} label="ROI" value={formatPercent(stats.roi)} />
+          </section>
+
+          <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+              <BarChart3 className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-serif font-bold">Campanhas e conversão</h2>
+            </div>
+            <div className="overflow-x-auto scrollbar-none">
+              <table className="w-full text-sm border-t-4 border-t-gold-500/70">
+                <thead className="bg-gold-500/10 text-[10px] uppercase tracking-widest text-gold-500/80 border-b border-border">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Campanha</th>
+                    <th className="px-4 py-3 text-left">Leads</th>
+                    <th className="px-4 py-3 text-left">Fechados</th>
+                    <th className="px-4 py-3 text-left">Conversão</th>
+                    <th className="px-4 py-3 text-left">Investimento</th>
+                    <th className="px-4 py-3 text-left">Receita</th>
+                    <th className="px-4 py-3 text-left">ROI</th>
+                    <th className="px-4 py-3 text-left">Notas</th>
+                    <th className="px-4 py-3 text-left">Follow-ups concluídos</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {stats.campaignRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Nenhuma campanha cadastrada.</td>
+                    </tr>
+                  ) : (
+                    stats.campaignRows.map((row) => (
+                      <tr key={row.id} className="border-b border-border/50 hover:bg-accent/40">
+                        <td className="px-4 py-3 font-semibold">{row.name}</td>
+                        <td className="px-4 py-3">{row.entries}</td>
+                        <td className="px-4 py-3">{row.won}</td>
+                        <td className="px-4 py-3">{formatPercent(row.conversion)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.spend)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.revenue)}</td>
+                        <td className="px-4 py-3">{formatPercent(row.roi)}</td>
+                        <td className="px-4 py-3">{row.notes}</td>
+                        <td className="px-4 py-3">{row.followUpsDone}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+              <Target className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-serif font-bold">Top criativos por volume de leads</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {stats.topCreative.length === 0 ? (
+                <p className="text-muted-foreground">Nenhum criativo com leads vinculados ainda.</p>
+              ) : (
+                stats.topCreative.map((item) => (
+                  <div key={item.adId} className="p-4 rounded-xl border border-border bg-background/40">
+                    <p className="text-xs uppercase tracking-widest text-gold-500/60">{item.campaignName}</p>
+                    <p className="font-bold mt-1">{item.adName}</p>
+                    <p className="text-sm text-muted-foreground mt-1">Leads: {item.leads}</p>
+                  </div>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
-          <Target className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">Top criativos por volume de leads</h2>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {stats.topCreative.length === 0 ? (
-            <p className="text-muted-foreground">Nenhum criativo com leads vinculados ainda.</p>
-          ) : (
-            stats.topCreative.map((item) => (
-              <div key={item.adId} className="p-4 rounded-xl border border-border bg-background/40">
-                <p className="text-xs uppercase tracking-widest text-gold-500/60">{item.campaignName}</p>
-                <p className="font-bold mt-1">{item.adName}</p>
-                <p className="text-sm text-muted-foreground mt-1">Leads: {item.leads}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
