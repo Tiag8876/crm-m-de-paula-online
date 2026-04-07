@@ -11,6 +11,10 @@ export type FunnelFieldType =
   | 'email'
   | 'phone'
   | 'number'
+  | 'currency'
+  | 'select'
+  | 'multiselect'
+  | 'user'
   | 'cpf'
   | 'cnpj';
 

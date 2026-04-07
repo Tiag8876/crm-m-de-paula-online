@@ -68,7 +68,21 @@ const ADMIN_SECTION_LINKS = [
   },
 ] as const;
 
-const FIELD_TYPE_OPTIONS: Array<{ value: FunnelFieldType; label: string }> = [
+const BASE_FIELD_TYPE_OPTIONS: Array<{ value: FunnelFieldType; label: string }> = [
+  { value: 'text', label: 'Texto curto' },
+  { value: 'textarea', label: 'Texto longo' },
+  { value: 'email', label: 'E-mail' },
+  { value: 'phone', label: 'Telefone' },
+  { value: 'number', label: 'Número' },
+  { value: 'currency', label: 'Moeda' },
+  { value: 'select', label: 'Seleção' },
+  { value: 'multiselect', label: 'Múltipla escolha' },
+  { value: 'user', label: 'Usuário responsável' },
+  { value: 'cpf', label: 'CPF' },
+  { value: 'cnpj', label: 'CNPJ' },
+];
+
+const CUSTOM_FIELD_TYPE_OPTIONS: Array<{ value: FunnelFieldType; label: string }> = [
   { value: 'text', label: 'Texto curto' },
   { value: 'textarea', label: 'Texto longo' },
   { value: 'email', label: 'E-mail' },
@@ -810,7 +824,7 @@ export function Settings() {
                                           onChange={(event) => upsertFunnelFieldByKey(funnel, field.key, baseDefinition, { type: event.target.value as FunnelFieldType })}
                                           className="w-full rounded-lg border border-border bg-background px-3 py-2"
                                         >
-                                          {FIELD_TYPE_OPTIONS.map((option) => (
+                                          {BASE_FIELD_TYPE_OPTIONS.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
                                           ))}
                                         </select>
@@ -878,7 +892,7 @@ export function Settings() {
                                         onChange={(event) => updateFunnelField(funnel.id, field.id, { type: event.target.value as FunnelFieldType })}
                                         className="w-full rounded-lg border border-border bg-background px-3 py-2"
                                       >
-                                        {FIELD_TYPE_OPTIONS.map((option) => (
+                                        {CUSTOM_FIELD_TYPE_OPTIONS.map((option) => (
                                           <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                       </select>
@@ -1183,7 +1197,7 @@ export function Settings() {
                       onChange={(event) => updateFieldDraft(targetFunnel.id, { type: event.target.value as FunnelFieldType })}
                       className="w-full rounded-lg border border-border bg-background px-4 py-3"
                     >
-                      {FIELD_TYPE_OPTIONS.map((option) => (
+                      {CUSTOM_FIELD_TYPE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
