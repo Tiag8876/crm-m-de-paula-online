@@ -87,6 +87,21 @@ const serializeTimestamp = (value) => {
   return parsed.toISOString();
 };
 
+const getEntitySyncTimestamp = (item) => {
+  if (!item || typeof item !== "object") return null;
+  return serializeTimestamp(item.lastInteractionAt || item.updatedAt || item.createdAt || null);
+};
+
+const isIncomingEntityNewer = (existingItem, incomingItem) => {
+  const existingTime = getEntitySyncTimestamp(existingItem);
+  const incomingTime = getEntitySyncTimestamp(incomingItem);
+
+  if (!incomingTime) return true;
+  if (!existingTime) return true;
+
+  return new Date(incomingTime).getTime() >= new Date(existingTime).getTime();
+};
+
 const isDatabaseConfigured = () => Boolean(databaseUrl);
 
 const createPool = () => {
@@ -315,6 +330,7 @@ const mergeOwnedEntities = (existingItems, incomingItems, userId) => {
     if (!canEdit) return item;
     const incomingVersion = incomingById.get(item.id);
     if (!incomingVersion) return item;
+    if (!isIncomingEntityNewer(item, incomingVersion)) return item;
     const nextOwner = Object.prototype.hasOwnProperty.call(incomingVersion, "ownerUserId")
       ? incomingVersion?.ownerUserId || undefined
       : item?.ownerUserId || undefined;
@@ -340,7 +356,11 @@ const mergeEntitiesById = (existingItems, incomingItems) => {
     if (item?.id) byId.set(item.id, item);
   }
   for (const item of incoming) {
-    if (item?.id) byId.set(item.id, item);
+    if (!item?.id) continue;
+    const current = byId.get(item.id);
+    if (!current || isIncomingEntityNewer(current, item)) {
+      byId.set(item.id, item);
+    }
   }
 
   return Array.from(byId.values());
