@@ -1,11 +1,11 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { AppUser, UserRole } from '@/types/auth';
 import { getUserAccessProfile } from '@/lib/access';
 
 const ACCESS_OPTIONS = [
   { value: 'commercial', label: 'Comercial' },
-  { value: 'traffic', label: 'Trafego' },
+  { value: 'traffic', label: 'Tráfego' },
 ] as const;
 
 type AccessOption = (typeof ACCESS_OPTIONS)[number]['value'];
@@ -53,7 +53,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
     event.preventDefault();
     setError(null);
     try {
-      const sector = role === 'admin' ? 'Diretoria' : accessProfile === 'traffic' ? 'Trafego' : 'Comercial';
+      const sector = role === 'admin' ? 'Diretoria' : accessProfile === 'traffic' ? 'Tráfego' : 'Comercial';
       await createUser({ name, email, password, role, sector, active: true });
       setName('');
       setEmail('');
@@ -70,7 +70,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
     if (!editingUser) return;
     setError(null);
     try {
-      const sector = editRole === 'admin' ? 'Diretoria' : editAccessProfile === 'traffic' ? 'Trafego' : 'Comercial';
+      const sector = editRole === 'admin' ? 'Diretoria' : editAccessProfile === 'traffic' ? 'Tráfego' : 'Comercial';
       await updateUser(editingUser.id, {
         name: editName,
         email: editEmail,
@@ -139,7 +139,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
           <button type="submit" className="rounded-lg bg-primary text-primary-foreground font-bold uppercase tracking-widest px-4 py-2">Criar</button>
         </form>
         <p className="text-xs text-muted-foreground mt-3">
-          Categoria de acesso: Admin ve tudo. Comercial ve Leads e Relatorios. Trafego ve Campanhas e Painel de Trafego.
+          Categoria de acesso: Admin vê tudo. Comercial vê Leads e Relatórios. Tráfego vê Painel de Tráfego.
         </p>
       </section>
 
@@ -220,3 +220,4 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
     </div>
   );
 }
+

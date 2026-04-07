@@ -124,7 +124,7 @@ export function Layout() {
               }
             >
               <item.icon className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
-              {!collapsed ? item.label : null}
+              {!collapsed ? normalizePtBrText(item.label) : null}
             </NavLink>
           ))}
         </nav>
@@ -143,7 +143,7 @@ export function Layout() {
             {!collapsed ? (
               <div className="overflow-hidden">
                 <p className="font-bold text-xs text-gold-100 truncate tracking-wider uppercase">{user?.name}</p>
-                <p className="text-[10px] text-gold-500/60 truncate tracking-tight">{user?.sector} - {user?.role}</p>
+                <p className="text-[10px] text-gold-500/60 truncate tracking-tight">{normalizePtBrText(user?.sector || "")} - {normalizePtBrText(user?.role || "")}</p>
               </div>
             ) : null}
           </div>
@@ -225,3 +225,4 @@ export function Layout() {
     </div>
   );
 }
+
