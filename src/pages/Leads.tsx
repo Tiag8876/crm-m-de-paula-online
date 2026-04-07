@@ -26,7 +26,7 @@ const buildFunnelGroups = (items: FunnelConfig[], areas: Array<{ id: string; nam
   const grouped = new Map<string, { label: string; funnels: FunnelConfig[] }>();
   for (const funnel of items) {
     const areaLabel = areas.find((area) => area.id === funnel.areaOfLawId)?.name;
-    const key = areaLabel || (funnel.operation === 'prospecting' ? 'Funis de prospecÃƒÂ§ÃƒÂ£o sem ÃƒÂ¡rea' : 'Funis gerais');
+    const key = areaLabel || (funnel.operation === 'prospecting' ? 'Funis de prospecÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o sem ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea' : 'Funis gerais');
     if (!grouped.has(key)) {
       grouped.set(key, { label: key, funnels: [] });
     }
@@ -143,14 +143,14 @@ export function Leads() {
   const commercialFunnelGroups = buildFunnelGroups(commercialFunnels, areasOfLaw);
   const prospectingFunnelGroups = buildFunnelGroups(prospectingFunnels, areasOfLaw);
   const createFunnelGroups = [
-    ...commercialFunnelGroups.map((group) => ({ label: `Comercial Ã‚Â· ${group.label}`, funnels: group.funnels })),
-    ...prospectingFunnelGroups.map((group) => ({ label: `ProspecÃƒÂ§ÃƒÂ£o Ã‚Â· ${group.label}`, funnels: group.funnels })),
+    ...commercialFunnelGroups.map((group) => ({ label: `Comercial ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${group.label}`, funnels: group.funnels })),
+    ...prospectingFunnelGroups.map((group) => ({ label: `ProspecÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${group.label}`, funnels: group.funnels })),
   ];
   const funnelOptions = createFunnelGroups.flatMap((group) =>
     group.funnels.map((funnel) => ({
       value: funnel.id,
       label: funnel.name,
-      description: funnel.operation === 'prospecting' ? 'Funil de prospecÃƒÂ§ÃƒÂ£o' : 'Funil comercial',
+      description: funnel.operation === 'prospecting' ? 'Funil de prospecÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o' : 'Funil comercial',
       group: group.label,
     })),
   );
@@ -163,16 +163,16 @@ export function Leads() {
   const areaOptions = areasOfLaw.map((area) => ({
     value: area.id,
     label: area.name,
-    description: area.description || 'ÃƒÂrea de atuaÃƒÂ§ÃƒÂ£o',
-    group: 'ÃƒÂreas',
+    description: area.description || 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea de atuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o',
+    group: 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âreas',
   }));
   const serviceOptions = services
     .filter((service) => isProspecting || !filterAreaId || service.areaOfLawId === filterAreaId)
     .map((service) => ({
       value: service.id,
       label: service.name,
-      description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'Serviço',
-      group: 'Serviços',
+      description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'ServiÃƒÂ§o',
+      group: 'ServiÃƒÂ§os',
     }));
   const statusOptions = sortedStages.map((stage) => ({
     value: stage.id,
@@ -183,14 +183,14 @@ export function Leads() {
   const createAreaOptions = areasOfLaw.map((area) => ({
     value: area.id,
     label: area.name,
-    description: area.description || 'ÃƒÂrea de atuaÃƒÂ§ÃƒÂ£o',
-    group: 'ÃƒÂreas',
+    description: area.description || 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea de atuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o',
+    group: 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âreas',
   }));
   const createServiceOptions = createAvailableServices.map((service) => ({
     value: service.id,
     label: service.name,
-    description: createFunnelArea?.name || areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'Serviço',
-    group: 'Serviços',
+    description: createFunnelArea?.name || areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'ServiÃƒÂ§o',
+    group: 'ServiÃƒÂ§os',
   }));
   const leadSourceOptions = (leadSources || []).map((source) => ({
     value: source.id,
@@ -426,12 +426,12 @@ export function Leads() {
       if (!reasonLabel) return;
       const matched = LOSS_REASON_OPTIONS.find((option) => option.label.toLowerCase() === reasonLabel.trim().toLowerCase());
       if (!matched) {
-        alert('Motivo invÃƒÂ¡lido. Use um dos motivos listados.');
+        alert('Motivo invÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lido. Use um dos motivos listados.');
         return;
       }
-      const detail = prompt('Descreva o motivo da perda com clareza (mÃƒÂ­nimo 12 caracteres):') || '';
+      const detail = prompt('Descreva o motivo da perda com clareza (mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­nimo 12 caracteres):') || '';
       if (!isValidLossReasonDetail(detail)) {
-        alert('Motivo de perda invÃƒÂ¡lido. Evite justificativa genÃƒÂ©rica como "nÃƒÂ£o respondeu".');
+        alert('Motivo de perda invÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lido. Evite justificativa genÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©rica como "nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o respondeu".');
         return;
       }
       const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
@@ -472,16 +472,16 @@ export function Leads() {
   };
 
   const searchPlaceholder = isProspecting
-    ? 'Buscar por clÃƒÂ­nica, contato, telefone ou CNPJ...'
+    ? 'Buscar por clÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­nica, contato, telefone ou CNPJ...'
     : 'Buscar por nome, telefone ou CPF...';
 
   return (
     <div className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">GestÃƒÂ£o de Leads</h1>
+          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Leads</h1>
           <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-[11px]">
-            Um ÃƒÂºnico kanban para operar qualquer funil do escritÃƒÂ³rio
+            Um ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºnico kanban para operar qualquer funil do escritÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rio
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
@@ -566,16 +566,16 @@ export function Leads() {
                 setFilterAreaId(nextValue);
                 setFilterServiceId('');
               }}
-              placeholder="Buscar área"
-              emptyLabel="Todas as ÃƒÂ¡reas"
+              placeholder="Buscar ÃƒÂ¡rea"
+              emptyLabel="Todas as ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡reas"
             />
           )}
           <PremiumSelect
             options={serviceOptions}
             value={filterServiceId}
             onChange={setFilterServiceId}
-            placeholder="Buscar serviço"
-            emptyLabel="Todos os serviÃƒÂ§os"
+            placeholder="Buscar serviÃƒÂ§o"
+            emptyLabel="Todos os serviÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§os"
           />
           <PremiumSelect
             options={statusOptions}
@@ -688,7 +688,7 @@ export function Leads() {
                   <th className="px-6 py-4">Contato</th>
                   <th className="px-6 py-4">Telefone</th>
                   <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">AÃƒÂ§ÃƒÂµes</th>
+                  <th className="px-6 py-4 text-right">AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</th>
                 </tr>
               </thead>
               <tbody>
@@ -779,7 +779,7 @@ export function Leads() {
                             {getLeadServiceIds(lead)
                               .map((serviceId) => services.find((service) => service.id === serviceId)?.name)
                               .filter(Boolean)
-                              .join(' Ã¢â‚¬Â¢ ')}
+                              .join(' ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ ')}
                           </p>
                         )}
                       </div>
@@ -799,10 +799,10 @@ export function Leads() {
               <thead className="bg-accent text-primary font-black text-[10px] uppercase tracking-[0.2em] border-b border-border">
                 <tr>
                   <th className="px-8 py-5">Nome do Cliente</th>
-                  <th className="px-8 py-5">ÃƒÂrea JurÃƒÂ­dica</th>
+                  <th className="px-8 py-5">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea JurÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­dica</th>
                   <th className="px-8 py-5">Status</th>
                   <th className="px-8 py-5">Valor Est.</th>
-                  <th className="px-8 py-5 text-right">AÃƒÂ§ÃƒÂµes</th>
+                  <th className="px-8 py-5 text-right">AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -823,7 +823,7 @@ export function Leads() {
                         </td>
                         <td className="px-8 py-5">
                           <div className="flex flex-col gap-1">
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'NÃƒÂ£o definido'}</span>
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{areasOfLaw.find((area) => area.id === lead.areaOfLawId)?.name || 'NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o definido'}</span>
                             {getLeadServiceIds(lead).length > 0 && (
                               <span className="text-[10px] text-muted-foreground">
                                 {getLeadServiceIds(lead)
@@ -873,7 +873,7 @@ export function Leads() {
             )}
             <div className="mb-5 flex items-start justify-between gap-4 md:mb-6">
               <div>
-                <h2 className="text-xl font-serif font-bold gold-text-gradient md:text-2xl">{createIsProspecting ? 'Novo cadastro em prospecção' : 'Novo lead comercial'}</h2>
+                <h2 className="text-xl font-serif font-bold gold-text-gradient md:text-2xl">{createIsProspecting ? 'Novo cadastro em prospecÃƒÂ§ÃƒÂ£o' : 'Novo lead comercial'}</h2>
                 <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Funil de entrada: {createFunnel.name}</p>
               </div>
               <button
@@ -908,12 +908,12 @@ export function Leads() {
               {createIsProspecting ? (
                 <>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Conta ou clínica</label>
-                    <input name="clinicName" required placeholder="Nome da conta ou clínica" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Conta ou clÃƒÂ­nica</label>
+                    <input name="clinicName" required placeholder="Nome da conta ou clÃƒÂ­nica" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Responsável principal</label>
-                    <input name="contactName" required placeholder="Responsável principal" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">ResponsÃƒÂ¡vel principal</label>
+                    <input name="contactName" required placeholder="ResponsÃƒÂ¡vel principal" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).label}</label>
@@ -936,12 +936,12 @@ export function Leads() {
                     <input name="neighborhood" placeholder={getBaseField('neighborhood', 'Bairro', 'Bairro').placeholder || 'Bairro'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Recepção ou contato secundário</label>
-                    <input name="receptionistName" placeholder="Recepção ou contato secundário" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">RecepÃƒÂ§ÃƒÂ£o ou contato secundÃƒÂ¡rio</label>
+                    <input name="receptionistName" placeholder="RecepÃƒÂ§ÃƒÂ£o ou contato secundÃƒÂ¡rio" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
                   </div>
                   {createFunnelArea && (
                     <div className="md:col-span-2 rounded-2xl border border-border bg-background/30 p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-gold-500/70">Área de atuação vinculada ao funil</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gold-500/70">ÃƒÂrea de atuaÃƒÂ§ÃƒÂ£o vinculada ao funil</p>
                       <p className="mt-1.5 text-sm font-semibold">{createFunnelArea.name}</p>
                       {createFunnelArea.description && <p className="mt-1.5 text-xs text-muted-foreground">{createFunnelArea.description}</p>}
                     </div>
@@ -951,8 +951,8 @@ export function Leads() {
                     options={createServiceOptions}
                     value={createProspectServiceId}
                     onChange={setCreateProspectServiceId}
-                    placeholder="Buscar serviço"
-                    emptyLabel="Serviço ofertado"
+                    placeholder="Buscar serviÃƒÂ§o"
+                    emptyLabel="ServiÃƒÂ§o ofertado"
                     className="md:col-span-2"
                   />
                   {createCustomFieldSchema.map((field) => (
@@ -982,100 +982,96 @@ export function Leads() {
                     </div>
                   ))}
                 </>
-              ) : (
+              ) :(
                 <>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('name', 'Nome completo', 'Nome do cliente', true).label}</label>
-                      <input required={Boolean(getBaseField('name', 'Nome completo', 'Nome do cliente', true).required)} name="name" type="text" placeholder={getBaseField('name', 'Nome completo', 'Nome do cliente', true).placeholder || 'Nome do cliente'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('phone', 'Telefone', 'Telefone', true).label}</label>
-                      <input required={Boolean(getBaseField('phone', 'Telefone', 'Telefone', true).required)} name="phone" type="tel" placeholder={getBaseField('phone', 'Telefone', 'Telefone', true).placeholder || 'Telefone'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
-                      <input name="email" type="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('name', 'Nome completo', 'Nome do cliente', true).label}</label>
+                    <input required={Boolean(getBaseField('name', 'Nome completo', 'Nome do cliente', true).required)} name="name" type="text" placeholder={getBaseField('name', 'Nome completo', 'Nome do cliente', true).placeholder || 'Nome do cliente'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Área de atuação</label>
+                    <PremiumSelect
+                      name="areaOfLawId"
+                      options={createAreaOptions}
+                      value={selectedArea}
+                      onChange={setSelectedArea}
+                      placeholder="Buscar área"
+                      emptyLabel="Selecione a área"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('phone', 'Telefone', 'Telefone', true).label}</label>
+                    <input required={Boolean(getBaseField('phone', 'Telefone', 'Telefone', true).required)} name="phone" type="tel" placeholder={getBaseField('phone', 'Telefone', 'Telefone', true).placeholder || 'Telefone'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Serviço</label>
+                    <div className="space-y-2 rounded-xl border border-border bg-background/20 p-2.5">
+                      {services.filter((service) => service.areaOfLawId === selectedArea).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Nenhum serviço vinculado a esta área.</p>
+                      ) : (
+                        services
+                          .filter((service) => service.areaOfLawId === selectedArea)
+                          .map((service) => (
+                            <label key={service.id} className="flex items-center gap-3 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm">
+                              <input type="checkbox" name="serviceIds" value={service.id} className="rounded border-border bg-background" />
+                              <span>{service.name}</span>
+                            </label>
+                          ))
+                      )}
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <div>
-                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Área de atuação</label>
-                        <PremiumSelect
-                          name="areaOfLawId"
-                          options={createAreaOptions}
-                          value={selectedArea}
-                          onChange={setSelectedArea}
-                          placeholder="Buscar área"
-                          emptyLabel="Selecione a área"
-                        />
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
+                    <input name="email" type="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Origem do lead</label>
+                    <PremiumSelect
+                      name="sourceId"
+                      options={leadSourceOptions}
+                      value={createLeadSourceId}
+                      onChange={(nextValue) => {
+                        setCreateLeadSourceId(nextValue);
+                        setCreateCampaignId('');
+                      }}
+                      placeholder="Buscar origem"
+                      emptyLabel="Selecione a origem"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Valor estimado</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold-500/50" />
+                      <input name="estimatedValue" type="number" className="w-full rounded-xl border border-border bg-background/40 py-2.5 pl-10 pr-3 text-sm" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">CPF</label>
+                    <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
+                  </div>
+                  {createLeadSource?.kind === 'campaign' ? (
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Serviço</label>
-                      <div className="space-y-2 rounded-xl border border-border bg-background/20 p-2.5">
-                        {services.filter((service) => service.areaOfLawId === selectedArea).length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Nenhum serviço vinculado a esta área.</p>
-                        ) : (
-                          services
-                            .filter((service) => service.areaOfLawId === selectedArea)
-                            .map((service) => (
-                              <label key={service.id} className="flex items-center gap-3 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm">
-                                <input type="checkbox" name="serviceIds" value={service.id} className="rounded border-border bg-background" />
-                                <span>{service.name}</span>
-                              </label>
-                            ))
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Origem do lead</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Campanha</label>
                       <PremiumSelect
-                        name="sourceId"
-                        options={leadSourceOptions}
-                        value={createLeadSourceId}
-                        onChange={(nextValue) => {
-                          setCreateLeadSourceId(nextValue);
-                          setCreateCampaignId('');
-                        }}
-                        placeholder="Buscar origem"
-                        emptyLabel="Selecione a origem"
+                        name="campaignId"
+                        options={createCampaignOptions}
+                        value={createCampaignId}
+                        onChange={setCreateCampaignId}
+                        placeholder="Buscar campanha"
+                        emptyLabel="Selecione a campanha"
                       />
                     </div>
-                    {createLeadSource?.kind === 'campaign' ? (
-                      <div className="md:col-span-2">
-                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Campanha</label>
-                        <PremiumSelect
-                          name="campaignId"
-                          options={createCampaignOptions}
-                          value={createCampaignId}
-                          onChange={setCreateCampaignId}
-                          placeholder="Buscar campanha"
-                          emptyLabel="Selecione a campanha"
-                        />
-                      </div>
-                    ) : createLeadSourceId ? (
-                      <div className="md:col-span-2">
-                        <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Detalhe da origem</label>
-                        <input
-                          name="sourceDetails"
-                          type="text"
-                          placeholder="Ex.: indicação de cliente antigo, parceria local, evento"
-                          className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
-                        />
-                      </div>
-                    ) : null}
+                  ) : createLeadSourceId ? (
                     <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor Estimado</label>
-                      <div className="relative">
-                        <DollarSign className="w-4 h-4 text-gold-500/50 absolute left-4 top-1/2 -translate-y-1/2" />
-                        <input name="estimatedValue" type="number" className="w-full rounded-xl border border-border bg-background/40 py-2.5 pl-10 pr-3 text-sm" />
-                      </div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Detalhe da origem</label>
+                      <input
+                        name="sourceDetails"
+                        type="text"
+                        placeholder="Ex.: indicação de cliente antigo, parceria local, evento"
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">CPF</label>
-                      <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                    </div>
-                  </div>
+                  ) : null}
                   {createCustomFieldSchema.map((field) => (
                     <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
                       <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
@@ -1104,7 +1100,7 @@ export function Leads() {
                   ))}
                 </>
               )}
-              <div className="md:col-span-2">
+              <div>
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir responsável</label>
                 <AssigneeSelect
                   users={activeAssignableUsers}
