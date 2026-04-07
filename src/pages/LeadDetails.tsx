@@ -425,8 +425,8 @@ export function LeadDetails() {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Área & Serviço</p>
-            <div className="flex flex-col gap-2 mt-1">
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Área de atuação</p>
+            <div className="mt-1">
               <PremiumSelect
                 options={areaOptions}
                 value={lead.areaOfLawId || ''}
@@ -435,22 +435,6 @@ export function LeadDetails() {
                 emptyLabel="Selecione a área"
                 className="bg-background/40 shadow-none"
               />
-              {lead.areaOfLawId && (
-                <div className="space-y-2">
-                  <PremiumMultiSelect
-                    options={serviceOptions}
-                    values={leadServiceIds}
-                    onChange={updateLeadServices}
-                    placeholder="Buscar serviço"
-                    emptyLabel={availableServices.length === 0 ? 'Nenhum serviço nesta área' : 'Selecione um ou mais serviços'}
-                    emptyDescription={availableServices.length === 0 ? 'Cadastre serviços dentro da área de atuação' : 'Serviços vinculados à área'}
-                    className="bg-background/40 shadow-none"
-                  />
-                  {availableServices.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Esta área ainda não tem serviços vinculados.</p>
-                  ) : null}
-                </div>
-              )}
             </div>
             {lead.estimatedValue && (
               <div className="flex items-center gap-3 text-emerald-500 font-bold mt-2">
@@ -460,8 +444,25 @@ export function LeadDetails() {
             )}
           </div>
           <div className="space-y-1">
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Serviços</p>
+            <div className="mt-1">
+              <PremiumMultiSelect
+                options={serviceOptions}
+                values={leadServiceIds}
+                onChange={updateLeadServices}
+                placeholder="Buscar serviço"
+                emptyLabel={lead.areaOfLawId ? (availableServices.length === 0 ? 'Nenhum serviço nesta área' : 'Selecione um ou mais serviços') : 'Selecione a área primeiro'}
+                emptyDescription={lead.areaOfLawId ? (availableServices.length === 0 ? 'Cadastre serviços dentro da área de atuação' : 'Serviços vinculados à área') : 'Escolha uma área de atuação para carregar os serviços'}
+                className="bg-background/40 shadow-none"
+              />
+            </div>
+            {lead.areaOfLawId && availableServices.length === 0 ? (
+              <p className="text-xs text-muted-foreground mt-2">Esta área ainda não tem serviços vinculados.</p>
+            ) : null}
+          </div>
+          <div className="space-y-1">
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Origem do Lead</p>
-            <div className="flex flex-col gap-2 mt-1">
+            <div className="mt-1">
               <PremiumSelect
                 options={sourceOptions}
                 value={lead.sourceId || ''}
@@ -478,8 +479,29 @@ export function LeadDetails() {
                 emptyLabel="Selecione a origem"
                 className="bg-background/40 shadow-none"
               />
-
-              {selectedSource?.kind === 'campaign' ? (
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Responsável</p>
+            <div className="mt-1">
+              <AssigneeSelect
+                users={selectableUsers}
+                value={lead.ownerUserId}
+                onChange={(nextValue) => updateLead(lead.id, { ownerUserId: nextValue || undefined })}
+                placeholder="Selecione um vendedor"
+                unassignedLabel="Sem atribuição definida"
+              />
+            </div>
+            {lead.status === 'perdido' && lead.lossReasonCode && (
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
+              </p>
+            )}
+          </div>
+          {selectedSource?.kind === 'campaign' ? (
+            <div className="space-y-1 lg:col-span-2">
+              <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Campanha</p>
+              <div className="mt-1">
                 <PremiumSelect
                   options={campaignOptions}
                   value={lead.campaignId || ''}
@@ -500,27 +522,34 @@ export function LeadDetails() {
                   emptyLabel="Selecione a campanha"
                   className="bg-background/40 shadow-none"
                 />
-              ) : selectedSource ? (
-                <input
-                  type="text"
-                  value={lead.sourceDetails || ''}
-                  onChange={(e) => updateLead(lead.id, { sourceDetails: e.target.value || undefined })}
-                  placeholder="Detalhe da origem"
-                  className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-                />
-              ) : null}
-
+              </div>
+            </div>
+          ) : selectedSource ? (
+            <div className="space-y-1 lg:col-span-2">
+              <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Detalhe da origem</p>
+              <input
+                type="text"
+                value={lead.sourceDetails || ''}
+                onChange={(e) => updateLead(lead.id, { sourceDetails: e.target.value || undefined })}
+                placeholder="Descreva a origem"
+                className="mt-1 w-full bg-background/40 border border-border rounded-lg px-3 py-3 text-sm text-foreground focus:outline-none focus:border-primary"
+              />
+            </div>
+          ) : null}
+          {selectedSource?.kind === 'campaign' ? (
+            <div className="space-y-1 lg:col-span-2">
+              <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Criativo</p>
               <button
                 onClick={() => setIsAdSelectorOpen(true)}
-                disabled={!lead.campaignId || selectedSource?.kind !== 'campaign'}
-                className="w-full bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground text-left flex items-center justify-between hover:border-gold-500/50 disabled:opacity-50"
+                disabled={!lead.campaignId}
+                className="mt-1 w-full bg-background/40 border border-border rounded-lg px-3 py-3 text-sm text-foreground text-left flex items-center justify-between hover:border-gold-500/50 disabled:opacity-50"
               >
-                <span>{ad ? ad.name : 'Selecionar Criativo'}</span>
+                <span>{ad ? ad.name : 'Selecionar criativo'}</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
 
               {ad && ad.mediaUrl && (
-                <div className="mt-2 rounded-xl overflow-hidden border border-border bg-background aspect-video relative">
+                <div className="mt-2 rounded-xl overflow-hidden border border-border bg-background aspect-video relative max-w-md">
                   {ad.mediaType === 'video' ? (
                     <video src={ad.mediaUrl} className="w-full h-full object-cover" controls />
                   ) : (
@@ -532,7 +561,7 @@ export function LeadDetails() {
                 </div>
               )}
             </div>
-          </div>
+          ) : null}
           {currentFieldSchema.map((field) => (
             <div key={field.id} className={field.type === 'textarea' ? 'space-y-1 md:col-span-2 lg:col-span-4' : 'space-y-1'}>
               <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">{field.label}</p>
