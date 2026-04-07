@@ -740,7 +740,7 @@ export const useStore = create<AppState>()(
               const key = `idle:${lead.id}`;
               candidates.set(key, {
                 key,
-                title: 'Lead sem acao',
+      title: 'Lead sem ação',
                 description: `${lead.name} esta sem atualizacao ha ${Math.floor(idleHours)}h.`,
                 category: 'idle',
                 leadId: lead.id,
@@ -1393,7 +1393,7 @@ export const useStore = create<AppState>()(
             logs: [{
               id: uuidv4(),
               type: 'lead_created',
-              content: 'Clinica registrada na prospeccao',
+      content: 'Clínica registrada na prospecção',
               timestamp: getSPTime(),
             }],
           }],

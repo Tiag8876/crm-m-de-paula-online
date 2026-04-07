@@ -61,7 +61,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
       setRole('user');
       setAccessProfile('commercial');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao criar usuario');
+      setError(err instanceof Error ? err.message : 'Falha ao criar usuário');
     }
   };
 
@@ -81,17 +81,17 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
       });
       setEditingUserId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao atualizar usuario');
+      setError(err instanceof Error ? err.message : 'Falha ao atualizar usuário');
     }
   };
 
   const onDeleteUser = async (targetUser: AppUser) => {
     if (targetUser.id === currentUser?.id) {
-      setError('Nao e permitido excluir o proprio usuario logado');
+      setError('Não é permitido excluir o próprio usuário logado');
       return;
     }
 
-    const confirmed = window.confirm(`Deseja realmente excluir o usuario "${targetUser.name}"? Esta acao nao pode ser desfeita.`);
+    const confirmed = window.confirm(`Deseja realmente excluir o usuário "${targetUser.name}"? Esta ação não pode ser desfeita.`);
     if (!confirmed) {
       return;
     }
@@ -103,7 +103,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
         setEditingUserId(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao excluir usuario');
+      setError(err instanceof Error ? err.message : 'Falha ao excluir usuário');
     }
   };
 
@@ -111,19 +111,19 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       {!embedded && (
         <header>
-          <h1 className="text-4xl font-serif font-bold gold-text-gradient">Administracao de Usuarios</h1>
-          <p className="text-muted-foreground">Cadastre usuarios, setor, perfil e credenciais. Apenas admin pode editar.</p>
+          <h1 className="text-4xl font-serif font-bold gold-text-gradient">Administração de Usuários</h1>
+          <p className="text-muted-foreground">Cadastre usuários, setor, perfil e credenciais. Apenas administradores podem editar.</p>
         </header>
       )}
 
       <section className="bg-card border border-border rounded-xl p-6">
-        <h2 className="text-xl font-semibold mb-4">Novo Usuario</h2>
+        <h2 className="text-xl font-semibold mb-4">Novo Usuário</h2>
         <form onSubmit={onCreateUser} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Nome" className="rounded-lg border border-border bg-background px-3 py-2" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="Email" className="rounded-lg border border-border bg-background px-3 py-2" />
           <input value={password} onChange={(e) => setPassword(e.target.value)} required type="password" placeholder="Senha inicial" className="rounded-lg border border-border bg-background px-3 py-2" />
           <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className="rounded-lg border border-border bg-background px-3 py-2">
-            <option value="user">Usuario</option>
+            <option value="user">Usuário</option>
             <option value="admin">Administrador</option>
           </select>
           <select
@@ -144,7 +144,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
       </section>
 
       <section className="bg-card border border-border rounded-xl p-6">
-        <h2 className="text-xl font-semibold mb-4">Usuarios Cadastrados</h2>
+        <h2 className="text-xl font-semibold mb-4">Usuários Cadastrados</h2>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
@@ -154,7 +154,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
                 <th className="py-2">Setor</th>
                 <th className="py-2">Perfil</th>
                 <th className="py-2">Status</th>
-                <th className="py-2">Acoes</th>
+                <th className="py-2">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -186,12 +186,12 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
 
       {editingUser && (
         <section className="bg-card border border-border rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4">Editar Usuario</h2>
+          <h2 className="text-xl font-semibold mb-4">Editar Usuário</h2>
           <form onSubmit={onSaveEdit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input value={editName} onChange={(e) => setEditName(e.target.value)} required className="rounded-lg border border-border bg-background px-3 py-2" />
             <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required type="email" className="rounded-lg border border-border bg-background px-3 py-2" />
             <select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} className="rounded-lg border border-border bg-background px-3 py-2">
-              <option value="user">Usuario</option>
+              <option value="user">Usuário</option>
               <option value="admin">Administrador</option>
             </select>
             <select
@@ -206,7 +206,7 @@ export function UsersAdminPage({ embedded = false }: { embedded?: boolean }) {
             </select>
             <input value={editPassword} onChange={(e) => setEditPassword(e.target.value)} type="password" placeholder="Nova senha (opcional)" className="rounded-lg border border-border bg-background px-3 py-2" />
             <label className="flex items-center gap-2 text-sm">
-              <input checked={editActive} onChange={(e) => setEditActive(e.target.checked)} type="checkbox" /> Usuario ativo
+              <input checked={editActive} onChange={(e) => setEditActive(e.target.checked)} type="checkbox" /> Usuário ativo
             </label>
             <div className="md:col-span-2 flex gap-3">
               <button type="submit" className="rounded-lg bg-primary text-primary-foreground font-bold uppercase tracking-widest px-4 py-2">Salvar</button>

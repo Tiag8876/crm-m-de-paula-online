@@ -26,14 +26,14 @@ export function LoginPage() {
 
         if (!health.ok || !payload?.ok) {
           if (mounted) {
-            setConnectionError('Nao foi possivel conectar ao servidor do sistema.');
+            setConnectionError('Não foi possível conectar ao servidor do sistema.');
             setCheckingSetup(false);
           }
           return;
         }
       } catch {
         if (mounted) {
-          setConnectionError('Nao foi possivel conectar ao servidor do sistema.');
+          setConnectionError('Não foi possível conectar ao servidor do sistema.');
           setCheckingSetup(false);
         }
         return;
@@ -46,8 +46,8 @@ export function LoginPage() {
           if (status.needsSetup) {
             setProvisioningMessage(
               status.publicSetupAllowed
-                ? 'Esta instancia ainda nao foi provisionada. Utilize a rota protegida de setup apenas pela equipe responsavel.'
-                : 'Esta instancia ainda nao foi provisionada. O administrador deve concluir o provisionamento interno antes do primeiro acesso.'
+                ? 'Esta instância ainda não foi provisionada. Utilize a rota protegida de setup apenas pela equipe responsável.'
+                : 'Esta instância ainda não foi provisionada. O administrador deve concluir o provisionamento interno antes do primeiro acesso.'
             );
           } else {
             setProvisioningMessage(null);
@@ -96,7 +96,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
         <h1 className="text-3xl font-serif font-bold gold-text-gradient mb-2">CRM M de Paula</h1>
-        <p className="text-sm text-muted-foreground mb-8">Acesse com seu usuario e senha.</p>
+        <p className="text-sm text-muted-foreground mb-8">Acesse com seu usuário e senha.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           {connectionError && (

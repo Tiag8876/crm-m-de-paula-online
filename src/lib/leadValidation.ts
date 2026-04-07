@@ -10,7 +10,7 @@ export const LOSS_REASON_OPTIONS = [
 ] as const;
 
 const WEAK_LOSS_REASON_PATTERNS = [
-  /nao respondeu/i,
+  /não respondeu/i,
   /sem resposta/i,
   /sumiu/i,
 ];
@@ -38,7 +38,7 @@ export function validateLeadStatusChange(lead: Lead, nextStatus: string): string
   }
 
   if (nextStatus === 'em_contato' && !hasLeadInteraction(lead)) {
-    return 'Registre a primeira interacao (observacao, tarefa ou follow-up) antes de avancar para Em Contato.';
+  return 'Registre a primeira interação (observação, tarefa ou follow-up) antes de avançar para Em Contato.';
   }
 
   if (nextStatus === 'reuniao_agendada' && (lead.followUps || []).length === 0) {

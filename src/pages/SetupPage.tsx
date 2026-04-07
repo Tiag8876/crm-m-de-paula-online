@@ -26,7 +26,7 @@ export function SetupPage() {
       const apiBase = getApiBase();
       try {
         const health = await fetch(`${apiBase}/api/health`);
-        if (!health.ok) throw new Error('API indisponivel');
+        if (!health.ok) throw new Error('API indisponível');
         if (!mounted) return;
         setBackendReachable(true);
 
@@ -93,30 +93,30 @@ export function SetupPage() {
           <p className="text-xs uppercase tracking-[0.22em] text-primary mb-3">Provisionamento Inicial</p>
           <h1 className="text-4xl font-serif font-bold gold-text-gradient mb-4">CRM M de Paula</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Esta tela existe apenas para provisionamento controlado da instancia. Em ambiente profissional, o recomendado e criar o administrador inicial por variaveis seguras do servidor.
+            Esta tela existe apenas para provisionamento controlado da instância. Em ambiente profissional, o recomendado é criar o administrador inicial por variáveis seguras do servidor.
           </p>
         </section>
 
         {!publicSetupAllowed && (
           <section className="rounded-2xl border border-amber-500/30 bg-card p-8">
-            <h2 className="text-xl font-serif font-bold mb-3">Provisionamento Publico Desabilitado</h2>
+            <h2 className="text-xl font-serif font-bold mb-3">Provisionamento Público Desabilitado</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Esta instancia nao permite criar administrador pela interface publica. Configure `ADMIN_BOOTSTRAP_NAME`,
-              `ADMIN_BOOTSTRAP_EMAIL` e `ADMIN_BOOTSTRAP_PASSWORD` no ambiente do servidor e faca um novo deploy.
+              Esta instância não permite criar administrador pela interface pública. Configure `ADMIN_BOOTSTRAP_NAME`,
+              `ADMIN_BOOTSTRAP_EMAIL` e `ADMIN_BOOTSTRAP_PASSWORD` no ambiente do servidor e faça um novo deploy.
             </p>
             {missingBootstrapFields.length > 0 && (
               <p className="mt-4 text-sm text-red-300">
-                Variaveis ausentes no runtime: {missingBootstrapFields.join(', ')}
+                Variáveis ausentes no runtime: {missingBootstrapFields.join(', ')}
               </p>
             )}
             {bootstrapNameFallbackApplied && (
               <p className="mt-4 text-sm text-amber-200">
-                `ADMIN_BOOTSTRAP_NAME` pode ficar vazio. O sistema vai usar "Administrador do Sistema" como nome padrao.
+                `ADMIN_BOOTSTRAP_NAME` pode ficar vazio. O sistema vai usar "Administrador do Sistema" como nome padrão.
               </p>
             )}
             {bootstrapConfigured && (
               <p className="mt-4 text-sm text-emerald-300">
-                As credenciais de provisionamento ja estao configuradas no ambiente. Basta publicar o deploy atualizado para concluir a criacao do administrador.
+                As credenciais de provisionamento já estão configuradas no ambiente. Basta publicar o deploy atualizado para concluir a criação do administrador.
               </p>
             )}
           </section>
@@ -130,7 +130,7 @@ export function SetupPage() {
 
           {!backendReachable && (
             <div className="mb-5 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
-              Nao foi possivel acessar a API configurada para o sistema. Verifique a conexao e tente novamente.
+              Não foi possível acessar a API configurada para o sistema. Verifique a conexão e tente novamente.
             </div>
           )}
 

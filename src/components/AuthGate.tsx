@@ -60,7 +60,7 @@ export function AuthGate() {
   }, [fetchMe, logout]);
 
   if (checking) {
-    return <AppLoadingScreen title="Inicializando sistema" subtitle="Validando conexao com o servidor e autenticacao..." />;
+    return <AppLoadingScreen title="Inicializando sistema" subtitle="Validando conexão com o servidor e autenticação..." />;
   }
 
   if (needsSetup) {
