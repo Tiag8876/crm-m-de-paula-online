@@ -454,13 +454,13 @@ export function LeadDetails() {
                 values={leadServiceIds}
                 onChange={updateLeadServices}
                 placeholder="Buscar servi?o"
-                emptyLabel={lead.areaOfLawId ? (availableServices.length === 0 ? 'Nenhum servi?o nesta ?rea' : 'Selecione um ou mais servi?os') : 'Selecione a ?rea primeiro'}
-                emptyDescription={lead.areaOfLawId ? (availableServices.length === 0 ? 'Cadastre servi?os dentro da ?rea de atua??o' : 'Servi?os vinculados ? ?rea') : 'Escolha uma ?rea de atua??o para carregar os servi?os'}
+                emptyLabel={lead.areaOfLawId ? (availableServices.length === 0 ? 'Nenhum serviço vinculado a esta área' : 'Selecione um ou mais serviços') : 'Selecione a área de atuação primeiro'}
+                emptyDescription={lead.areaOfLawId ? (availableServices.length === 0 ? 'Cadastre serviços dentro da área de atuação' : 'Serviços vinculados à área') : 'Escolha a área de atuação para carregar os serviços'}
                 className="bg-background/40 shadow-none"
               />
             </div>
             {lead.areaOfLawId && availableServices.length === 0 ? (
-              <p className="text-xs text-muted-foreground mt-2">Esta ?rea ainda n?o tem servi?os vinculados.</p>
+              <p className="text-xs text-muted-foreground mt-2">Esta área ainda não tem serviços vinculados.</p>
             ) : null}
           </div>
           <div className="space-y-1">

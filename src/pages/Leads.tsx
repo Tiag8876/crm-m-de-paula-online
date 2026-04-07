@@ -1034,7 +1034,7 @@ export function Leads() {
                         value={createProspectServiceId}
                         onChange={setCreateProspectServiceId}
                         placeholder="Buscar serviço"
-                        emptyLabel={createServiceOptions.length > 0 ? (getBaseField('serviceId', 'Serviço ofertado', 'Selecione o serviço').placeholder || 'Selecione o serviço') : 'Nenhum serviço vinculado a esta área'}
+                        emptyLabel={createFunnel?.areaOfLawId ? (createServiceOptions.length > 0 ? (getBaseField('serviceId', 'Serviço ofertado', 'Selecione o serviço').placeholder || 'Selecione o serviço') : 'Nenhum serviço vinculado a esta área') : 'Selecione a área de atuação primeiro'}
                       />
                     </div>
                   )}
@@ -1094,8 +1094,8 @@ export function Leads() {
                         values={createServiceIds}
                         onChange={setCreateServiceIds}
                         placeholder="Buscar serviço"
-                        emptyLabel={createCommercialServices.length > 0 ? (getBaseField('serviceIds', 'Serviços', 'Selecione um ou mais serviços').placeholder || 'Selecione um ou mais serviços') : 'Nenhum serviço vinculado a esta área'}
-                        emptyDescription={createCommercialServices.length > 0 ? 'Nenhum serviço selecionado' : 'Cadastre serviços nesta área para usar neste funil'}
+                        emptyLabel={selectedArea ? (createCommercialServices.length > 0 ? (getBaseField('serviceIds', 'Serviços', 'Selecione um ou mais serviços').placeholder || 'Selecione um ou mais serviços') : 'Nenhum serviço vinculado a esta área') : 'Selecione a área de atuação primeiro'}
+                        emptyDescription={selectedArea ? (createCommercialServices.length > 0 ? 'Nenhum serviço selecionado' : 'Cadastre serviços nesta área para usar neste funil') : 'Escolha a área de atuação para carregar os serviços'}
                       />
                     </div>
                   )}
