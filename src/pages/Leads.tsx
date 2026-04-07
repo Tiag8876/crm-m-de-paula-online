@@ -40,7 +40,7 @@ const buildFunnelGroups = (items: FunnelConfig[], areas: Array<{ id: string; nam
 export function Leads() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
+  const { user, users, assignableUsers, fetchAssignableUsers, fetchUsers } = useAuthStore();
   const {
     leads,
     prospectLeads,
@@ -79,11 +79,20 @@ export function Leads() {
   const draggedRecordIdRef = useRef<string | null>(null);
 
   const allFunnels = sortFunnels(funnels || []);
-  const activeAssignableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
+  const activeAssignableUsers = Array.from(
+    new Map(
+      [...(assignableUsers || []), ...(users || []), ...(user ? [user] : [])]
+        .filter((candidate) => candidate?.active)
+        .map((candidate) => [candidate.id, candidate]),
+    ).values(),
+  );
 
   useEffect(() => {
     fetchAssignableUsers().catch(() => null);
-  }, [fetchAssignableUsers]);
+    if (isAdmin) {
+      fetchUsers().catch(() => null);
+    }
+  }, [fetchAssignableUsers, fetchUsers, isAdmin]);
 
   useEffect(() => {
     const funnelParam = searchParams.get('funnel');

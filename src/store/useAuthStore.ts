@@ -51,6 +51,17 @@ interface AuthState {
   setError: (message: string | null) => void;
 }
 
+const mergeUniqueUsers = (...collections: AppUser[][]): AppUser[] => {
+  const byId = new Map<string, AppUser>();
+  for (const collection of collections) {
+    for (const user of collection || []) {
+      if (!user?.id) continue;
+      byId.set(user.id, user);
+    }
+  }
+  return Array.from(byId.values());
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -105,8 +116,22 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchAssignableUsers: async () => {
-        const data = await api.get<{ users: AppUser[] }>('/api/users/assignable');
-        set({ assignableUsers: data.users });
+        const currentUser = get().user;
+        const currentUsers = get().users;
+        try {
+          const data = await api.get<{ users: AppUser[] }>('/api/users/assignable');
+          const merged = mergeUniqueUsers(data.users || [], currentUsers, currentUser ? [currentUser] : []);
+          set({ assignableUsers: merged });
+          return;
+        } catch (error) {
+          if (!isAdminUser(currentUser)) {
+            throw error;
+          }
+        }
+
+        const fallbackData = await api.get<{ users: AppUser[] }>('/api/users');
+        const merged = mergeUniqueUsers(fallbackData.users || [], currentUser ? [currentUser] : []);
+        set({ users: fallbackData.users, assignableUsers: merged });
       },
 
       createUser: async (input) => {

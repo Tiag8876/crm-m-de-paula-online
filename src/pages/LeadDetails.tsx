@@ -14,11 +14,12 @@ import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getBaseFieldKeys } from '@/lib/funnelFieldSchema';
+import { isAdminUser } from '@/lib/access';
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, assignableUsers, fetchAssignableUsers } = useAuthStore();
+  const { user, users, assignableUsers, fetchAssignableUsers, fetchUsers } = useAuthStore();
   const {
     leads, campaigns, adGroups, ads, areasOfLaw, services, leadSources, standardTasks, funnels, commercialDefaultFunnelId,
     updateLead, deleteLead, addNoteToLead, updateNoteInLead, deleteNoteFromLead,
@@ -64,7 +65,10 @@ export function LeadDetails() {
   const [followUpNotes, setFollowUpNotes] = useState('');
   useEffect(() => {
     fetchAssignableUsers().catch(() => null);
-  }, [fetchAssignableUsers]);
+    if (isAdminUser(user)) {
+      fetchUsers().catch(() => null);
+    }
+  }, [fetchAssignableUsers, fetchUsers, user]);
 
   useEffect(() => {
     if (!lead) return;
@@ -131,7 +135,13 @@ export function LeadDetails() {
     .filter((field) => !baseFieldKeys.has(field.key))
     .sort((a, b) => a.order - b.order);
   const currentStage = sortedStages.find(s => s.id === lead.status);
-  const selectableUsers = (assignableUsers || []).filter((candidate) => candidate.active);
+  const selectableUsers = Array.from(
+    new Map(
+      [...(assignableUsers || []), ...(users || []), ...(user ? [user] : [])]
+        .filter((candidate) => candidate?.active)
+        .map((candidate) => [candidate.id, candidate]),
+    ).values(),
+  );
   const updateCustomField = (key: string, value: string) => {
     updateLead(lead.id, {
       customFields: {
