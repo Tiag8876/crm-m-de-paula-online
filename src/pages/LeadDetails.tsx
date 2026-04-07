@@ -16,6 +16,8 @@ import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange 
 import { getBaseFieldKeys } from '@/lib/funnelFieldSchema';
 import { isAdminUser } from '@/lib/access';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
+import { PremiumSelect } from '@/components/PremiumSelect';
+import { PremiumMultiSelect } from '@/components/PremiumMultiSelect';
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
@@ -97,6 +99,40 @@ export function LeadDetails() {
 
   const availableServices = services.filter(s => s.areaOfLawId === lead?.areaOfLawId);
   const availableAds = ads.filter(a => adGroups.find(ag => ag.id === a.adGroupId)?.campaignId === lead?.campaignId);
+  const areaOptions = areasOfLaw.map((area) => ({
+    value: area.id,
+    label: area.name,
+    description: area.description || 'Área de atuação',
+    group: 'Áreas',
+  }));
+  const serviceOptions = availableServices.map((service) => ({
+    value: service.id,
+    label: service.name,
+    description: service.description || 'Serviço vinculado à área',
+    group: 'Serviços',
+  }));
+  const sourceOptions = (leadSources || []).map((source) => ({
+    value: source.id,
+    label: source.name,
+    description: source.kind === 'campaign' ? 'Origem por campanha' : 'Origem manual',
+    group: source.kind === 'campaign' ? 'Campanhas' : 'Outras origens',
+  }));
+  const campaignOptions = campaigns.map((item) => ({
+    value: item.id,
+    label: item.name,
+    description: areasOfLaw.find((area) => area.id === item.areaOfLawId)?.name || 'Campanha',
+    group: 'Campanhas',
+  }));
+
+  const updateLeadServices = (nextIds: string[]) => {
+    updateLead(lead.id, {
+      serviceId: nextIds[0],
+      serviceIds: nextIds,
+      estimatedValue: nextIds.length === 1
+        ? services.find((item) => item.id === nextIds[0])?.price || lead.estimatedValue
+        : lead.estimatedValue,
+    });
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -391,39 +427,28 @@ export function LeadDetails() {
           <div className="space-y-1">
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Área & Serviço</p>
             <div className="flex flex-col gap-2 mt-1">
-              <select
+              <PremiumSelect
+                options={areaOptions}
                 value={lead.areaOfLawId || ''}
-                onChange={(e) => updateLead(lead.id, { areaOfLawId: e.target.value, serviceId: undefined, serviceIds: [] })}
-                className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-              >
-                <option value="">Selecione a Área</option>
-                {areasOfLaw.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+                onChange={(nextValue) => updateLead(lead.id, { areaOfLawId: nextValue || undefined, serviceId: undefined, serviceIds: [] })}
+                placeholder="Buscar área"
+                emptyLabel="Selecione a área"
+                className="bg-background/40 shadow-none"
+              />
               {lead.areaOfLawId && (
-                <div className="space-y-2 rounded-lg border border-border bg-background/30 p-2">
-                  {availableServices.map((service) => {
-                    const checked = leadServiceIds.includes(service.id);
-                    return (
-                      <label key={service.id} className="flex items-center gap-2 text-xs text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const nextIds = e.target.checked
-                              ? Array.from(new Set([...leadServiceIds, service.id]))
-                              : leadServiceIds.filter((serviceId) => serviceId !== service.id);
-                            updateLead(lead.id, {
-                              serviceId: nextIds[0],
-                              serviceIds: nextIds,
-                              estimatedValue: nextIds.length === 1 ? services.find((item) => item.id === nextIds[0])?.price || lead.estimatedValue : lead.estimatedValue
-                            });
-                          }}
-                          className="rounded border-border bg-background"
-                        />
-                        <span>{service.name}</span>
-                      </label>
-                    );
-                  })}
+                <div className="space-y-2">
+                  <PremiumMultiSelect
+                    options={serviceOptions}
+                    values={leadServiceIds}
+                    onChange={updateLeadServices}
+                    placeholder="Buscar serviço"
+                    emptyLabel={availableServices.length === 0 ? 'Nenhum serviço nesta área' : 'Selecione um ou mais serviços'}
+                    emptyDescription={availableServices.length === 0 ? 'Cadastre serviços dentro da área de atuação' : 'Serviços vinculados à área'}
+                    className="bg-background/40 shadow-none"
+                  />
+                  {availableServices.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Esta área ainda não tem serviços vinculados.</p>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -437,30 +462,31 @@ export function LeadDetails() {
           <div className="space-y-1">
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Origem do Lead</p>
             <div className="flex flex-col gap-2 mt-1">
-              <select
+              <PremiumSelect
+                options={sourceOptions}
                 value={lead.sourceId || ''}
-                onChange={(e) => {
+                onChange={(nextValue) => {
                   updateLead(lead.id, {
-                    sourceId: e.target.value || undefined,
+                    sourceId: nextValue || undefined,
                     sourceDetails: undefined,
                     campaignId: undefined,
                     adGroupId: undefined,
                     adId: undefined,
                   });
                 }}
-                className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-              >
-                <option value="">Selecione a origem</option>
-                {(leadSources || []).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
-              </select>
+                placeholder="Buscar origem"
+                emptyLabel="Selecione a origem"
+                className="bg-background/40 shadow-none"
+              />
 
               {selectedSource?.kind === 'campaign' ? (
-                <select
+                <PremiumSelect
+                  options={campaignOptions}
                   value={lead.campaignId || ''}
-                  onChange={(e) => {
-                    const selectedCampaign = campaigns.find(c => c.id === e.target.value);
+                  onChange={(nextValue) => {
+                    const selectedCampaign = campaigns.find(c => c.id === nextValue);
                     updateLead(lead.id, {
-                      campaignId: e.target.value || undefined,
+                      campaignId: nextValue || undefined,
                       adGroupId: undefined,
                       adId: undefined,
                       areaOfLawId: selectedCampaign?.areaOfLawId || lead.areaOfLawId,
@@ -470,11 +496,10 @@ export function LeadDetails() {
                         : leadServiceIds,
                     });
                   }}
-                  className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-                >
-                  <option value="">Selecione a Campanha</option>
-                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                  placeholder="Buscar campanha"
+                  emptyLabel="Selecione a campanha"
+                  className="bg-background/40 shadow-none"
+                />
               ) : selectedSource ? (
                 <input
                   type="text"
