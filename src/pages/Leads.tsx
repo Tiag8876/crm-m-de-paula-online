@@ -80,6 +80,7 @@ export function Leads() {
   const [createOwnerUserId, setCreateOwnerUserId] = useState('');
   const [createCampaignId, setCreateCampaignId] = useState('');
   const [createProspectServiceId, setCreateProspectServiceId] = useState('');
+  const [createServiceIds, setCreateServiceIds] = useState<string[]>([]);
   const [createCustomFieldValues, setCreateCustomFieldValues] = useState<Record<string, string | string[]>>({});
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -138,6 +139,7 @@ export function Leads() {
   const createEffectiveFieldSchema = buildEffectiveFieldSchema(createFunnel);
   const createFieldMap = new Map(createEffectiveFieldSchema.map((field) => [field.key, field]));
   const createTemplateLibrary = getTemplatesForOperation(fieldTemplates || [], createFunnel?.operation);
+  const hasCreateField = (key: string) => createEffectiveFieldSchema.some((field) => field.key === key);
   const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => {
     const linkedTemplate = createTemplateLibrary.find((template) => template.id === field.templateId || template.key === field.key);
     return !linkedTemplate?.system;
@@ -145,8 +147,9 @@ export function Leads() {
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAreaScopedServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
   const createAvailableServices = createAreaScopedServices;
-  const createCommercialServices = selectedArea
-    ? services.filter((service) => service.areaOfLawId === selectedArea)
+  const createSelectedAreaId = selectedArea || createFunnel?.areaOfLawId || '';
+  const createCommercialServices = createSelectedAreaId
+    ? services.filter((service) => service.areaOfLawId === createSelectedAreaId)
     : [];
   const createLeadSource = (leadSources || []).find((source) => source.id === createLeadSourceId);
   const createAvailableCampaigns = campaigns.filter((campaign) => !createFunnel?.areaOfLawId || !campaign.areaOfLawId || campaign.areaOfLawId === createFunnel.areaOfLawId);
@@ -300,6 +303,7 @@ export function Leads() {
     setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
     setCreateCampaignId('');
     setCreateProspectServiceId('');
+    setCreateServiceIds([]);
     setCreateCustomFieldValues({});
   };
 
@@ -336,54 +340,55 @@ export function Leads() {
     try {
       const formData = new FormData(event.currentTarget);
       const customFields = collectCustomFields();
-      const selectedServiceIds = formData
-        .getAll('serviceIds')
-        .map((value) => String(value))
-        .filter(Boolean);
+      const selectedServiceIds = hasCreateField(createIsProspecting ? 'serviceId' : 'serviceIds')
+        ? createServiceIds.filter(Boolean)
+        : [];
       if (createIsProspecting) {
         addProspectLead({
-          clinicName: String(formData.get('clinicName') || ''),
-          contactName: String(formData.get('contactName') || ''),
-          receptionistName: String(formData.get('receptionistName') || '') || undefined,
-          phone: String(formData.get('phone') || ''),
-          email: String(formData.get('email') || ''),
-          cnpj: String(formData.get('cnpj') || ''),
-          city: String(formData.get('city') || ''),
-          neighborhood: String(formData.get('neighborhood') || '') || undefined,
-          serviceId: createProspectServiceId || String(formData.get('serviceId') || '') || undefined,
+          clinicName: hasCreateField('clinicName') ? String(formData.get('clinicName') || '') : '',
+          contactName: hasCreateField('contactName') ? String(formData.get('contactName') || '') : '',
+          receptionistName: hasCreateField('receptionistName') ? String(formData.get('receptionistName') || '') || undefined : undefined,
+          phone: hasCreateField('phone') ? String(formData.get('phone') || '') : '',
+          email: hasCreateField('email') ? String(formData.get('email') || '') : '',
+          cnpj: hasCreateField('cnpj') ? String(formData.get('cnpj') || '') : '',
+          city: hasCreateField('city') ? String(formData.get('city') || '') : '',
+          neighborhood: hasCreateField('neighborhood') ? String(formData.get('neighborhood') || '') || undefined : undefined,
+          serviceId: hasCreateField('serviceId') ? (createProspectServiceId || String(formData.get('serviceId') || '') || undefined) : undefined,
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           status: createSortedStages[0]?.id || 'p_novo',
-          ownerUserId: createOwnerUserId || (isAdmin ? undefined : user?.id),
+          ownerUserId: hasCreateField('ownerUserId') ? (createOwnerUserId || (isAdmin ? undefined : user?.id)) : undefined,
           customFields,
         });
       } else {
-        const sourceId = String(formData.get('sourceId') || '') || undefined;
+        const sourceId = hasCreateField('sourceId') ? (String(formData.get('sourceId') || '') || undefined) : undefined;
         const selectedSource = (leadSources || []).find((source) => source.id === sourceId);
-          const campaignId = selectedSource?.kind === 'campaign'
-            ? createCampaignId || String(formData.get('campaignId') || '') || undefined
-            : undefined;
+        const campaignId = hasCreateField('campaignId') && selectedSource?.kind === 'campaign'
+          ? createCampaignId || String(formData.get('campaignId') || '') || undefined
+          : undefined;
         const selectedCampaign = campaigns.find((campaign) => campaign.id === campaignId);
         const mergedServiceIds = selectedCampaign?.serviceId
           ? Array.from(new Set([selectedCampaign.serviceId, ...selectedServiceIds]))
           : selectedServiceIds;
         addLead({
-          name: String(formData.get('name') || ''),
-          phone: String(formData.get('phone') || ''),
-          email: String(formData.get('email') || ''),
-          cpf: String(formData.get('cpf') || ''),
+          name: hasCreateField('name') ? String(formData.get('name') || '') : '',
+          phone: hasCreateField('phone') ? String(formData.get('phone') || '') : '',
+          email: hasCreateField('email') ? String(formData.get('email') || '') : '',
+          cpf: hasCreateField('cpf') ? String(formData.get('cpf') || '') : '',
           legalArea: String(formData.get('legalArea') || ''),
-          areaOfLawId: selectedCampaign?.areaOfLawId || String(formData.get('areaOfLawId') || ''),
-          serviceId: mergedServiceIds[0],
-          serviceIds: mergedServiceIds,
+          areaOfLawId: hasCreateField('areaOfLawId')
+            ? (selectedCampaign?.areaOfLawId || String(formData.get('areaOfLawId') || '') || createFunnel?.areaOfLawId || '')
+            : (selectedCampaign?.areaOfLawId || createFunnel?.areaOfLawId || ''),
+          serviceId: hasCreateField('serviceIds') ? mergedServiceIds[0] : undefined,
+          serviceIds: hasCreateField('serviceIds') ? mergedServiceIds : [],
           sourceId,
-          sourceDetails: selectedSource?.kind === 'campaign'
+          sourceDetails: !hasCreateField('sourceDetails') || selectedSource?.kind === 'campaign'
             ? undefined
             : String(formData.get('sourceDetails') || '') || undefined,
           campaignId,
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
-          estimatedValue: Number(formData.get('estimatedValue')) || 0,
+          estimatedValue: hasCreateField('estimatedValue') ? Number(formData.get('estimatedValue')) || 0 : 0,
           status: createSortedStages[0]?.id || 'novo',
-          ownerUserId: createOwnerUserId || (isAdmin ? undefined : user?.id),
+          ownerUserId: hasCreateField('ownerUserId') ? (createOwnerUserId || (isAdmin ? undefined : user?.id)) : undefined,
           customFields,
         });
       }
@@ -540,6 +545,8 @@ export function Leads() {
                 setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
                 setCreateCampaignId('');
                 setCreateProspectServiceId('');
+                setCreateServiceIds([]);
+                setCreateCustomFieldValues({});
                 setIsModalOpen(true);
               }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
@@ -913,7 +920,7 @@ export function Leads() {
             </div>
             <form onSubmit={handleCreateRecord} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Funil</label>
                 <PremiumSelect
                   name="funnelId"
                   options={funnelOptions}
@@ -925,281 +932,337 @@ export function Leads() {
                     setCreateLeadSourceId('');
                     setCreateCampaignId('');
                     setCreateProspectServiceId('');
+                    setCreateServiceIds([]);
+                    setCreateCustomFieldValues({});
                   }}
                   placeholder="Buscar funil"
+                  emptyLabel="Selecione o funil"
                 />
-                </div>
+              </div>
+
               {createIsProspecting ? (
                 <>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Conta ou cl√≠nica</label>
-                    <input name="clinicName" required placeholder="Nome da conta ou cl√≠nica" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Respons√°vel principal</label>
-                    <input name="contactName" required placeholder="Respons√°vel principal" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).label}</label>
-                    <input name="phone" required={Boolean(getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).required)} placeholder={getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).placeholder || 'Telefone ou WhatsApp'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('cnpj', 'CNPJ', 'CNPJ').label}</label>
-                    <input name="cnpj" placeholder={getBaseField('cnpj', 'CNPJ', 'CNPJ').placeholder || 'CNPJ'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
-                    <input name="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('city', 'Cidade', 'Cidade').label}</label>
-                    <input name="city" placeholder={getBaseField('city', 'Cidade', 'Cidade').placeholder || 'Cidade'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">{getBaseField('neighborhood', 'Bairro', 'Bairro').label}</label>
-                    <input name="neighborhood" placeholder={getBaseField('neighborhood', 'Bairro', 'Bairro').placeholder || 'Bairro'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Recep√ß√£o ou contato secund√°rio</label>
-                    <input name="receptionistName" placeholder="Recep√ß√£o ou contato secund√°rio" className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  {createFunnelArea && (
-                    <div className="md:col-span-2 rounded-2xl border border-border bg-background/30 p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-gold-500/70">√Årea de atua√ß√£o vinculada ao funil</p>
-                      <p className="mt-1.5 text-sm font-semibold">{createFunnelArea.name}</p>
-                      {createFunnelArea.description && <p className="mt-1.5 text-xs text-muted-foreground">{createFunnelArea.description}</p>}
+                  {hasCreateField('clinicName') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Conta ou clÌnica</label>
+                      <input
+                        name="clinicName"
+                        required
+                        placeholder="Nome da conta ou clÌnica"
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
                     </div>
                   )}
-                  <PremiumSelect
-                    name="serviceId"
-                    options={createServiceOptions}
-                    value={createProspectServiceId}
-                    onChange={setCreateProspectServiceId}
-                    placeholder="Buscar servi√ßo"
-                    emptyLabel="Servi√ßo ofertado"
-                    className="md:col-span-2"
-                  />
-                  {createCustomFieldSchema.map((field) => (
-                    <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
-                        {field.label}
-                        {field.required ? ' *' : ''}
-                      </label>
-                      {field.type === 'textarea' ? (
-                        <textarea
-                          required={Boolean(field.required)}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
-                          placeholder={field.placeholder || field.helpText || ''}
-                          className="min-h-[96px] w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
-                        />
-                      ) : field.type === 'select' ? (
-                        <PremiumSelect
-                          options={(field.options || []).map((option) => ({
-                            value: option.value,
-                            label: option.label,
-                            description: field.label,
-                            group: 'Op√ß√µes',
-                          }))}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
-                          placeholder={`Buscar ${field.label.toLowerCase()}`}
-                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
-                        />
-                      ) : field.type === 'multiselect' ? (
-                        <PremiumMultiSelect
-                          options={(field.options || []).map((option) => ({
-                            value: option.value,
-                            label: option.label,
-                            description: field.label,
-                            group: 'Op√ß√µes',
-                          }))}
-                          values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
-                          onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
-                          placeholder={`Buscar ${field.label.toLowerCase()}`}
-                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
-                        />
-                      ) : (
-                        <input
-                          required={Boolean(field.required)}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
-                          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
-                          inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
-                          placeholder={field.placeholder || field.helpText || ''}
-                          className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
-                        />
-                      )}
-                      {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
-                    </div>
-                  ))}
-                </>
-              ) :(
-                <>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('name', 'Nome completo', 'Nome do cliente', true).label}</label>
-                    <input required={Boolean(getBaseField('name', 'Nome completo', 'Nome do cliente', true).required)} name="name" type="text" placeholder={getBaseField('name', 'Nome completo', 'Nome do cliente', true).placeholder || 'Nome do cliente'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">√Årea de atua√ß√£o</label>
-                    <PremiumSelect
-                      name="areaOfLawId"
-                      options={createAreaOptions}
-                      value={selectedArea}
-                      onChange={setSelectedArea}
-                      placeholder="Buscar √°rea"
-                      emptyLabel="Selecione a √°rea"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('phone', 'Telefone', 'Telefone', true).label}</label>
-                    <input required={Boolean(getBaseField('phone', 'Telefone', 'Telefone', true).required)} name="phone" type="tel" placeholder={getBaseField('phone', 'Telefone', 'Telefone', true).placeholder || 'Telefone'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Servi√ßo</label>
-                    <div className="space-y-2 rounded-xl border border-border bg-background/20 p-2.5">
-                      {services.filter((service) => service.areaOfLawId === selectedArea).length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Nenhum servi√ßo vinculado a esta √°rea.</p>
-                      ) : (
-                        services
-                          .filter((service) => service.areaOfLawId === selectedArea)
-                          .map((service) => (
-                            <label key={service.id} className="flex items-center gap-3 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm">
-                              <input type="checkbox" name="serviceIds" value={service.id} className="rounded border-border bg-background" />
-                              <span>{service.name}</span>
-                            </label>
-                          ))
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
-                    <input name="email" type="email" placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Origem do lead</label>
-                    <PremiumSelect
-                      name="sourceId"
-                      options={leadSourceOptions}
-                      value={createLeadSourceId}
-                      onChange={(nextValue) => {
-                        setCreateLeadSourceId(nextValue);
-                        setCreateCampaignId('');
-                      }}
-                      placeholder="Buscar origem"
-                      emptyLabel="Selecione a origem"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Valor estimado</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold-500/50" />
-                      <input name="estimatedValue" type="number" className="w-full rounded-xl border border-border bg-background/40 py-2.5 pl-10 pr-3 text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">CPF</label>
-                    <input name="cpf" type="text" placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'} className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm" />
-                  </div>
-                  {createLeadSource?.kind === 'campaign' ? (
+                  {hasCreateField('contactName') && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Campanha</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Respons·vel principal</label>
+                      <input
+                        name="contactName"
+                        required
+                        placeholder="Respons·vel principal"
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('phone') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).label}</label>
+                      <input
+                        name="phone"
+                        required={Boolean(getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).required)}
+                        placeholder={getBaseField('phone', 'Telefone ou WhatsApp', 'Telefone ou WhatsApp', true).placeholder || 'Telefone ou WhatsApp'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('cnpj') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('cnpj', 'CNPJ', 'CNPJ').label}</label>
+                      <input
+                        name="cnpj"
+                        placeholder={getBaseField('cnpj', 'CNPJ', 'CNPJ').placeholder || 'CNPJ'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('email') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
+                      <input
+                        name="email"
+                        placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('city') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('city', 'Cidade', 'Cidade').label}</label>
+                      <input
+                        name="city"
+                        placeholder={getBaseField('city', 'Cidade', 'Cidade').placeholder || 'Cidade'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('neighborhood') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('neighborhood', 'Bairro', 'Bairro').label}</label>
+                      <input
+                        name="neighborhood"
+                        placeholder={getBaseField('neighborhood', 'Bairro', 'Bairro').placeholder || 'Bairro'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('receptionistName') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">RecepÁ„o ou contato secund·rio</label>
+                      <input
+                        name="receptionistName"
+                        placeholder="RecepÁ„o ou contato secund·rio"
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('serviceId') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceId', 'ServiÁo ofertado', 'Selecione o serviÁo').label}</label>
+                      <PremiumSelect
+                        name="serviceId"
+                        options={createServiceOptions}
+                        value={createProspectServiceId}
+                        onChange={setCreateProspectServiceId}
+                        placeholder="Buscar serviÁo"
+                        emptyLabel={createServiceOptions.length > 0 ? (getBaseField('serviceId', 'ServiÁo ofertado', 'Selecione o serviÁo').placeholder || 'Selecione o serviÁo') : 'Nenhum serviÁo vinculado a esta ·rea'}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {hasCreateField('name') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('name', 'Nome completo', 'Nome do cliente', true).label}</label>
+                      <input
+                        required={Boolean(getBaseField('name', 'Nome completo', 'Nome do cliente', true).required)}
+                        name="name"
+                        type="text"
+                        placeholder={getBaseField('name', 'Nome completo', 'Nome do cliente', true).placeholder || 'Nome do cliente'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('areaOfLawId') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('areaOfLawId', '¡rea de atuaÁ„o', 'Selecione a ·rea').label}</label>
+                      <PremiumSelect
+                        name="areaOfLawId"
+                        options={createAreaOptions}
+                        value={selectedArea}
+                        onChange={(nextValue) => {
+                          setSelectedArea(nextValue);
+                          setCreateServiceIds([]);
+                        }}
+                        placeholder="Buscar ·rea"
+                        emptyLabel={getBaseField('areaOfLawId', '¡rea de atuaÁ„o', 'Selecione a ·rea').placeholder || 'Selecione a ·rea'}
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('phone') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('phone', 'Telefone', 'Telefone', true).label}</label>
+                      <input
+                        required={Boolean(getBaseField('phone', 'Telefone', 'Telefone', true).required)}
+                        name="phone"
+                        type="tel"
+                        placeholder={getBaseField('phone', 'Telefone', 'Telefone', true).placeholder || 'Telefone'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('serviceIds') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('serviceIds', 'ServiÁos', 'Selecione um ou mais serviÁos').label}</label>
+                      <PremiumMultiSelect
+                        options={createCommercialServices.map((service) => ({
+                          value: service.id,
+                          label: service.name,
+                          description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'ServiÁo',
+                          group: 'ServiÁos da ·rea',
+                        }))}
+                        values={createServiceIds}
+                        onChange={setCreateServiceIds}
+                        placeholder="Buscar serviÁo"
+                        emptyLabel={createCommercialServices.length > 0 ? (getBaseField('serviceIds', 'ServiÁos', 'Selecione um ou mais serviÁos').placeholder || 'Selecione um ou mais serviÁos') : 'Nenhum serviÁo vinculado a esta ·rea'}
+                        emptyDescription={createCommercialServices.length > 0 ? 'Nenhum serviÁo selecionado' : 'Cadastre serviÁos nesta ·rea para usar neste funil'}
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('email') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('email', 'E-mail', 'E-mail').label}</label>
+                      <input
+                        name="email"
+                        type="email"
+                        placeholder={getBaseField('email', 'E-mail', 'E-mail').placeholder || 'E-mail'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('sourceId') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('sourceId', 'Origem do lead', 'Selecione a origem').label}</label>
+                      <PremiumSelect
+                        name="sourceId"
+                        options={leadSourceOptions}
+                        value={createLeadSourceId}
+                        onChange={(nextValue) => {
+                          setCreateLeadSourceId(nextValue);
+                          setCreateCampaignId('');
+                        }}
+                        placeholder="Buscar origem"
+                        emptyLabel={getBaseField('sourceId', 'Origem do lead', 'Selecione a origem').placeholder || 'Selecione a origem'}
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('estimatedValue') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('estimatedValue', 'Valor estimado', 'Valor estimado').label}</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold-500/50" />
+                        <input name="estimatedValue" type="number" className="w-full rounded-xl border border-border bg-background/40 py-2.5 pl-10 pr-3 text-sm" />
+                      </div>
+                    </div>
+                  )}
+                  {hasCreateField('cpf') && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('cpf', 'CPF', 'CPF').label}</label>
+                      <input
+                        name="cpf"
+                        type="text"
+                        placeholder={getBaseField('cpf', 'CPF', 'CPF').placeholder || 'CPF'}
+                        className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {hasCreateField('campaignId') && createLeadSource?.kind === 'campaign' && (
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('campaignId', 'Campanha', 'Selecione a campanha').label}</label>
                       <PremiumSelect
                         name="campaignId"
                         options={createCampaignOptions}
                         value={createCampaignId}
                         onChange={setCreateCampaignId}
                         placeholder="Buscar campanha"
-                        emptyLabel="Selecione a campanha"
+                        emptyLabel={getBaseField('campaignId', 'Campanha', 'Selecione a campanha').placeholder || 'Selecione a campanha'}
                       />
                     </div>
-                  ) : createLeadSourceId ? (
+                  )}
+                  {hasCreateField('sourceDetails') && createLeadSourceId && createLeadSource?.kind !== 'campaign' && (
                     <div>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Detalhe da origem</label>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">{getBaseField('sourceDetails', 'Detalhe da origem', 'Descreva a origem').label}</label>
                       <input
                         name="sourceDetails"
                         type="text"
-                        placeholder="Ex.: indica√ß√£o de cliente antigo, parceria local, evento"
+                        placeholder={getBaseField('sourceDetails', 'Detalhe da origem', 'Descreva a origem').placeholder || 'Descreva a origem'}
                         className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
                       />
                     </div>
-                  ) : null}
-                  {createCustomFieldSchema.map((field) => (
-                    <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
-                        {field.label}
-                        {field.required ? ' *' : ''}
-                      </label>
-                      {field.type === 'textarea' ? (
-                        <textarea
-                          required={Boolean(field.required)}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
-                          placeholder={field.placeholder || field.helpText || ''}
-                          className="min-h-[96px] w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
-                        />
-                      ) : field.type === 'select' ? (
-                        <PremiumSelect
-                          options={(field.options || []).map((option) => ({
-                            value: option.value,
-                            label: option.label,
-                            description: field.label,
-                            group: 'Op√ß√µes',
-                          }))}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
-                          placeholder={`Buscar ${field.label.toLowerCase()}`}
-                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
-                        />
-                      ) : field.type === 'multiselect' ? (
-                        <PremiumMultiSelect
-                          options={(field.options || []).map((option) => ({
-                            value: option.value,
-                            label: option.label,
-                            description: field.label,
-                            group: 'Op√ß√µes',
-                          }))}
-                          values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
-                          onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
-                          placeholder={`Buscar ${field.label.toLowerCase()}`}
-                          emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
-                        />
-                      ) : (
-                        <input
-                          required={Boolean(field.required)}
-                          value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
-                          onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
-                          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
-                          inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
-                          placeholder={field.placeholder || field.helpText || ''}
-                          className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
-                        />
-                      )}
-                      {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
-                    </div>
-                  ))}
+                  )}
                 </>
               )}
-              <div>
-                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir respons√°vel</label>
-                <AssigneeSelect
-                  users={activeAssignableUsers}
-                  value={createOwnerUserId}
-                  onChange={(nextValue) => setCreateOwnerUserId(nextValue || '')}
-                  placeholder="Selecione um vendedor"
-                  unassignedLabel="Sem atribui√ß√£o definida"
-                  className="bg-background/40"
-                />
-              </div>
-              <div className="md:col-span-2 mt-5 flex justify-end gap-3 border-t border-border pt-4">
-                <button type="button" onClick={() => { setIsModalOpen(false); resetModalState(); }} className="px-6 py-2.5 text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:text-foreground transition-all" disabled={isSavingRecord}>
+
+              {createCustomFieldSchema.map((field) => (
+                <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
+                    {field.label}
+                    {field.required ? ' *' : ''}
+                  </label>
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      required={Boolean(field.required)}
+                      value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                      onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
+                      placeholder={field.placeholder || field.helpText || ''}
+                      className="min-h-[96px] w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                    />
+                  ) : field.type === 'select' ? (
+                    <PremiumSelect
+                      options={(field.options || []).map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        description: field.label,
+                        group: 'OpÁıes',
+                      }))}
+                      value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                      onChange={(nextValue) => updateCreateCustomField(field.key, nextValue)}
+                      placeholder={`Buscar ${field.label.toLowerCase()}`}
+                      emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                    />
+                  ) : field.type === 'multiselect' ? (
+                    <PremiumMultiSelect
+                      options={(field.options || []).map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        description: field.label,
+                        group: 'OpÁıes',
+                      }))}
+                      values={Array.isArray(createCustomFieldValues[field.key]) ? (createCustomFieldValues[field.key] as string[]) : []}
+                      onChange={(nextValues) => updateCreateCustomField(field.key, nextValues)}
+                      placeholder={`Buscar ${field.label.toLowerCase()}`}
+                      emptyLabel={field.placeholder || `Selecione ${field.label.toLowerCase()}`}
+                    />
+                  ) : (
+                    <input
+                      required={Boolean(field.required)}
+                      value={typeof createCustomFieldValues[field.key] === 'string' ? String(createCustomFieldValues[field.key]) : ''}
+                      onChange={(event) => updateCreateCustomField(field.key, event.target.value)}
+                      type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+                      inputMode={field.type === 'number' || field.type === 'cpf' || field.type === 'cnpj' || field.type === 'phone' ? 'numeric' : undefined}
+                      placeholder={field.placeholder || field.helpText || ''}
+                      className="w-full rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm"
+                    />
+                  )}
+                  {field.helpText && <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p>}
+                </div>
+              ))}
+
+              {hasCreateField('ownerUserId') && (
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir respons·vel</label>
+                  <AssigneeSelect
+                    users={activeAssignableUsers}
+                    value={createOwnerUserId}
+                    onChange={(nextValue) => setCreateOwnerUserId(nextValue || '')}
+                    placeholder="Selecione um vendedor"
+                    unassignedLabel="Sem atribuiÁ„o definida"
+                    className="bg-background/40"
+                  />
+                </div>
+              )}
+
+              <div className="mt-5 flex justify-end gap-3 border-t border-border pt-4 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    resetModalState();
+                  }}
+                  className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground transition-all hover:text-foreground"
+                  disabled={isSavingRecord}
+                >
                   Cancelar
                 </button>
-                <button type="submit" className="rounded-xl bg-primary px-8 py-2.5 font-black uppercase tracking-widest text-[10px] text-primary-foreground shadow-xl transition-all hover:bg-gold-400 disabled:opacity-70" disabled={isSavingRecord}>
-                  {isSavingRecord ? 'Salvando...' : 'Confirmar Registro'}
+                <button
+                  type="submit"
+                  className="rounded-xl bg-primary px-8 py-2.5 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-xl transition-all hover:bg-gold-400 disabled:opacity-70"
+                  disabled={isSavingRecord}
+                >
+                  {isSavingRecord ? 'Salvando...' : 'Confirmar registro'}
                 </button>
               </div>
-              {saveError && <p className="md:col-span-2 text-xs text-red-400">{saveError}</p>}
+              {saveError && <p className="text-xs text-red-400 md:col-span-2">{saveError}</p>}
             </form>
           </div>
         </div>
