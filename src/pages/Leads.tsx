@@ -12,6 +12,7 @@ import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { FunnelConfig, Lead } from '@/types/crm';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
+import { PremiumSelect } from '@/components/PremiumSelect';
 
 const sortFunnels = (items: FunnelConfig[]) =>
   [...items].sort((a, b) => {
@@ -75,6 +76,8 @@ export function Leads() {
   const [createFunnelId, setCreateFunnelId] = useState('');
   const [createLeadSourceId, setCreateLeadSourceId] = useState('');
   const [createOwnerUserId, setCreateOwnerUserId] = useState('');
+  const [createCampaignId, setCreateCampaignId] = useState('');
+  const [createProspectServiceId, setCreateProspectServiceId] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
@@ -147,6 +150,65 @@ export function Leads() {
     ...commercialFunnelGroups.map((group) => ({ label: `Comercial · ${group.label}`, funnels: group.funnels })),
     ...prospectingFunnelGroups.map((group) => ({ label: `Prospecção · ${group.label}`, funnels: group.funnels })),
   ];
+  const funnelOptions = createFunnelGroups.flatMap((group) =>
+    group.funnels.map((funnel) => ({
+      value: funnel.id,
+      label: funnel.name,
+      description: funnel.operation === 'prospecting' ? 'Funil de prospecção' : 'Funil comercial',
+      group: group.label,
+    })),
+  );
+  const campaignOptions = campaigns.map((campaign) => ({
+    value: campaign.id,
+    label: campaign.name,
+    description: areasOfLaw.find((area) => area.id === campaign.areaOfLawId)?.name || 'Campanha ativa',
+    group: 'Campanhas',
+  }));
+  const areaOptions = areasOfLaw.map((area) => ({
+    value: area.id,
+    label: area.name,
+    description: area.description || 'Área de atuação',
+    group: 'Áreas',
+  }));
+  const serviceOptions = services
+    .filter((service) => isProspecting || !filterAreaId || service.areaOfLawId === filterAreaId)
+    .map((service) => ({
+      value: service.id,
+      label: service.name,
+      description: areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'Serviço',
+      group: 'Serviços',
+    }));
+  const statusOptions = sortedStages.map((stage) => ({
+    value: stage.id,
+    label: stage.name,
+    description: activeFunnel?.name || 'Etapa do funil',
+    group: 'Status',
+  }));
+  const createAreaOptions = areasOfLaw.map((area) => ({
+    value: area.id,
+    label: area.name,
+    description: area.description || 'Área de atuação',
+    group: 'Áreas',
+  }));
+  const createServiceOptions = createAvailableServices.map((service) => ({
+    value: service.id,
+    label: service.name,
+    description: createFunnelArea?.name || areasOfLaw.find((area) => area.id === service.areaOfLawId)?.name || 'Serviço',
+    group: 'Serviços',
+  }));
+  const leadSourceOptions = (leadSources || []).map((source) => ({
+    value: source.id,
+    label: source.name,
+    description: source.kind === 'campaign' ? 'Origem por campanha' : 'Origem manual',
+    group: source.kind === 'campaign' ? 'Campanhas' : 'Outras origens',
+  }));
+  const createCampaignOptions = createAvailableCampaigns.map((campaign) => ({
+    value: campaign.id,
+    label: campaign.name,
+    description: areasOfLaw.find((area) => area.id === campaign.areaOfLawId)?.name || 'Campanha',
+    group: 'Campanhas',
+  }));
+
   const getBaseField = (key: string, fallbackLabel: string, fallbackPlaceholder = '', fallbackRequired = false) =>
     createFieldMap.get(key) || {
       key,
@@ -230,6 +292,8 @@ export function Leads() {
     setSelectedArea('');
     setCreateLeadSourceId('');
     setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
+    setCreateCampaignId('');
+    setCreateProspectServiceId('');
   };
 
   const collectCustomFields = (formData: FormData) =>
@@ -266,7 +330,7 @@ export function Leads() {
           cnpj: String(formData.get('cnpj') || ''),
           city: String(formData.get('city') || ''),
           neighborhood: String(formData.get('neighborhood') || '') || undefined,
-          serviceId: String(formData.get('serviceId') || '') || undefined,
+          serviceId: createProspectServiceId || String(formData.get('serviceId') || '') || undefined,
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           status: createSortedStages[0]?.id || 'p_novo',
           ownerUserId: createOwnerUserId || (isAdmin ? undefined : user?.id),
@@ -275,9 +339,9 @@ export function Leads() {
       } else {
         const sourceId = String(formData.get('sourceId') || '') || undefined;
         const selectedSource = (leadSources || []).find((source) => source.id === sourceId);
-        const campaignId = selectedSource?.kind === 'campaign'
-          ? String(formData.get('campaignId') || '') || undefined
-          : undefined;
+          const campaignId = selectedSource?.kind === 'campaign'
+            ? createCampaignId || String(formData.get('campaignId') || '') || undefined
+            : undefined;
         const selectedCampaign = campaigns.find((campaign) => campaign.id === campaignId);
         const mergedServiceIds = selectedCampaign?.serviceId
           ? Array.from(new Set([selectedCampaign.serviceId, ...selectedServiceIds]))
@@ -425,19 +489,14 @@ export function Leads() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
-          <select
-            value={selectedFunnelId}
-            onChange={(event) => handleFunnelChange(event.target.value)}
-            className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground min-w-[260px]"
-          >
-            {createFunnelGroups.map((group) => (
-              <optgroup key={group.label} label={group.label}>
-                {group.funnels.map((funnel) => (
-                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <div className="min-w-[300px] flex-1 max-w-[420px]">
+            <PremiumSelect
+              options={funnelOptions}
+              value={selectedFunnelId}
+              onChange={handleFunnelChange}
+              placeholder="Buscar funil"
+            />
+          </div>
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button
               onClick={() => setViewMode('kanban')}
@@ -459,6 +518,8 @@ export function Leads() {
                 setSelectedArea(activeFunnel?.areaOfLawId || '');
                 setCreateLeadSourceId('');
                 setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
+                setCreateCampaignId('');
+                setCreateProspectServiceId('');
                 setIsModalOpen(true);
               }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
@@ -493,42 +554,40 @@ export function Leads() {
       {showAdvancedFilters && (
         <div className="bg-card p-4 rounded-2xl border border-border shadow-2xl grid grid-cols-1 md:grid-cols-5 gap-3">
           {!isProspecting && (
-            <select value={filterCampaignId} onChange={(event) => setFilterCampaignId(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-              <option value="">Todas as campanhas</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-              ))}
-            </select>
+            <PremiumSelect
+              options={campaignOptions}
+              value={filterCampaignId}
+              onChange={setFilterCampaignId}
+              placeholder="Buscar campanha"
+              emptyLabel="Todas as campanhas"
+            />
           )}
           {!isProspecting && (
-            <select
+            <PremiumSelect
+              options={areaOptions}
               value={filterAreaId}
-              onChange={(event) => {
-                setFilterAreaId(event.target.value);
+              onChange={(nextValue) => {
+                setFilterAreaId(nextValue);
                 setFilterServiceId('');
               }}
-              className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
-            >
-              <option value="">Todas as áreas</option>
-              {areasOfLaw.map((area) => (
-                <option key={area.id} value={area.id}>{area.name}</option>
-              ))}
-            </select>
+              placeholder="Buscar área"
+              emptyLabel="Todas as áreas"
+            />
           )}
-          <select value={filterServiceId} onChange={(event) => setFilterServiceId(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-            <option value="">Todos os serviços</option>
-            {services
-              .filter((service) => isProspecting || !filterAreaId || service.areaOfLawId === filterAreaId)
-              .map((service) => (
-                <option key={service.id} value={service.id}>{service.name}</option>
-              ))}
-          </select>
-          <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="px-3 py-2 rounded-lg bg-background border border-border text-sm">
-            <option value="">Todos os status</option>
-            {sortedStages.map((stage) => (
-              <option key={stage.id} value={stage.id}>{stage.name}</option>
-            ))}
-          </select>
+          <PremiumSelect
+            options={serviceOptions}
+            value={filterServiceId}
+            onChange={setFilterServiceId}
+            placeholder="Buscar serviço"
+            emptyLabel="Todos os serviços"
+          />
+          <PremiumSelect
+            options={statusOptions}
+            value={filterStatus}
+            onChange={setFilterStatus}
+            placeholder="Buscar status"
+            emptyLabel="Todos os status"
+          />
           <button
             type="button"
             onClick={() => {
@@ -835,25 +894,20 @@ export function Leads() {
             <form onSubmit={handleCreateRecord} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil</label>
-                <select
+                <PremiumSelect
                   name="funnelId"
+                  options={funnelOptions}
                   value={createFunnel.id}
-                  onChange={(event) => {
-                      setCreateFunnelId(event.target.value);
-                      const nextFunnel = allFunnels.find((funnel) => funnel.id === event.target.value);
-                      setSelectedArea(nextFunnel?.areaOfLawId || '');
-                      setCreateLeadSourceId('');
-                    }}
-                    className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
-                  >
-                    {createFunnelGroups.map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.funnels.map((funnel) => (
-                          <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                  onChange={(nextValue) => {
+                    setCreateFunnelId(nextValue);
+                    const nextFunnel = allFunnels.find((funnel) => funnel.id === nextValue);
+                    setSelectedArea(nextFunnel?.areaOfLawId || '');
+                    setCreateLeadSourceId('');
+                    setCreateCampaignId('');
+                    setCreateProspectServiceId('');
+                  }}
+                  placeholder="Buscar funil"
+                />
                 </div>
               {createIsProspecting ? (
                 <>
@@ -896,12 +950,15 @@ export function Leads() {
                       {createFunnelArea.description && <p className="mt-2 text-sm text-muted-foreground">{createFunnelArea.description}</p>}
                     </div>
                   )}
-                  <select name="serviceId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl md:col-span-2">
-                    <option value="">Serviço ofertado</option>
-                    {createAvailableServices.map((service) => (
-                      <option key={service.id} value={service.id}>{service.name}</option>
-                    ))}
-                  </select>
+                  <PremiumSelect
+                    name="serviceId"
+                    options={createServiceOptions}
+                    value={createProspectServiceId}
+                    onChange={setCreateProspectServiceId}
+                    placeholder="Buscar serviço"
+                    emptyLabel="Serviço ofertado"
+                    className="md:col-span-2"
+                  />
                   {createCustomFieldSchema.map((field) => (
                     <div key={field.id} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
                       <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">
@@ -948,12 +1005,14 @@ export function Leads() {
                   <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Área de Atuação</label>
-                        <select name="areaOfLawId" value={selectedArea} onChange={(event) => setSelectedArea(event.target.value)} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                          <option value="">Selecione a Área</option>
-                          {areasOfLaw.map((area) => (
-                            <option key={area.id} value={area.id}>{area.name}</option>
-                        ))}
-                      </select>
+                        <PremiumSelect
+                          name="areaOfLawId"
+                          options={createAreaOptions}
+                          value={selectedArea}
+                          onChange={setSelectedArea}
+                          placeholder="Buscar área"
+                          emptyLabel="Selecione a área"
+                        />
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Serviço</label>
@@ -974,27 +1033,29 @@ export function Leads() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Origem do lead</label>
-                      <select
+                      <PremiumSelect
                         name="sourceId"
+                        options={leadSourceOptions}
                         value={createLeadSourceId}
-                        onChange={(event) => setCreateLeadSourceId(event.target.value)}
-                        className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
-                      >
-                        <option value="">Selecione a origem</option>
-                        {(leadSources || []).map((source) => (
-                          <option key={source.id} value={source.id}>{source.name}</option>
-                        ))}
-                      </select>
+                        onChange={(nextValue) => {
+                          setCreateLeadSourceId(nextValue);
+                          setCreateCampaignId('');
+                        }}
+                        placeholder="Buscar origem"
+                        emptyLabel="Selecione a origem"
+                      />
                     </div>
                     {createLeadSource?.kind === 'campaign' ? (
                       <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Campanha</label>
-                        <select name="campaignId" className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                          <option value="">Selecione a campanha</option>
-                          {createAvailableCampaigns.map((campaign) => (
-                            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-                          ))}
-                        </select>
+                        <PremiumSelect
+                          name="campaignId"
+                          options={createCampaignOptions}
+                          value={createCampaignId}
+                          onChange={setCreateCampaignId}
+                          placeholder="Buscar campanha"
+                          emptyLabel="Selecione a campanha"
+                        />
                       </div>
                     ) : createLeadSourceId ? (
                       <div className="md:col-span-2">
@@ -1054,7 +1115,7 @@ export function Leads() {
                   value={createOwnerUserId}
                   onChange={(nextValue) => setCreateOwnerUserId(nextValue || '')}
                   placeholder="Selecione um vendedor"
-                  unassignedLabel="Sem atribui??o definida"
+                  unassignedLabel="Sem atribuição definida"
                   className="bg-background/40"
                 />
               </div>
