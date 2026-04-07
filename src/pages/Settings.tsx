@@ -8,7 +8,6 @@ import {
   BriefcaseBusiness,
   ChevronDown,
   Copy,
-  Database,
   ListChecks,
   Plus,
   Shield,
@@ -23,9 +22,10 @@ import { UsersAdminPage } from '@/pages/UsersAdminPage';
 import type { FunnelConfig, FunnelFieldType } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'team' | 'operations';
-type OperationsSection = 'funnels' | 'areas' | 'services' | 'sources' | 'tasks';
+type OperationsSection = 'funnels' | 'areas' | 'sources' | 'tasks';
 type StageDraft = { name: string; color: string };
 type FunnelDraft = { name: string; description: string };
+type ServiceDraft = { name: string; description: string; price: string };
 type FieldDraft = {
   label: string;
   key: string;
@@ -47,12 +47,6 @@ const ADMIN_SECTION_LINKS = [
     label: 'Áreas de atuação',
     description: 'Organize especialidades do escritório sem espalhar isso em vários menus.',
     icon: BriefcaseBusiness,
-  },
-  {
-    id: 'services',
-    label: 'Serviços',
-    description: 'Centralize ofertas, precificação e contexto comercial em uma mesma camada.',
-    icon: Database,
   },
   {
     id: 'sources',
@@ -108,8 +102,9 @@ export function Settings() {
   const requestedSection = searchParams.get('section');
   const initialTab: SettingsTab = requestedTab === 'team' || requestedTab === 'operations' ? requestedTab : 'profile';
   const validOperationSections = ADMIN_SECTION_LINKS.map((section) => section.id);
-  const initialOperationSection: OperationsSection = validOperationSections.includes((requestedSection || '') as OperationsSection)
-    ? (requestedSection as OperationsSection)
+  const normalizedRequestedSection = requestedSection === 'services' ? 'areas' : requestedSection;
+  const initialOperationSection: OperationsSection = validOperationSections.includes((normalizedRequestedSection || '') as OperationsSection)
+    ? (normalizedRequestedSection as OperationsSection)
     : 'funnels';
 
   const {
@@ -151,10 +146,6 @@ export function Settings() {
   const [activeOperationSection, setActiveOperationSection] = useState<OperationsSection>(initialOperationSection);
   const [newAreaName, setNewAreaName] = useState('');
   const [newAreaDesc, setNewAreaDesc] = useState('');
-  const [newServiceName, setNewServiceName] = useState('');
-  const [newServiceDesc, setNewServiceDesc] = useState('');
-  const [newServicePrice, setNewServicePrice] = useState('');
-  const [selectedAreaForService, setSelectedAreaForService] = useState('');
   const [newLeadSourceName, setNewLeadSourceName] = useState('');
   const [newLeadSourceKind, setNewLeadSourceKind] = useState<'campaign' | 'referral' | 'partner' | 'organic' | 'other'>('referral');
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -168,6 +159,8 @@ export function Settings() {
   const [objectionDrafts, setObjectionDrafts] = useState<Record<string, string>>({});
   const [funnelDrafts, setFunnelDrafts] = useState<Record<string, FunnelDraft>>({});
   const [expandedFunnels, setExpandedFunnels] = useState<Record<string, boolean>>({});
+  const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
+  const [serviceDrafts, setServiceDrafts] = useState<Record<string, ServiceDraft>>({});
   const [expandedStageSections, setExpandedStageSections] = useState<Record<string, boolean>>({});
   const [expandedFieldSections, setExpandedFieldSections] = useState<Record<string, boolean>>({});
   const [fieldModalFunnelId, setFieldModalFunnelId] = useState<string | null>(null);
@@ -190,6 +183,15 @@ export function Settings() {
         return a.name.localeCompare(b.name);
       }),
     [areasOfLaw, funnels],
+  );
+
+  const servicesByArea = useMemo(
+    () =>
+      areasOfLaw.reduce<Record<string, typeof services>>((acc, area) => {
+        acc[area.id] = services.filter((service) => service.areaOfLawId === area.id);
+        return acc;
+      }, {}),
+    [areasOfLaw, services],
   );
 
   useEffect(() => {
@@ -223,8 +225,9 @@ export function Settings() {
   }, [activeTab, isAdmin, requestedTab, setSearchParams]);
 
   useEffect(() => {
-    const nextSection: OperationsSection = validOperationSections.includes((requestedSection || '') as OperationsSection)
-      ? (requestedSection as OperationsSection)
+    const normalizedSection = requestedSection === 'services' ? 'areas' : requestedSection;
+    const nextSection: OperationsSection = validOperationSections.includes((normalizedSection || '') as OperationsSection)
+      ? (normalizedSection as OperationsSection)
       : 'funnels';
     if (nextSection !== activeOperationSection) {
       setActiveOperationSection(nextSection);
@@ -251,6 +254,8 @@ export function Settings() {
   };
 
   const getStageDraft = (funnelId: string) => stageDrafts[funnelId] || { name: '', color: '#D4AF37' };
+  const getServiceDraft = (areaId: string): ServiceDraft =>
+    serviceDrafts[areaId] || { name: '', description: '', price: '' };
   const getFieldDraft = (funnelId: string): FieldDraft =>
     fieldDrafts[funnelId] || {
       label: '',
@@ -266,6 +271,13 @@ export function Settings() {
     setStageDrafts((current) => ({
       ...current,
       [funnelId]: { ...getStageDraft(funnelId), ...patch },
+    }));
+  };
+
+  const updateServiceDraft = (areaId: string, patch: Partial<ServiceDraft>) => {
+    setServiceDrafts((current) => ({
+      ...current,
+      [areaId]: { ...getServiceDraft(areaId), ...patch },
     }));
   };
 
@@ -294,6 +306,10 @@ export function Settings() {
 
   const toggleFunnelCard = (funnelId: string) => {
     setExpandedFunnels((current) => ({ ...current, [funnelId]: !current[funnelId] }));
+  };
+
+  const toggleAreaCard = (areaId: string) => {
+    setExpandedAreas((current) => ({ ...current, [areaId]: !current[areaId] }));
   };
 
   const upsertFunnelFieldByKey = (
@@ -332,12 +348,14 @@ export function Settings() {
     setNewAreaDesc('');
   };
 
-  const handleAddService = () => {
-    if (!newServiceName.trim() || !selectedAreaForService) return;
-    addService(selectedAreaForService, newServiceName, newServiceDesc, newServicePrice ? Number(newServicePrice) : undefined);
-    setNewServiceName('');
-    setNewServiceDesc('');
-    setNewServicePrice('');
+  const handleAddService = (areaId: string) => {
+    const draft = getServiceDraft(areaId);
+    if (!draft.name.trim()) return;
+    addService(areaId, draft.name, draft.description, draft.price ? Number(draft.price) : undefined);
+    setServiceDrafts((current) => ({
+      ...current,
+      [areaId]: { name: '', description: '', price: '' },
+    }));
   };
 
   const handleAddLeadSource = () => {
@@ -998,62 +1016,93 @@ export function Settings() {
             </div>
             <div className="grid gap-4">
               {areasOfLaw.map((area) => (
-                <div key={area.id} className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
-                  <div>
-                    <h4 className="text-lg font-bold text-gold-100">{area.name}</h4>
-                    {area.description && <p className="text-sm text-muted-foreground">{area.description}</p>}
-                  </div>
-                  <button onClick={() => deleteAreaOfLaw(area.id)} className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10">
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-              {areasOfLaw.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhuma área cadastrada.</p>}
-            </div>
-          </section>
-          )}
-
-          {activeOperationSection === 'services' && (
-          <section id="settings-section-services" className="space-y-6 rounded-xl border border-border bg-card p-6">
-            <div>
-              <h3 className="text-xl font-serif text-gold-400">Serviços</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <select value={selectedAreaForService} onChange={(e) => setSelectedAreaForService(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2">
-                <option value="">Selecione a área de atuação</option>
-                {areasOfLaw.map((area) => (
-                  <option key={area.id} value={area.id}>{area.name}</option>
-                ))}
-              </select>
-              <input type="text" placeholder="Nome do serviço" value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
-              <input type="text" placeholder="Descrição curta" value={newServiceDesc} onChange={(e) => setNewServiceDesc(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
-              <input type="number" placeholder="Valor estimado" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="rounded-lg border border-border bg-background px-4 py-2" />
-            </div>
-            <div className="flex justify-end">
-              <button onClick={handleAddService} disabled={!selectedAreaForService || !newServiceName} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-50">
-                <Plus className="h-4 w-4" /> Adicionar serviço
-              </button>
-            </div>
-            <div className="grid gap-4">
-              {services.map((service) => {
-                const area = areasOfLaw.find((item) => item.id === service.areaOfLawId);
-                return (
-                  <div key={service.id} className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
-                    <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="rounded bg-accent px-2 py-1 text-xs font-bold uppercase tracking-wider text-primary">{area?.name || 'Área não vinculada'}</span>
-                        {service.price && <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-mono text-emerald-400">R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                <article key={area.id} className="overflow-hidden rounded-xl border border-border bg-background/40">
+                  <div className="flex items-center justify-between gap-4 px-5 py-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleAreaCard(area.id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <div className="rounded-lg border border-border bg-card p-2 text-gold-400">
+                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedAreas[area.id] ? 'rotate-180' : ''}`} />
                       </div>
-                      <h4 className="text-lg font-bold text-gold-100">{service.name}</h4>
-                      {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
-                    </div>
-                    <button onClick={() => deleteService(service.id)} className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10">
+                      <div className="min-w-0">
+                        <h4 className="truncate text-lg font-bold text-gold-100">{area.name}</h4>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          <span>{servicesByArea[area.id]?.length || 0} serviço(s)</span>
+                          {area.description ? <span className="normal-case tracking-normal">{area.description}</span> : null}
+                        </div>
+                      </div>
+                    </button>
+                    <button onClick={() => deleteAreaOfLaw(area.id)} className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10">
                       <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
-                );
-              })}
-              {services.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhum serviço cadastrado.</p>}
+
+                  {expandedAreas[area.id] && (
+                    <div className="space-y-5 border-t border-border px-5 py-5">
+                      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_180px_auto]">
+                        <input
+                          type="text"
+                          placeholder="Nome do serviço"
+                          value={getServiceDraft(area.id).name}
+                          onChange={(e) => updateServiceDraft(area.id, { name: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-4 py-2"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Descrição curta"
+                          value={getServiceDraft(area.id).description}
+                          onChange={(e) => updateServiceDraft(area.id, { description: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-4 py-2"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Valor estimado"
+                          value={getServiceDraft(area.id).price}
+                          onChange={(e) => updateServiceDraft(area.id, { price: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-4 py-2"
+                        />
+                        <button
+                          onClick={() => handleAddService(area.id)}
+                          disabled={!getServiceDraft(area.id).name.trim()}
+                          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Plus className="h-4 w-4" /> Adicionar
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {servicesByArea[area.id]?.length ? (
+                          servicesByArea[area.id].map((service) => (
+                            <div key={service.id} className="flex items-center justify-between rounded-xl border border-border bg-card/60 px-4 py-3">
+                              <div>
+                                <h5 className="text-sm font-bold text-gold-100">{service.name}</h5>
+                                {service.description ? <p className="text-sm text-muted-foreground">{service.description}</p> : null}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {service.price ? (
+                                  <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-mono text-emerald-400">
+                                    R$ {service.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </span>
+                                ) : null}
+                                <button onClick={() => deleteService(service.id)} className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="rounded-xl border border-dashed border-border bg-background/40 px-4 py-4 text-sm text-muted-foreground">
+                            Esta área ainda não tem serviços cadastrados.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ))}
+              {areasOfLaw.length === 0 && <p className="py-6 text-center text-muted-foreground">Nenhuma área cadastrada.</p>}
             </div>
           </section>
           )}
