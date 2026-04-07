@@ -480,11 +480,11 @@ export function Leads() {
     : 'Buscar por nome, telefone ou CPF...';
 
   return (
-    <div className="p-10 max-w-7xl mx-auto space-y-10">
+    <div className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto space-y-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-5xl font-serif font-bold gold-text-gradient tracking-tight">Gestão de Leads</h1>
-          <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-xs">
+          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">Gestão de Leads</h1>
+          <p className="text-muted-foreground mt-2 font-medium tracking-[0.1em] uppercase text-[11px]">
             Um único kanban para operar qualquer funil do escritório
           </p>
         </div>
@@ -877,7 +877,7 @@ export function Leads() {
             )}
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-3xl font-serif font-bold gold-text-gradient">{createIsProspecting ? 'Novo cadastro em prospecção' : 'Novo lead comercial'}</h2>
+                <h2 className="text-2xl font-serif font-bold gold-text-gradient">{createIsProspecting ? 'Novo cadastro em prospecção' : 'Novo lead comercial'}</h2>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground mt-2">Funil de entrada: {createFunnel.name}</p>
               </div>
               <button

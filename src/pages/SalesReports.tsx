@@ -288,11 +288,11 @@ export function SalesReports() {
   };
 
   return (
-    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
       <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">Relatórios</h1>
-          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">Leitura premium por período, funil, investimento e retorno</p>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold gold-text-gradient tracking-tight">Relatórios</h1>
+          <p className="text-muted-foreground mt-2 text-[11px] uppercase tracking-widest">Leitura premium por período, funil, investimento e retorno</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <PremiumSelect
@@ -329,9 +329,9 @@ export function SalesReports() {
       </section>
 
       <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+        <div className="px-5 py-4 border-b border-border bg-accent flex items-center gap-3">
           <GitBranchPlus className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">{selectedScope === ALL_SCOPE ? 'Fechamento por Funil' : activeFunnel?.operation === 'prospecting' ? 'Fechamento por Serviço' : 'Fechamento por Campanha'}</h2>
+          <h2 className="text-base font-serif font-bold">{selectedScope === ALL_SCOPE ? 'Fechamento por Funil' : activeFunnel?.operation === 'prospecting' ? 'Fechamento por Serviço' : 'Fechamento por Campanha'}</h2>
         </div>
         <div className="overflow-x-auto scrollbar-none">
           <table className="w-full text-sm border-t-4 border-t-gold-500/70">
@@ -364,9 +364,9 @@ export function SalesReports() {
       </section>
 
       <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+        <div className="px-5 py-4 border-b border-border bg-accent flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-serif font-bold">Disciplina por Responsável</h2>
+          <h2 className="text-base font-serif font-bold">Disciplina por Responsável</h2>
         </div>
         <div className="overflow-x-auto scrollbar-none">
           <table className="w-full text-sm border-t-4 border-t-gold-500/70">
@@ -402,5 +402,5 @@ export function SalesReports() {
 }
 
 function MetricCard({ icon: Icon, label, value }: { icon: typeof FileSpreadsheet; label: string; value: string | number }) {
-  return <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-xl"><div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary"><Icon className="w-4 h-4" /></div><div><p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p><p className="text-lg font-serif font-bold">{value}</p></div></div>;
+  return <div className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 shadow-xl"><div className="w-8 h-8 rounded-lg bg-accent border border-border flex items-center justify-center text-primary"><Icon className="w-4 h-4" /></div><div><p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p><p className="text-base font-serif font-bold">{value}</p></div></div>;
 }

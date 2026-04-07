@@ -117,11 +117,11 @@ export function TrafficAnalytics() {
   };
 
   return (
-    <div className="p-10 max-w-7xl mx-auto space-y-8">
-      <header className="space-y-5">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+      <header className="space-y-4">
         <div>
-          <h1 className="text-4xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Tráfego</h1>
-          <p className="text-muted-foreground mt-2 text-xs uppercase tracking-widest">
+          <h1 className="text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight">Painel de Tráfego</h1>
+          <p className="text-muted-foreground mt-2 text-[11px] uppercase tracking-widest">
             Visão unificada de performance, campanhas e retorno comercial
           </p>
           {user?.sector && (
@@ -152,11 +152,11 @@ export function TrafficAnalytics() {
       ) : (
         <>
           <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+            <div className="px-5 py-4 border-b border-border bg-accent flex items-center gap-3">
               <CalendarRange className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-serif font-bold">Resumo mensal automático</h2>
+              <h2 className="text-base font-serif font-bold">Resumo mensal automático</h2>
             </div>
-            <div className="p-6 text-sm text-muted-foreground">
+            <div className="p-5 text-[13px] text-muted-foreground">
               {latestWeekly ? (
                 <p>Base semanal mais recente: {latestWeekly.weekKey}. O painel consolida investimento, receita e ROI do mês corrente.</p>
               ) : (
@@ -175,9 +175,9 @@ export function TrafficAnalytics() {
           </section>
 
           <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+            <div className="px-5 py-4 border-b border-border bg-accent flex items-center gap-3">
               <BarChart3 className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-serif font-bold">Campanhas e conversão</h2>
+              <h2 className="text-base font-serif font-bold">Campanhas e conversão</h2>
             </div>
             <div className="overflow-x-auto scrollbar-none">
               <table className="w-full text-sm border-t-4 border-t-gold-500/70">
@@ -220,11 +220,11 @@ export function TrafficAnalytics() {
           </section>
 
           <section className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-border bg-accent flex items-center gap-3">
+            <div className="px-5 py-4 border-b border-border bg-accent flex items-center gap-3">
               <Target className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-serif font-bold">Top criativos por volume de leads</h2>
+              <h2 className="text-base font-serif font-bold">Top criativos por volume de leads</h2>
             </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
               {stats.topCreative.length === 0 ? (
                 <p className="text-muted-foreground">Nenhum criativo com leads vinculados ainda.</p>
               ) : (
@@ -246,13 +246,13 @@ export function TrafficAnalytics() {
 
 function StatCard({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: string | number }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-3 shadow-xl">
-      <div className="w-10 h-10 rounded-lg bg-accent border border-border flex items-center justify-center text-primary">
-        <Icon className="w-5 h-5" />
+    <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 shadow-xl">
+      <div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary">
+        <Icon className="w-4 h-4" />
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p>
-        <p className="text-xl font-serif font-bold">{value}</p>
+        <p className="text-lg font-serif font-bold">{value}</p>
       </div>
     </div>
   );

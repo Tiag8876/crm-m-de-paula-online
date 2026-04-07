@@ -163,11 +163,11 @@ export function Dashboard() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-10">
-      <header className="space-y-4">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
+      <header className="space-y-3">
         <div>
-          <h1 className="text-4xl font-serif font-bold tracking-tight gold-text-gradient md:text-5xl">Painel de Controle</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <h1 className="text-3xl font-serif font-bold tracking-tight gold-text-gradient md:text-4xl">Painel de Controle</h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
             A visão geral da operação fica aqui. Atalhos, prioridades, agenda e saúde dos funis sem obrigar ninguém a trocar de contexto para entender o que fazer.
           </p>
         </div>
@@ -187,11 +187,11 @@ export function Dashboard() {
         <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Operação do CRM" description="Ajustar funis, formulários e catálogo do sistema." />
       </section>
 
-      <section className="grid grid-cols-1 gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-8">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-6">
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent p-6">
-              <h2 className="text-lg font-serif font-bold">Fila de prioridades</h2>
+            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Fila de prioridades</h2>
               <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{priorityQueue.length} item(ns)</span>
             </div>
             <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
@@ -218,11 +218,11 @@ export function Dashboard() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
-              <h2 className="text-lg font-serif font-bold">Atividade recente</h2>
+            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Atividade recente</h2>
               <Link to="/leads" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Abrir operação <ArrowRight className="h-3 w-3" /></Link>
             </div>
-            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
               {recentActivity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
                 <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
                   <div className="flex items-center justify-between gap-3">
@@ -236,10 +236,10 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6">
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
-              <h2 className="text-lg font-serif font-bold">Agenda de hoje</h2>
+            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Agenda de hoje</h2>
               <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} ações</span>
             </div>
             <div className="space-y-3 p-4">
@@ -253,8 +253,8 @@ export function Dashboard() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent p-6">
-              <h2 className="text-lg font-serif font-bold">Funis em destaque</h2>
+            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Funis em destaque</h2>
               <span className="text-[10px] uppercase tracking-widest text-gold-500/70">Conversão geral {metrics.conversion.toFixed(1)}%</span>
             </div>
             <div className="space-y-3 p-4">
@@ -285,20 +285,20 @@ export function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-xl">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-xl">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-4 w-4" /></div>
       <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p>
-      <p className="mt-2 text-3xl font-serif font-bold">{value}</p>
+      <p className="mt-2 text-2xl font-serif font-bold">{value}</p>
     </div>
   );
 }
 
 function QuickLink({ to, icon: Icon, title, description }: { to: string; icon: typeof LayoutDashboard; title: string; description: string }) {
   return (
-    <Link to={to} className="rounded-2xl border border-border bg-card p-5 shadow-xl transition-all hover:border-gold-500/40">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-5 w-5" /></div>
-      <p className="text-lg font-serif font-bold">{title}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    <Link to={to} className="rounded-2xl border border-border bg-card p-4 shadow-xl transition-all hover:border-gold-500/40">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-4 w-4" /></div>
+      <p className="text-base font-serif font-bold">{title}</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
     </Link>
   );
 }

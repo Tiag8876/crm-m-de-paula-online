@@ -399,9 +399,9 @@ export function Settings() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
-      <div className="mb-8">
-        <h1 className="mb-2 text-4xl font-serif font-bold text-primary">Configurações</h1>
+    <div className="mx-auto max-w-7xl p-4 md:p-8">
+      <div className="mb-6">
+        <h1 className="mb-2 text-3xl md:text-4xl font-serif font-bold text-primary">Configurações</h1>
       </div>
 
       <div className="mb-8 flex gap-3 overflow-x-auto border-b border-border pb-4">
@@ -419,9 +419,9 @@ export function Settings() {
       {activeTab === 'profile' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6">
-            <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-serif text-gold-400">Meu perfil</h2>
+              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                <h2 className="text-xl font-serif text-gold-400">Meu perfil</h2>
               </div>
               <div className="rounded-full border border-border bg-background/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {user?.role === 'admin' ? 'Administrador' : 'Usuário da equipe'}
@@ -481,7 +481,7 @@ export function Settings() {
       {isAdmin && activeTab === 'team' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-2xl font-serif text-gold-400">Equipe</h2>
+            <h2 className="text-xl font-serif text-gold-400">Equipe</h2>
           </div>
           <UsersAdminPage embedded />
         </div>

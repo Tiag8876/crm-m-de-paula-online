@@ -144,10 +144,10 @@ export function Campaigns({ embedded = false }: { embedded?: boolean }) {
   };
 
   return (
-    <div className={embedded ? "space-y-10" : "p-10 max-w-7xl mx-auto space-y-10"}>
+    <div className={embedded ? "space-y-8" : "p-4 md:p-8 max-w-7xl mx-auto space-y-8"}>
       <header className="flex items-center justify-between">
         <div>
-          <h1 className={embedded ? "text-3xl font-serif font-bold gold-text-gradient tracking-tight" : "text-4xl font-serif font-bold gold-text-gradient tracking-tight"}>Campanhas Ativas</h1>
+          <h1 className={embedded ? "text-2xl md:text-3xl font-serif font-bold gold-text-gradient tracking-tight" : "text-3xl md:text-4xl font-serif font-bold gold-text-gradient tracking-tight"}>Campanhas Ativas</h1>
           <p className="text-muted-foreground mt-2 font-medium tracking-widest uppercase text-[10px]">Arquitetura de Conversão & Criativos</p>
         </div>
         <button
@@ -199,7 +199,7 @@ export function Campaigns({ embedded = false }: { embedded?: boolean }) {
                       <Folder className="w-6 h-6" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-serif font-bold text-foreground">{campaign.name}</h2>
+                      <h2 className="text-lg font-serif font-bold text-foreground">{campaign.name}</h2>
                       <div className="flex gap-2 mt-1">
                         <p className="text-[10px] text-gold-500/60 font-black uppercase tracking-widest">
                           {(adGroups || []).filter(ag => ag.campaignId === campaign.id).length} Conjuntos de Anúncios
