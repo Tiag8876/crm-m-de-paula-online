@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getLeadServiceIds, leadMatchesService } from '@/lib/leadServices';
 import { isAdminUser } from '@/lib/access';
-import { buildEffectiveFieldSchema } from '@/lib/funnelFieldSchema';
+import { buildEffectiveFieldSchema, getBaseFieldKeys } from '@/lib/funnelFieldSchema';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -134,11 +134,7 @@ export function Leads() {
   const createSortedStages = [...(createFunnel?.stages || [])].sort((a, b) => a.order - b.order);
   const createEffectiveFieldSchema = buildEffectiveFieldSchema(createFunnel);
   const createFieldMap = new Map(createEffectiveFieldSchema.map((field) => [field.key, field]));
-  const createBaseFieldKeys = new Set(
-    (createIsProspecting
-      ? ['clinicName', 'contactName', 'phone', 'email', 'cnpj', 'city', 'neighborhood', 'receptionistName']
-      : ['name', 'phone', 'email', 'cpf'])
-  );
+  const createBaseFieldKeys = getBaseFieldKeys(createFunnel?.operation);
   const createCustomFieldSchema = createEffectiveFieldSchema.filter((field) => !createBaseFieldKeys.has(field.key));
   const createFunnelArea = areasOfLaw.find((area) => area.id === createFunnel?.areaOfLawId);
   const createAvailableServices = services.filter((service) => !createFunnel?.areaOfLawId || service.areaOfLawId === createFunnel.areaOfLawId);
