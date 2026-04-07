@@ -11,6 +11,7 @@ import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { FunnelConfig, Lead } from '@/types/crm';
+import { AssigneeSelect } from '@/components/AssigneeSelect';
 
 const sortFunnels = (items: FunnelConfig[]) =>
   [...items].sort((a, b) => {
@@ -73,6 +74,7 @@ export function Leads() {
   const [selectedArea, setSelectedArea] = useState('');
   const [createFunnelId, setCreateFunnelId] = useState('');
   const [createLeadSourceId, setCreateLeadSourceId] = useState('');
+  const [createOwnerUserId, setCreateOwnerUserId] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<number | null>(null);
@@ -227,6 +229,7 @@ export function Leads() {
     setShowSaveSuccess(false);
     setSelectedArea('');
     setCreateLeadSourceId('');
+    setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
   };
 
   const collectCustomFields = (formData: FormData) =>
@@ -266,7 +269,7 @@ export function Leads() {
           serviceId: String(formData.get('serviceId') || '') || undefined,
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           status: createSortedStages[0]?.id || 'p_novo',
-          ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+          ownerUserId: createOwnerUserId || (isAdmin ? undefined : user?.id),
           customFields,
         });
       } else {
@@ -296,7 +299,7 @@ export function Leads() {
           funnelId: String(formData.get('funnelId') || '') || createFunnel?.id,
           estimatedValue: Number(formData.get('estimatedValue')) || 0,
           status: createSortedStages[0]?.id || 'novo',
-          ownerUserId: String(formData.get('ownerUserId') || '') || (isAdmin ? undefined : user?.id),
+          ownerUserId: createOwnerUserId || (isAdmin ? undefined : user?.id),
           customFields,
         });
       }
@@ -452,11 +455,12 @@ export function Leads() {
           <button
             onClick={() => {
               resetModalState();
-              setCreateFunnelId(activeFunnel?.id || '');
-              setSelectedArea(activeFunnel?.areaOfLawId || '');
-              setCreateLeadSourceId('');
-              setIsModalOpen(true);
-            }}
+                setCreateFunnelId(activeFunnel?.id || '');
+                setSelectedArea(activeFunnel?.areaOfLawId || '');
+                setCreateLeadSourceId('');
+                setCreateOwnerUserId(isAdmin ? '' : user?.id || '');
+                setIsModalOpen(true);
+              }}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gold-400 transition-all shadow-lg"
           >
             <Plus className="w-5 h-5" />
@@ -1045,12 +1049,14 @@ export function Leads() {
               )}
               <div className="md:col-span-2">
                 <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gold-500/60">Atribuir responsável</label>
-                <select name="ownerUserId" defaultValue={isAdmin ? '' : user?.id || ''} className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl">
-                  <option value="">Sem atribuição definida</option>
-                  {activeAssignableUsers.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
-                  ))}
-                </select>
+                <AssigneeSelect
+                  users={activeAssignableUsers}
+                  value={createOwnerUserId}
+                  onChange={(nextValue) => setCreateOwnerUserId(nextValue || '')}
+                  placeholder="Selecione um vendedor"
+                  unassignedLabel="Sem atribui??o definida"
+                  className="bg-background/40"
+                />
               </div>
               <div className="md:col-span-2 flex justify-end gap-4 mt-8 pt-6 border-t border-border">
                 <button type="button" onClick={() => { setIsModalOpen(false); resetModalState(); }} className="px-8 py-3 text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:text-foreground transition-all" disabled={isSavingRecord}>

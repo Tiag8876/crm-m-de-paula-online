@@ -15,6 +15,7 @@ import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getBaseFieldKeys } from '@/lib/funnelFieldSchema';
 import { isAdminUser } from '@/lib/access';
+import { AssigneeSelect } from '@/components/AssigneeSelect';
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
@@ -532,18 +533,13 @@ export function LeadDetails() {
           ))}
           <div className="space-y-1">
             <p className="text-[10px] font-black text-gold-500/60 uppercase tracking-widest">Vendedor Responsável</p>
-            <select
-              value={lead.ownerUserId || ''}
-              onChange={(e) => updateLead(lead.id, { ownerUserId: e.target.value || undefined })}
-              className="bg-background/40 border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary w-full"
-            >
-              <option value="">Selecione um vendedor</option>
-              {selectableUsers.map((assignableUser) => (
-                <option key={assignableUser.id} value={assignableUser.id}>
-                  {assignableUser.name}
-                </option>
-              ))}
-            </select>
+            <AssigneeSelect
+              users={selectableUsers}
+              value={lead.ownerUserId}
+              onChange={(nextValue) => updateLead(lead.id, { ownerUserId: nextValue || undefined })}
+              placeholder="Selecione um vendedor"
+              unassignedLabel="Sem atribuição definida"
+            />
             {lead.status === 'perdido' && lead.lossReasonCode && (
               <p className="text-[10px] text-muted-foreground mt-2">
                 Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
@@ -1025,16 +1021,13 @@ export function LeadDetails() {
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Vendedor Responsável</label>
-                <select
-                  value={editForm.ownerUserId}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, ownerUserId: e.target.value }))}
-                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
-                >
-                  <option value="">Sem atribuição</option>
-                  {selectableUsers.map((assignableUser) => (
-                    <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.name}</option>
-                  ))}
-                </select>
+                <AssigneeSelect
+                    users={selectableUsers}
+                    value={editForm.ownerUserId}
+                    onChange={(nextValue) => setEditForm((prev) => ({ ...prev, ownerUserId: nextValue || '' }))}
+                    placeholder="Selecione um vendedor"
+                    unassignedLabel="Sem atribuição"
+                  />
               </div>
 
               <div className="md:col-span-2 flex justify-end gap-4 pt-4">
