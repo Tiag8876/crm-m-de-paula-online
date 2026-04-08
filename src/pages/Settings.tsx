@@ -3,11 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
+  BookOpen,
   ArrowDown,
   ArrowUp,
   BriefcaseBusiness,
   ChevronDown,
   Copy,
+  Download,
+  ExternalLink,
   ListChecks,
   Plus,
   Shield,
@@ -21,7 +24,7 @@ import { buildEffectiveFieldSchema, createFieldOptions, getTemplatesForOperation
 import { UsersAdminPage } from '@/pages/UsersAdminPage';
 import type { FieldTemplate, FunnelConfig, FunnelFieldOption, FunnelFieldType, FieldTemplateSource } from '@/types/crm';
 
-type SettingsTab = 'profile' | 'team' | 'operations';
+type SettingsTab = 'profile' | 'documentation' | 'team' | 'operations';
 type OperationsSection = 'funnels' | 'areas' | 'sources' | 'tasks';
 type StageDraft = { name: string; color: string };
 type FunnelDraft = { name: string; description: string };
@@ -116,7 +119,10 @@ export function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const requestedSection = searchParams.get('section');
-  const initialTab: SettingsTab = requestedTab === 'team' || requestedTab === 'operations' ? requestedTab : 'profile';
+  const initialTab: SettingsTab =
+    requestedTab === 'documentation' || requestedTab === 'team' || requestedTab === 'operations'
+      ? requestedTab
+      : 'profile';
   const validOperationSections = ADMIN_SECTION_LINKS.map((section) => section.id);
   const normalizedRequestedSection = requestedSection === 'services' ? 'areas' : requestedSection;
   const initialOperationSection: OperationsSection = validOperationSections.includes((normalizedRequestedSection || '') as OperationsSection)
@@ -192,6 +198,11 @@ export function Settings() {
   const [profileConfirmPassword, setProfileConfirmPassword] = useState('');
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const manualBaseUrl = import.meta.env.BASE_URL || '/';
+  const manualRoot = manualBaseUrl.endsWith('/') ? manualBaseUrl : `${manualBaseUrl}/`;
+  const manualPdfUrl = `${manualRoot}manuals/manual_crm_mdepaula.pdf`;
+  const manualPdfViewerUrl = `${manualPdfUrl}#view=FitH`;
+  const manualDocxUrl = `${manualRoot}manuals/manual_crm_mdepaula.docx`;
 
   const sortedFunnels = useMemo(
     () =>
@@ -233,12 +244,16 @@ export function Settings() {
 
   useEffect(() => {
     if (!isAdmin && activeTab !== 'profile') {
-      setActiveTab('profile');
-      setSearchParams({ tab: 'profile' }, { replace: true });
+      const safeTab = requestedTab === 'documentation' ? 'documentation' : 'profile';
+      setActiveTab(safeTab);
+      setSearchParams({ tab: safeTab }, { replace: true });
       return;
     }
 
-    const nextTab: SettingsTab = requestedTab === 'team' || requestedTab === 'operations' ? requestedTab : 'profile';
+    const nextTab: SettingsTab =
+      requestedTab === 'documentation' || requestedTab === 'team' || requestedTab === 'operations'
+        ? requestedTab
+        : 'profile';
     if (nextTab !== activeTab) {
       setActiveTab(nextTab);
     }
@@ -439,8 +454,9 @@ export function Settings() {
 
   const tabs = [
     { key: 'profile' as const, icon: UserCircle2, label: 'Meu Perfil' },
+    { key: 'documentation' as const, icon: BookOpen, label: 'Documenta??o' },
     ...(isAdmin ? [{ key: 'team' as const, icon: Shield, label: 'Equipe' }] : []),
-    ...(isAdmin ? [{ key: 'operations' as const, icon: Workflow, label: 'Operação do CRM' }] : []),
+    ...(isAdmin ? [{ key: 'operations' as const, icon: Workflow, label: 'Opera??o do CRM' }] : []),
   ];
 
   return (
@@ -523,6 +539,54 @@ export function Settings() {
         </div>
       )}
 
+      {activeTab === 'documentation' && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl">
+                <h2 className="text-xl font-serif text-gold-400">Documenta??o do sistema</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Manual oficial do CRM M de Paula para consulta r?pida, treinamento da equipe e apoio no uso di?rio.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={manualPdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/60 hover:text-gold-400"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir PDF
+                </a>
+                <a
+                  href={manualPdfUrl}
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/60 hover:text-gold-400"
+                >
+                  <Download className="h-4 w-4" />
+                  Baixar PDF
+                </a>
+                <a
+                  href={manualDocxUrl}
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-gold-400"
+                >
+                  <Download className="h-4 w-4" />
+                  Baixar Word
+                </a>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-background/40">
+              <iframe
+                title="Manual do usu?rio do CRM M de Paula"
+                src={manualPdfViewerUrl}
+                className="h-[78vh] min-h-[720px] w-full bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {isAdmin && activeTab === 'team' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6">
