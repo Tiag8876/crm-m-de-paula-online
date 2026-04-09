@@ -454,9 +454,9 @@ export function Settings() {
 
   const tabs = [
     { key: 'profile' as const, icon: UserCircle2, label: 'Meu Perfil' },
-    { key: 'documentation' as const, icon: BookOpen, label: 'Documenta??o' },
+    { key: 'documentation' as const, icon: BookOpen, label: 'Documentação' },
     ...(isAdmin ? [{ key: 'team' as const, icon: Shield, label: 'Equipe' }] : []),
-    ...(isAdmin ? [{ key: 'operations' as const, icon: Workflow, label: 'Opera??o do CRM' }] : []),
+    ...(isAdmin ? [{ key: 'operations' as const, icon: Workflow, label: 'Operação do CRM' }] : []),
   ];
 
   return (
@@ -544,9 +544,9 @@ export function Settings() {
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
-                <h2 className="text-xl font-serif text-gold-400">Documenta??o do sistema</h2>
+                <h2 className="text-xl font-serif text-gold-400">Documentação do sistema</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Manual oficial do CRM M de Paula para consulta r?pida, treinamento da equipe e apoio no uso di?rio.
+                  Manual oficial do CRM M de Paula para consulta rápida, treinamento da equipe e apoio no uso diário.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -579,7 +579,7 @@ export function Settings() {
             </div>
             <div className="overflow-hidden rounded-2xl border border-border bg-background/40">
               <iframe
-                title="Manual do usu?rio do CRM M de Paula"
+                title="Manual do usuário do CRM M de Paula"
                 src={manualPdfViewerUrl}
                 className="h-[78vh] min-h-[720px] w-full bg-white"
               />
@@ -1044,7 +1044,7 @@ export function Settings() {
                                   ))}
                                   {availableTemplates.length === 0 && (
                                     <p className="rounded-xl border border-dashed border-border bg-background/40 px-4 py-4 text-sm text-muted-foreground lg:col-span-2">
-                                      Todos os modelos dispon?veis j? est?o ativos neste funil.
+                                      Todos os modelos disponíveis já estão ativos neste funil.
                                     </p>
                                   )}
                                 </div>
@@ -1331,14 +1331,14 @@ export function Settings() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">T?tulo do campo</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Título do campo</label>
                   <input
                     value={fieldDraft.label}
                     onChange={(event) => updateFieldDraft(targetFunnel.id, {
                       label: event.target.value,
                       key: normalizeFieldKey(event.target.value),
                     })}
-                    placeholder="Ex.: Nome da cl?nica"
+                    placeholder="Ex.: Nome da clínica"
                     className="w-full rounded-lg border border-border bg-background px-4 py-3"
                   />
                 </div>
@@ -1366,18 +1366,18 @@ export function Settings() {
                         onChange={(event) => updateFieldDraft(targetFunnel.id, { required: event.target.checked })}
                         className="rounded border-border bg-background"
                       />
-                      Obrigat?rio
+                      Obrigatório
                     </label>
                   </div>
                 </div>
 
                 {(fieldDraft.type === 'select' || fieldDraft.type === 'multiselect') && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Op??es da lista</label>
+                    <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Opções da lista</label>
                     <textarea
                       value={fieldDraft.optionsText}
                       onChange={(event) => updateFieldDraft(targetFunnel.id, { optionsText: event.target.value })}
-                      placeholder="Ex.: Cl?nica, Hospital, Laborat?rio"
+                      placeholder="Ex.: Clínica, Hospital, Laboratório"
                       className="min-h-[120px] w-full rounded-lg border border-border bg-background px-4 py-3 text-sm"
                     />
                   </div>
