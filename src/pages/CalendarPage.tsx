@@ -5,6 +5,11 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Clock, Plus, X, MessageCircle, PhoneCall, ListTodo } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import type { FollowUp, Task } from '@/types/crm';
+
+type CalendarFollowUpItem = FollowUp & { leadName: string; leadId: string; itemType: 'followup' };
+type CalendarTaskItem = Task & { leadName: string; leadId: string; itemType: 'task' };
+type CalendarItem = CalendarFollowUpItem | CalendarTaskItem;
 
 export function CalendarPage() {
   const { leads, addFollowUpToLead, addTaskToLead, kanbanStages } = useStore();
@@ -20,15 +25,15 @@ export function CalendarPage() {
     end: addDays(startOfWeek(monthEnd, { weekStartsOn: 0 }), 6),
   });
 
-  const allFollowUps = leads.flatMap(lead =>
-    (lead.followUps || []).map(fu => ({ ...fu, leadName: lead.name, leadId: lead.id, itemType: 'followup' as const }))
+  const allFollowUps: CalendarFollowUpItem[] = leads.flatMap((lead) =>
+    (lead.followUps || []).map((fu) => ({ ...fu, leadName: lead.name, leadId: lead.id, itemType: 'followup' as const }))
   );
 
-  const allTasks = leads.flatMap(lead =>
-    (lead.tasks || []).map(task => ({ ...task, leadName: lead.name, leadId: lead.id, itemType: 'task' as const }))
+  const allTasks: CalendarTaskItem[] = leads.flatMap((lead) =>
+    (lead.tasks || []).map((task) => ({ ...task, leadName: lead.name, leadId: lead.id, itemType: 'task' as const }))
   );
 
-  const allItems = [...allFollowUps, ...allTasks];
+  const allItems: CalendarItem[] = [...allFollowUps, ...allTasks];
 
   const prevMonth = () => setCurrentDate(addDays(monthStart, -1));
   const nextMonth = () => setCurrentDate(addDays(monthEnd, 1));
@@ -95,7 +100,7 @@ export function CalendarPage() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    {dayItems.slice(0, 3).map((item: any) => (
+                    {dayItems.slice(0, 3).map((item) => (
                       <div key={item.id} onClick={(e) => e.stopPropagation()}>
                         <Link
                           to={`/leads/${item.leadId}`}
@@ -135,7 +140,7 @@ export function CalendarPage() {
                 .filter(item => new Date(item.date) >= new Date() && (item.status === 'pendente'))
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                 .slice(0, 8)
-                .map((item: any) => (
+                .map((item) => (
                   <Link
                     key={item.id}
                     to={`/leads/${item.leadId}`}
@@ -208,8 +213,10 @@ export function CalendarPage() {
               const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
               if (modalType === 'followup') {
+                const rawType = formData.get('type');
+                const followUpType = rawType === 'email' || rawType === 'ligacao' || rawType === 'whatsapp' ? rawType : 'whatsapp';
                 addFollowUpToLead(leadId, {
-                  type: formData.get('type') as any,
+                  type: followUpType,
                   date: `${dateStr}T${time}`,
                   notes: formData.get('notes') as string,
                 });

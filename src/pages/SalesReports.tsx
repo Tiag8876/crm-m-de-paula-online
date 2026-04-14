@@ -149,7 +149,7 @@ export function SalesReports() {
 
     if (selectedScope === ALL_SCOPE) return base;
     return base.filter((item) => item.funnelId === selectedScope);
-  }, [campaigns, leads, now, period, prospectLeads, rangeStart, selectedScope, services, user?.id, user?.role]);
+  }, [campaigns, leads, now, prospectLeads, rangeStart, selectedScope, services, user?.id, user?.role]);
 
   const spendByCampaign = useMemo(() => {
     const trackedIds = new Set(records.filter((record) => record.kind === 'commercial' && record.sourceId).map((record) => record.sourceId as string));

@@ -2,6 +2,7 @@
 import { useStore } from '@/store/useStore';
 import { Plus, ChevronDown, ChevronRight, Image as ImageIcon, Video, Folder, LayoutGrid, X, Upload, Megaphone, Target, MousePointer2, Edit2, CheckCircle2, Trash2, WalletCards, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { Ad, Campaign } from '@/types/crm';
 
 export function Campaigns({ embedded = false }: { embedded?: boolean }) {
   const { campaigns, campaignSpendEntries, adGroups, ads, areasOfLaw, services, addCampaign, updateCampaign, deleteCampaign, addCampaignSpendEntry, updateCampaignSpendEntry, deleteCampaignSpendEntry, addAdGroup, updateAdGroup, deleteAdGroup, addAd, updateAd, deleteAd } = useStore();
@@ -74,7 +75,7 @@ export function Campaigns({ embedded = false }: { embedded?: boolean }) {
     setIsSpendModalOpen(true);
   };
 
-  const openEditCampaignModal = (campaign: any) => {
+  const openEditCampaignModal = (campaign: Campaign) => {
     setEditingCampaignId(campaign.id);
     setNewCampaignName(campaign.name);
     setNewCampaignAreaId(campaign.areaOfLawId || '');
@@ -83,7 +84,7 @@ export function Campaigns({ embedded = false }: { embedded?: boolean }) {
     setIsCampaignModalOpen(true);
   };
 
-  const openEditAdModal = (ad: any) => {
+  const openEditAdModal = (ad: Ad) => {
     const mediaUrl = ad.mediaUrl || '';
     setEditingAdId(ad.id);
     setSelectedAdGroupIdForAd(ad.adGroupId);

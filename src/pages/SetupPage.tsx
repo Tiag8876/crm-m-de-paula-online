@@ -43,8 +43,9 @@ export function SetupPage() {
         if (!mounted) return;
         setBackendReachable(false);
       } finally {
-        if (!mounted) return;
-        setChecking(false);
+        if (mounted) {
+          setChecking(false);
+        }
       }
     };
 

@@ -8,6 +8,7 @@ import {
   History, User, DollarSign, Briefcase, Pencil,
   FileText, Paperclip, AlertCircle, ListTodo, Video, X, ChevronDown
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getLeadServiceIds } from '@/lib/leadServices';
@@ -62,6 +63,11 @@ export function LeadDetails() {
   });
 
   const [activeTab, setActiveTab] = useState<'history' | 'documents' | 'tasks'>('tasks');
+  const detailTabs: Array<{ key: 'tasks' | 'documents' | 'history'; icon: LucideIcon; label: string }> = [
+    { key: 'tasks', icon: ListTodo, label: 'Tarefas' },
+    { key: 'documents', icon: FileText, label: 'Documentos' },
+    { key: 'history', icon: History, label: 'Historico & Observacoes' },
+  ];
   const [followUpType, setFollowUpType] = useState<'whatsapp' | 'ligacao' | 'email'>('whatsapp');
   const [followUpDate, setFollowUpDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [followUpTime, setFollowUpTime] = useState('09:00');
@@ -794,14 +800,10 @@ export function LeadDetails() {
         {/* Right Column: Central de Controle (Tabs) */}
         <div className="lg:col-span-2 bg-card rounded-3xl border border-border shadow-2xl flex flex-col overflow-hidden">
           <div className="flex border-b border-border bg-accent">
-            {[
-              { key: 'tasks', icon: ListTodo, label: 'Tarefas' },
-              { key: 'documents', icon: FileText, label: 'Documentos' },
-              { key: 'history', icon: History, label: 'Historico & Observacoes' },
-            ].map(tab => (
+            {detailTabs.map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
+                onClick={() => setActiveTab(tab.key)}
                 className={cn(
                   "flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
                   activeTab === tab.key ? "text-primary border-b-2 border-primary bg-accent" : "text-muted-foreground hover:text-foreground"

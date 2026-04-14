@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ApiError, api } from '@/lib/api';
 import { useStore } from '@/store/useStore';
@@ -51,7 +51,25 @@ export function StateSyncProvider() {
   const setRuntimeInfo = useSystemStore((state) => state.setRuntimeInfo);
   const setSyncState = useSystemStore((state) => state.setSyncState);
 
-  const flushPendingState = async () => {
+  const pullLatestState = useCallback(async () => {
+    if (!loadedRef.current || syncingRef.current) return;
+
+    try {
+      const data = await api.get<{ state: ReturnType<typeof pickState>; updatedAt?: string }>('/api/state');
+      if (!data.updatedAt || data.updatedAt === lastServerUpdatedAtRef.current) return;
+
+      const normalizedState = normalizePtBrDeep(data.state);
+      skipNextRef.current = true;
+      useStore.setState((current) => ({ ...current, ...normalizedState }));
+      saveOfflineSnapshot(normalizedState as unknown as Record<string, unknown>);
+      lastServerUpdatedAtRef.current = data.updatedAt;
+      setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
+    } catch {
+      // keep local state and retry
+    }
+  }, [setSyncState]);
+
+  const flushPendingState = useCallback(async () => {
     if (!loadedRef.current || syncingRef.current || !pendingStateRef.current) return;
 
     syncingRef.current = true;
@@ -79,25 +97,7 @@ export function StateSyncProvider() {
     } finally {
       syncingRef.current = false;
     }
-  };
-
-  const pullLatestState = async () => {
-    if (!loadedRef.current || syncingRef.current) return;
-
-    try {
-      const data = await api.get<{ state: ReturnType<typeof pickState>; updatedAt?: string }>('/api/state');
-      if (!data.updatedAt || data.updatedAt === lastServerUpdatedAtRef.current) return;
-
-      const normalizedState = normalizePtBrDeep(data.state);
-      skipNextRef.current = true;
-      useStore.setState((current) => ({ ...current, ...normalizedState }));
-      saveOfflineSnapshot(normalizedState as unknown as Record<string, unknown>);
-      lastServerUpdatedAtRef.current = data.updatedAt;
-      setSyncState({ syncState: 'synced', syncError: null, lastSyncAt: data.updatedAt || new Date().toISOString() });
-    } catch {
-      // keep local state and retry
-    }
-  };
+  }, [pullLatestState, setSyncState]);
 
   useEffect(() => {
     let mounted = true;
@@ -159,7 +159,7 @@ export function StateSyncProvider() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [flushPendingState, setRuntimeInfo, setSyncState]);
 
   useEffect(() => {
     const unsubscribe = useStore.subscribe((state) => {
@@ -189,7 +189,7 @@ export function StateSyncProvider() {
         window.clearTimeout(timerRef.current);
       }
     };
-  }, []);
+  }, [flushPendingState]);
 
   useEffect(() => {
     pullTimerRef.current = window.setInterval(() => {
@@ -215,7 +215,7 @@ export function StateSyncProvider() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [flushPendingState, pullLatestState]);
 
   useEffect(() => {
     inactivityTimerRef.current = window.setInterval(() => {
