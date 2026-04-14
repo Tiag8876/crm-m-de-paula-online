@@ -324,18 +324,26 @@ const mergeOwnedEntities = (existingItems, incomingItems, userId) => {
   const incoming = Array.isArray(incomingItems) ? incomingItems : [];
 
   const incomingById = new Map(incoming.filter((item) => item?.id).map((item) => [item.id, item]));
-
-  const next = existing.map((item) => {
+  const next = [];
+  for (const item of existing) {
     const canEdit = item?.ownerUserId === userId || !item?.ownerUserId;
-    if (!canEdit) return item;
+    if (!canEdit) {
+      next.push(item);
+      continue;
+    }
     const incomingVersion = incomingById.get(item.id);
-    if (!incomingVersion) return item;
-    if (!isIncomingEntityNewer(item, incomingVersion)) return item;
+    if (!incomingVersion) {
+      continue;
+    }
+    if (!isIncomingEntityNewer(item, incomingVersion)) {
+      next.push(item);
+      continue;
+    }
     const nextOwner = Object.prototype.hasOwnProperty.call(incomingVersion, "ownerUserId")
       ? incomingVersion?.ownerUserId || undefined
       : item?.ownerUserId || undefined;
-    return { ...incomingVersion, ownerUserId: nextOwner };
-  });
+    next.push({ ...incomingVersion, ownerUserId: nextOwner });
+  }
 
   for (const item of incoming) {
     if (!item?.id) continue;
@@ -350,20 +358,19 @@ const mergeOwnedEntities = (existingItems, incomingItems, userId) => {
 const mergeEntitiesById = (existingItems, incomingItems) => {
   const existing = Array.isArray(existingItems) ? existingItems : [];
   const incoming = Array.isArray(incomingItems) ? incomingItems : [];
-  const byId = new Map();
+  const next = [];
 
-  for (const item of existing) {
-    if (item?.id) byId.set(item.id, item);
-  }
   for (const item of incoming) {
     if (!item?.id) continue;
-    const current = byId.get(item.id);
+    const current = existing.find((existingItem) => existingItem?.id === item.id);
     if (!current || isIncomingEntityNewer(current, item)) {
-      byId.set(item.id, item);
+      next.push(item);
+      continue;
     }
+    next.push(current);
   }
 
-  return Array.from(byId.values());
+  return next;
 };
 
 const mergeStateForUser = (currentState, incomingState, user) => {
