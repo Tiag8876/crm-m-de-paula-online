@@ -557,6 +557,32 @@ export function SalesReports() {
   const bestCampaign = campaignRows.find((item) => item.total > 0);
   const bestOwner = ownerRows.find((item) => item.total > 0);
   const linkedFunnelsCount = funnelRows.filter((item) => item.linkedCampaignId).length;
+  const canViewFinancials = user?.role === 'admin';
+
+  const ownerCampaignRows = useMemo(
+    () => (selectedOwner ? buildCampaignRows(detailRecords, campaigns, getAllocatedSpend, nowMs) : []),
+    [campaigns, detailRecords, getAllocatedSpend, nowMs, selectedOwner],
+  );
+  const ownerFunnelRows = useMemo(
+    () => (selectedOwner ? buildFunnelRows(detailRecords, allFunnels, campaigns, getAllocatedSpend, nowMs) : []),
+    [allFunnels, campaigns, detailRecords, getAllocatedSpend, nowMs, selectedOwner],
+  );
+  const campaignOwnerRows = useMemo(
+    () => (selectedCampaign ? buildOwnerRows(detailRecords, users, user, getAllocatedSpend, nowMs) : []),
+    [detailRecords, getAllocatedSpend, nowMs, selectedCampaign, user, users],
+  );
+  const campaignFunnelRows = useMemo(
+    () => (selectedCampaign ? buildFunnelRows(detailRecords, allFunnels, campaigns, getAllocatedSpend, nowMs) : []),
+    [allFunnels, campaigns, detailRecords, getAllocatedSpend, nowMs, selectedCampaign],
+  );
+  const funnelOwnerRows = useMemo(
+    () => (selectedFunnel ? buildOwnerRows(detailRecords, users, user, getAllocatedSpend, nowMs) : []),
+    [detailRecords, getAllocatedSpend, nowMs, selectedFunnel, user, users],
+  );
+  const funnelCampaignRows = useMemo(
+    () => (selectedFunnel ? buildCampaignRows(detailRecords, campaigns, getAllocatedSpend, nowMs) : []),
+    [campaigns, detailRecords, getAllocatedSpend, nowMs, selectedFunnel],
+  );
 
   const detailTitle = selectedCampaign
     ? `Campanha: ${selectedCampaign.name}${detailOwnerId ? ` / ${getOwnerLabel(detailOwnerId, users, user)}` : ''}`
@@ -572,20 +598,26 @@ export function SalesReports() {
       ['Fechados', String(detailTitle ? detailMetrics.won : overallMetrics.won)],
       ['Perdidos', String(detailTitle ? detailMetrics.lost : overallMetrics.lost)],
       ['Conversao', detailTitle ? formatPercent(detailMetrics.conversion) : formatPercent(overallMetrics.conversion)],
-      ['Investimento', detailTitle ? formatCurrency(detailMetrics.totalSpend) : formatCurrency(overallMetrics.totalSpend)],
-      ['Receita', detailTitle ? formatCurrency(detailMetrics.wonRevenue) : formatCurrency(overallMetrics.wonRevenue)],
-      ['ROI', detailTitle ? formatPercent(detailMetrics.roi) : formatPercent(overallMetrics.roi)],
     ];
+    if (canViewFinancials) {
+      summaryRows.push(
+        ['Investimento', detailTitle ? formatCurrency(detailMetrics.totalSpend) : formatCurrency(overallMetrics.totalSpend)],
+        ['Receita', detailTitle ? formatCurrency(detailMetrics.wonRevenue) : formatCurrency(overallMetrics.wonRevenue)],
+        ['ROI', detailTitle ? formatPercent(detailMetrics.roi) : formatPercent(overallMetrics.roi)],
+      );
+    }
     const focusRows = (detailTitle ? detailComparisonRows : campaignRows.slice(0, 12)).map((item) => [
       item.name,
       String(item.total),
       String(item.won),
+      String(item.lost),
       formatPercent(item.conversion),
-      formatCurrency(item.totalSpend),
-      formatCurrency(item.wonRevenue),
-      formatPercent(item.roi),
+      ...(canViewFinancials
+        ? [formatCurrency(item.totalSpend), formatCurrency(item.wonRevenue), formatPercent(item.roi)]
+        : []),
     ]);
-    const html = `<html><head><meta charset="utf-8" /></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;background:#fffaf0;color:#111827"><div style="background:linear-gradient(180deg,#111111 0%,#171717 100%);border-radius:18px;padding:24px;color:#f5d06f"><div style="height:4px;background:#d4af37;border-radius:999px;margin-bottom:14px"></div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:#f3d98a">CRM M De Paula</div><h1 style="margin:12px 0 0;font-size:28px">${detailTitle || 'Panorama geral'}</h1><p style="margin:8px 0 0;color:#d7bf7a;font-size:12px">Periodo ${period} | Gerado em ${new Date().toLocaleString('pt-BR')}</p></div>${buildHtmlTable('Resumo executivo', ['Indicador', 'Valor'], summaryRows)}${buildHtmlTable(detailTitle ? 'Aprofundamento atual' : 'Campanhas em destaque', ['Nome', 'Entradas', 'Fechados', 'Conversao', 'Investimento', 'Receita', 'ROI'], focusRows)}</body></html>`;
+    const focusColumns = ['Nome', 'Entradas', 'Fechados', 'Perdidos', 'Conversao', ...(canViewFinancials ? ['Investimento', 'Receita', 'ROI'] : [])];
+    const html = `<html><head><meta charset="utf-8" /></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;background:#fffaf0;color:#111827"><div style="background:linear-gradient(180deg,#111111 0%,#171717 100%);border-radius:18px;padding:24px;color:#f5d06f"><div style="height:4px;background:#d4af37;border-radius:999px;margin-bottom:14px"></div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:#f3d98a">CRM M De Paula</div><h1 style="margin:12px 0 0;font-size:28px">${detailTitle || 'Panorama geral'}</h1><p style="margin:8px 0 0;color:#d7bf7a;font-size:12px">Periodo ${period} | Gerado em ${new Date().toLocaleString('pt-BR')}</p></div>${buildHtmlTable('Resumo executivo', ['Indicador', 'Valor'], summaryRows)}${buildHtmlTable(detailTitle ? 'Aprofundamento atual' : 'Campanhas em destaque', focusColumns, focusRows)}</body></html>`;
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -601,34 +633,42 @@ export function SalesReports() {
 
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6">
-      <section className="rounded-[32px] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.25),_transparent_32%),linear-gradient(135deg,_rgba(17,17,17,1)_0%,_rgba(24,24,24,1)_38%,_rgba(37,31,14,1)_100%)] p-6 md:p-8 shadow-[0_30px_120px_rgba(0,0,0,0.28)]">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-gold-300/70">Relatorios executivos</p>
-            <h1 className="mt-3 text-3xl md:text-5xl font-serif font-bold text-white leading-tight">Panorama completo da operacao com leitura real de campanhas, funis e equipe.</h1>
-            <p className="mt-4 max-w-2xl text-sm md:text-base text-white/70">Esta pagina virou o hub analitico do CRM. O painel de trafego fica operacional, e o aprofundamento acontece aqui com visao geral, graficos e drill-down.</p>
-          </div>
-          <div className="grid w-full gap-3 md:grid-cols-3 xl:w-auto xl:min-w-[760px]">
-            <PremiumSelect options={operationOptions} value={operationFilter} onChange={(nextValue) => updateParams({ operation: nextValue === ALL_OPERATIONS ? null : nextValue, detail: null, entityId: null, ownerId: null })} placeholder="Selecionar escopo" />
-            <PremiumSelect options={periodOptions} value={period} onChange={(nextValue) => updateParams({ period: nextValue })} placeholder="Selecionar periodo" />
-            <button type="button" onClick={exportReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gold-500/40 bg-gold-500/20 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-gold-100 transition hover:bg-gold-500/30"><Download className="h-4 w-4" />Exportar leitura</button>
-          </div>
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-foreground">Relatorios</h1>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <HeroMetricCard icon={BarChart3} label="Entradas" value={overallMetrics.total} helper="volume no periodo" />
-          <HeroMetricCard icon={CheckCircle2} label="Fechados" value={overallMetrics.won} helper={`${formatPercent(overallMetrics.conversion)} de conversao`} />
-          <HeroMetricCard icon={WalletCards} label="Investimento" value={formatCurrency(overallMetrics.totalSpend)} helper={`${formatCurrency(overallMetrics.cpl)} por lead`} />
-          <HeroMetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(overallMetrics.wonRevenue)} helper={`${formatPercent(overallMetrics.roi)} de ROI`} />
+        <div className="grid w-full gap-3 md:grid-cols-3 lg:w-auto lg:min-w-[760px]">
+          <PremiumSelect options={operationOptions} value={operationFilter} onChange={(nextValue) => updateParams({ operation: nextValue === ALL_OPERATIONS ? null : nextValue, detail: null, entityId: null, ownerId: null })} placeholder="Selecionar escopo" />
+          <PremiumSelect options={periodOptions} value={period} onChange={(nextValue) => updateParams({ period: nextValue })} placeholder="Selecionar periodo" />
+          <button type="button" onClick={exportReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-foreground transition hover:border-gold-500/40">
+            <Download className="h-4 w-4" />
+            Exportar
+          </button>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={TrendingUp} label="Conversao geral" value={formatPercent(overallMetrics.conversion)} helper={`${overallMetrics.active} ativos em andamento`} />
-        <MetricCard icon={Clock3} label="Leads parados" value={overallMetrics.stalled} helper="sem interacao por 24h+" />
-        <MetricCard icon={Target} label="Pipeline" value={formatCurrency(overallMetrics.pipelineValue)} helper={`${overallMetrics.active} oportunidades abertas`} />
-        <MetricCard icon={CalendarRange} label="Follow-up atrasado" value={overallMetrics.overdue} helper="fila de retorno pendente" />
-      </section>
+      {!detailTitle ? (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard icon={BarChart3} label="Entradas" value={overallMetrics.total} helper="volume no periodo" />
+            <MetricCard icon={CheckCircle2} label="Fechados" value={overallMetrics.won} helper={formatPercent(overallMetrics.conversion)} />
+            <MetricCard icon={TrendingDown} label="Perdidos" value={overallMetrics.lost} helper={`${overallMetrics.active} ativos`} />
+            <MetricCard icon={Clock3} label="Leads parados" value={overallMetrics.stalled} helper="sem interacao por 24h+" />
+            <MetricCard icon={CalendarRange} label="Follow-up atrasado" value={overallMetrics.overdue} helper="fila de retorno pendente" />
+          </section>
 
+          {canViewFinancials ? (
+            <section className="grid gap-4 md:grid-cols-3">
+              <MetricCard icon={WalletCards} label="Investimento" value={formatCurrency(overallMetrics.totalSpend)} helper={`${formatCurrency(overallMetrics.cpl)} por lead`} />
+              <MetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(overallMetrics.wonRevenue)} helper={`${formatPercent(overallMetrics.roi)} de ROI`} />
+              <MetricCard icon={Target} label="Pipeline" value={formatCurrency(overallMetrics.pipelineValue)} helper={`${overallMetrics.active} oportunidades abertas`} />
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      {!detailTitle ? (
+        <>
       <section className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <ChartCard title="Evolucao do periodo" description="Entradas, fechamentos e perdas na mesma linha para leitura rapida." actionLabel="Filtros ativos" actionValue={`${period} / ${operationFilter === 'all' ? 'toda operacao' : operationFilter}`}>
           <ResponsiveContainer width="100%" height={320}>
@@ -711,6 +751,8 @@ export function SalesReports() {
         <RankingCard title="Vendedores para aprofundar" description="Abrindo o vendedor, voce desce para as campanhas dele." items={ownerRanking} />
         <RankingCard title="Funis que pedem leitura" description="Abre o detalhamento por etapa, com campanha vinculada quando existir." items={funnelRanking} />
       </section>
+        </>
+      ) : null}
 
       {detailTitle ? (
         <section className="rounded-[32px] border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.18)] overflow-hidden">
@@ -731,12 +773,20 @@ export function SalesReports() {
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <HeroMetricCard icon={BarChart3} label="Entradas" value={detailMetrics.total} helper="volume deste recorte" />
               <HeroMetricCard icon={CheckCircle2} label="Fechados" value={detailMetrics.won} helper={formatPercent(detailMetrics.conversion)} />
-              <HeroMetricCard icon={WalletCards} label="Investimento" value={formatCurrency(detailMetrics.totalSpend)} helper={`CAC ${formatCurrency(detailMetrics.cac)}`} />
-              <HeroMetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(detailMetrics.wonRevenue)} helper={`ROI ${formatPercent(detailMetrics.roi)}`} />
+              <HeroMetricCard icon={TrendingDown} label="Perdidos" value={detailMetrics.lost} helper={`${detailMetrics.active} ativos`} />
               <HeroMetricCard icon={Clock3} label="Leads parados" value={detailMetrics.stalled} helper={`${detailMetrics.overdue} follow-ups atrasados`} />
+              <HeroMetricCard icon={CalendarRange} label="Follow-ups" value={detailMetrics.overdue} helper="atrasados no recorte" />
             </div>
           </div>
           <div className="p-6 space-y-6">
+            {canViewFinancials ? (
+              <section className="grid gap-4 md:grid-cols-3">
+                <MetricCard icon={WalletCards} label="Investimento" value={formatCurrency(detailMetrics.totalSpend)} helper={`CAC ${formatCurrency(detailMetrics.cac)}`} />
+                <MetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(detailMetrics.wonRevenue)} helper={`ROI ${formatPercent(detailMetrics.roi)}`} />
+                <MetricCard icon={Target} label="Pipeline" value={formatCurrency(detailMetrics.pipelineValue)} helper="valor em andamento" />
+              </section>
+            ) : null}
+
             <div className="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
               <ChartCard title="Linha do tempo deste recorte" description="Ajuda a entender se o detalhe clicado acelerou ou travou.">
                 <ResponsiveContainer width="100%" height={280}>
@@ -785,8 +835,8 @@ export function SalesReports() {
                   <div className="space-y-3">
                     <DetailInsightRow label="Gargalo atual" value={detailStageData.length > 0 ? `${[...detailStageData].sort((a, b) => b.total - a.total)[0].name} (${[...detailStageData].sort((a, b) => b.total - a.total)[0].total})` : 'Sem dados'} />
                     <DetailInsightRow label="Funil principal" value={primaryDetailFunnel ? primaryDetailFunnel.name : 'Nao identificado'} />
-                    <DetailInsightRow label="ROI deste recorte" value={formatPercent(detailMetrics.roi)} />
-                    <DetailInsightRow label="Pipeline aberto" value={formatCurrency(detailMetrics.pipelineValue)} />
+                    {canViewFinancials ? <DetailInsightRow label="ROI deste recorte" value={formatPercent(detailMetrics.roi)} /> : null}
+                    {canViewFinancials ? <DetailInsightRow label="Pipeline aberto" value={formatCurrency(detailMetrics.pipelineValue)} /> : null}
                   </div>
                 </ChartCard>
                 <ChartCard title="Funis relacionados" description="Especialmente util ao abrir vendedor ou campanha.">
@@ -794,6 +844,108 @@ export function SalesReports() {
                 </ChartCard>
               </div>
             </div>
+
+            {selectedOwner ? (
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                <ChartCard title="Campanhas deste vendedor" description="Resultado por campanha operada por este vendedor.">
+                  <div className="space-y-2">
+                    {ownerCampaignRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={`${item.total} entradas / ${item.lost} perdidos`}
+                        metric={`${item.won} fechados`}
+                        onClick={() => updateParams({ detail: 'campaign', entityId: item.id, ownerId: selectedOwner.id })}
+                      />
+                    ))}
+                    {ownerCampaignRows.length === 0 ? <EmptyInlineState message="Nenhuma campanha encontrada para este vendedor." /> : null}
+                  </div>
+                </ChartCard>
+
+                <ChartCard title="Funis deste vendedor" description="Leitura do vendedor por funil.">
+                  <div className="space-y-2">
+                    {ownerFunnelRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={item.linkedCampaignName ? `Campanha ${item.linkedCampaignName}` : `${item.stageCount} etapas`}
+                        metric={`${item.total} entradas`}
+                        onClick={() => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null })}
+                      />
+                    ))}
+                    {ownerFunnelRows.length === 0 ? <EmptyInlineState message="Nenhum funil encontrado para este vendedor." /> : null}
+                  </div>
+                </ChartCard>
+              </div>
+            ) : null}
+
+            {selectedCampaign ? (
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                <ChartCard title="Equipe nesta campanha" description="Resultado por vendedor dentro desta campanha.">
+                  <div className="space-y-2">
+                    {campaignOwnerRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={`${item.total} entradas / ${item.lost} perdidos`}
+                        metric={`${item.won} fechados`}
+                        onClick={() => updateParams({ detail: 'owner', entityId: item.id, ownerId: null })}
+                      />
+                    ))}
+                    {campaignOwnerRows.length === 0 ? <EmptyInlineState message="Nenhum vendedor encontrado nesta campanha." /> : null}
+                  </div>
+                </ChartCard>
+
+                <ChartCard title="Funis desta campanha" description="Quais funis estao absorvendo melhor esta origem.">
+                  <div className="space-y-2">
+                    {campaignFunnelRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={`${item.stageCount} etapas / ${item.ownersCount} responsaveis`}
+                        metric={`${item.total} entradas`}
+                        onClick={() => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null })}
+                      />
+                    ))}
+                    {campaignFunnelRows.length === 0 ? <EmptyInlineState message="Nenhum funil encontrado para esta campanha." /> : null}
+                  </div>
+                </ChartCard>
+              </div>
+            ) : null}
+
+            {selectedFunnel ? (
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                <ChartCard title="Equipe neste funil" description="Quem opera esse funil e como esta convertendo.">
+                  <div className="space-y-2">
+                    {funnelOwnerRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={`${item.total} entradas / ${item.lost} perdidos`}
+                        metric={`${item.won} fechados`}
+                        onClick={() => updateParams({ detail: 'owner', entityId: item.id, ownerId: null })}
+                      />
+                    ))}
+                    {funnelOwnerRows.length === 0 ? <EmptyInlineState message="Nenhum vendedor encontrado neste funil." /> : null}
+                  </div>
+                </ChartCard>
+
+                <ChartCard title="Campanhas relacionadas" description="Campanha vinculada e origens presentes neste funil.">
+                  <div className="space-y-2">
+                    {funnelCampaignRows.map((item) => (
+                      <QuickActionRow
+                        key={item.id}
+                        title={item.name}
+                        subtitle={`${item.ownerCount} responsaveis / ${item.funnelCount} funis`}
+                        metric={`${item.total} entradas`}
+                        onClick={() => updateParams({ detail: 'campaign', entityId: item.id, ownerId: null })}
+                      />
+                    ))}
+                    {funnelCampaignRows.length === 0 ? <EmptyInlineState message="Nenhuma campanha encontrada para este funil." /> : null}
+                  </div>
+                </ChartCard>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
