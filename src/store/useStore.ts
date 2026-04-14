@@ -31,6 +31,12 @@ import {
   normalizeFieldTemplates,
   templateToFieldConfig,
 } from '@/lib/funnelFieldSchema';
+import {
+  getStageSemantic,
+  isClosedSemantic,
+  isLostSemantic,
+  normalizeKanbanStages,
+} from '@/lib/funnelStages';
 
 const getSPTime = () => {
   return new Date().toLocaleString("pt-BR", {
@@ -39,16 +45,16 @@ const getSPTime = () => {
   });
 };
 
-const DEFAULT_STAGES: KanbanStage[] = [
+const DEFAULT_STAGES: KanbanStage[] = normalizeKanbanStages([
   { id: 'novo', name: 'Novo Lead', color: '#D4AF37', order: 0 },
   { id: 'em_contato', name: 'Em Contato', color: '#3B82F6', order: 1 },
   { id: 'aguardando_resposta', name: 'Aguardando Resposta', color: '#F59E0B', order: 2 },
   { id: 'reuniao_agendada', name: 'Reunião Agendada', color: '#8B5CF6', order: 3 },
   { id: 'fechado', name: 'Contrato Fechado', color: '#10B981', order: 4 },
   { id: 'perdido', name: 'Perdido', color: '#EF4444', order: 5 },
-];
+], 'commercial');
 
-const DEFAULT_PROSPECT_STAGES: KanbanStage[] = [
+const DEFAULT_PROSPECT_STAGES: KanbanStage[] = normalizeKanbanStages([
   { id: 'p_novo', name: 'Novo Cadastro', color: '#D4AF37', order: 0 },
   { id: 'p_primeira_ligacao', name: 'Primeira Ligação', color: '#3B82F6', order: 1 },
   { id: 'p_sem_contato', name: 'Sem Contato', color: '#F59E0B', order: 2 },
@@ -59,7 +65,7 @@ const DEFAULT_PROSPECT_STAGES: KanbanStage[] = [
   { id: 'p_fechada', name: 'Fechada', color: '#10B981', order: 7 },
   { id: 'p_perdida', name: 'Perdida', color: '#EF4444', order: 8 },
   { id: 'p_inspecao', name: 'Inspeção', color: '#22C55E', order: 9 },
-];
+], 'prospecting');
 
 const DEFAULT_COMMERCIAL_FUNNEL_ID = 'funnel-commercial-default';
 const DEFAULT_PROSPECTING_FUNNEL_ID = 'funnel-prospecting-default';
@@ -133,10 +139,10 @@ const buildDefaultFunnels = (): FunnelConfig[] => {
   ];
 };
 
-const normalizeStages = (stages: KanbanStage[] = []): KanbanStage[] =>
-  [...stages]
-    .sort((a, b) => a.order - b.order)
-    .map((stage, index) => ({ ...stage, order: index }));
+const normalizeStages = (
+  stages: KanbanStage[] = [],
+  operation: FunnelConfig['operation'] = 'commercial',
+): KanbanStage[] => normalizeKanbanStages(stages, operation);
 
 const ensureFunnels = (funnels?: FunnelConfig[], fieldTemplates: FieldTemplate[] = getDefaultFieldTemplates()): FunnelConfig[] => {
   const current = [...(funnels || [])];
@@ -150,7 +156,8 @@ const ensureFunnels = (funnels?: FunnelConfig[], fieldTemplates: FieldTemplate[]
 
   return current.map((funnel) => ({
     ...funnel,
-    stages: normalizeStages(funnel.stages),
+    linkedCampaignId: funnel.linkedCampaignId || undefined,
+    stages: normalizeStages(funnel.stages, funnel.operation),
     fieldSchema: ensureFunnelFieldSchema(funnel, fieldTemplates, funnel.fieldSchema),
     objections: funnel.objections || [],
     playbook: funnel.playbook || '',
@@ -298,12 +305,12 @@ interface AppState {
   updateKanbanStage: (id: string, data: Partial<KanbanStage>) => void;
   deleteKanbanStage: (id: string) => void;
   reorderKanbanStages: (stages: KanbanStage[]) => void;
-  addFunnel: (input: { name: string; operation: FunnelConfig['operation']; description?: string; areaOfLawId?: string }) => string;
-  updateFunnel: (id: string, data: Partial<Pick<FunnelConfig, 'name' | 'description' | 'operation' | 'playbook' | 'areaOfLawId'>>) => void;
+  addFunnel: (input: { name: string; operation: FunnelConfig['operation']; description?: string; areaOfLawId?: string; linkedCampaignId?: string }) => string;
+  updateFunnel: (id: string, data: Partial<Pick<FunnelConfig, 'name' | 'description' | 'operation' | 'playbook' | 'areaOfLawId' | 'linkedCampaignId'>>) => void;
   duplicateFunnel: (id: string) => string | null;
   deleteFunnel: (id: string) => void;
   setDefaultFunnel: (operation: FunnelConfig['operation'], funnelId: string) => void;
-  addFunnelStage: (funnelId: string, name: string, color: string) => void;
+  addFunnelStage: (funnelId: string, name: string, color: string, semanticKey?: KanbanStage['semanticKey']) => void;
   updateFunnelStage: (funnelId: string, stageId: string, data: Partial<KanbanStage>) => void;
   deleteFunnelStage: (funnelId: string, stageId: string) => void;
   reorderFunnelStages: (funnelId: string, stages: KanbanStage[]) => void;
@@ -365,6 +372,7 @@ export const useStore = create<AppState>()(
         const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const defaultFunnel = getDefaultFunnel(aliases.funnels, 'commercial', aliases.commercialDefaultFunnelId);
         const normalizedLead = normalizeLeadServices(leadData);
+        const resolvedFunnel = aliases.funnels.find((funnel) => funnel.id === (normalizedLead.funnelId || defaultFunnel.id)) || defaultFunnel;
         return {
           leads: [...state.leads, {
             ...normalizedLead,
@@ -372,6 +380,7 @@ export const useStore = create<AppState>()(
             createdAt: timestamp,
             lastInteractionAt: timestamp,
             funnelId: normalizedLead.funnelId || defaultFunnel.id,
+            campaignId: normalizedLead.campaignId || resolvedFunnel.linkedCampaignId || undefined,
             customFields: normalizedLead.customFields || {},
             notes: [],
             followUps: [],
@@ -390,15 +399,22 @@ export const useStore = create<AppState>()(
       updateLead: (id, data) => set((state) => ({
         leads: (state.leads || []).map(lead => {
           if (lead.id === id) {
-            const normalizedData = normalizeLeadServices({ ...lead, ...data });
+            const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+            const targetFunnelId = data.funnelId || lead.funnelId || aliases.commercialDefaultFunnelId;
+            const resolvedFunnel = getDefaultFunnel(aliases.funnels, 'commercial', targetFunnelId);
+            const shouldSyncCampaignFromFunnel = data.funnelId !== undefined && data.campaignId === undefined;
+            const normalizedData = normalizeLeadServices({
+              ...lead,
+              ...data,
+              campaignId:
+                data.campaignId !== undefined
+                  ? data.campaignId
+                  : shouldSyncCampaignFromFunnel
+                    ? resolvedFunnel.linkedCampaignId || lead.campaignId || undefined
+                    : lead.campaignId || resolvedFunnel.linkedCampaignId || undefined,
+            });
             const logs = [...(lead.logs || [])];
             if (normalizedData.status && normalizedData.status !== lead.status) {
-              const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
-              const resolvedFunnel = getDefaultFunnel(
-                aliases.funnels,
-                'commercial',
-                normalizedData.funnelId || lead.funnelId || aliases.commercialDefaultFunnelId,
-              );
               const oldStage = resolvedFunnel.stages.find(s => s.id === lead.status);
               const newStage = resolvedFunnel.stages.find(s => s.id === normalizedData.status);
               logs.push({
@@ -681,9 +697,13 @@ export const useStore = create<AppState>()(
 
       runInactivityAutomation: (thresholdHours = 24) => {
         let created = 0;
-        set((state) => ({
-          leads: (state.leads || []).map((lead) => {
-            if (lead.status === 'fechado' || lead.status === 'perdido') {
+        set((state) => {
+          const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
+          return {
+            leads: (state.leads || []).map((lead) => {
+            const funnel = aliases.funnels.find((item) => item.id === (lead.funnelId || aliases.commercialDefaultFunnelId));
+            const semantic = getStageSemantic(funnel, lead.status, 'commercial');
+            if (isClosedSemantic(semantic) || isLostSemantic(semantic)) {
               return lead;
             }
 
@@ -724,8 +744,9 @@ export const useStore = create<AppState>()(
                 },
               ],
             };
-          }),
-        }));
+            }),
+          };
+        });
         return created;
       },
 
@@ -733,13 +754,16 @@ export const useStore = create<AppState>()(
         let unreadCount = 0;
         set((state) => {
           const now = Date.now();
+          const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
           const candidates = new Map<
             string,
             Omit<SystemNotification, 'id' | 'createdAt' | 'read'>
           >();
 
           for (const lead of state.leads || []) {
-            if (lead.status === 'fechado' || lead.status === 'perdido') continue;
+            const funnel = aliases.funnels.find((item) => item.id === (lead.funnelId || aliases.commercialDefaultFunnelId));
+            const semantic = getStageSemantic(funnel, lead.status, 'commercial');
+            if (isClosedSemantic(semantic) || isLostSemantic(semantic)) continue;
 
             const idleHours = getLeadIdleHours(lead, now);
             if (idleHours >= thresholdHours) {
@@ -837,6 +861,7 @@ export const useStore = create<AppState>()(
         const weekKey = getWeekKey(new Date());
 
         set((state) => {
+          const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
           const existing = (state.weeklySnapshots || []).find((item) => item.weekKey === weekKey);
           if (existing) {
             snapshot = existing;
@@ -849,7 +874,10 @@ export const useStore = create<AppState>()(
             .map((campaign) => {
               const group = weekLeads.filter((lead) => lead.campaignId === campaign.id);
               const entries = group.length;
-              const closed = group.filter((lead) => lead.status === 'fechado').length;
+              const closed = group.filter((lead) => {
+                const funnel = aliases.funnels.find((item) => item.id === (lead.funnelId || aliases.commercialDefaultFunnelId));
+                return isClosedSemantic(getStageSemantic(funnel, lead.status, 'commercial'));
+              }).length;
               return {
                 id: campaign.id,
                 name: campaign.name,
@@ -861,8 +889,14 @@ export const useStore = create<AppState>()(
             .sort((a, b) => b.entries - a.entries);
 
           const total = weekLeads.length;
-          const won = weekLeads.filter((lead) => lead.status === 'fechado').length;
-          const lost = weekLeads.filter((lead) => lead.status === 'perdido').length;
+          const won = weekLeads.filter((lead) => {
+            const funnel = aliases.funnels.find((item) => item.id === (lead.funnelId || aliases.commercialDefaultFunnelId));
+            return isClosedSemantic(getStageSemantic(funnel, lead.status, 'commercial'));
+          }).length;
+          const lost = weekLeads.filter((lead) => {
+            const funnel = aliases.funnels.find((item) => item.id === (lead.funnelId || aliases.commercialDefaultFunnelId));
+            return isLostSemantic(getStageSemantic(funnel, lead.status, 'commercial'));
+          }).length;
 
           const topCreative = (state.ads || [])
             .map((ad) => {
@@ -1139,7 +1173,7 @@ export const useStore = create<AppState>()(
             ? {
                 ...funnel,
                 updatedAt: new Date().toISOString(),
-                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== id)),
+                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== id), funnel.operation),
               }
             : funnel,
         );
@@ -1150,13 +1184,13 @@ export const useStore = create<AppState>()(
         const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.commercialDefaultFunnelId
-            ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages) }
+            ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages, funnel.operation) }
             : funnel,
         );
         return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);
       }),
 
-      addFunnel: ({ name, operation, description, areaOfLawId }) => {
+      addFunnel: ({ name, operation, description, areaOfLawId, linkedCampaignId }) => {
         const id = uuidv4();
         set((state) => {
           const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
@@ -1170,6 +1204,7 @@ export const useStore = create<AppState>()(
               description,
               operation,
               areaOfLawId,
+              linkedCampaignId: linkedCampaignId || undefined,
               stages: template.stages.map((stage) => ({ ...stage, id: uuidv4() })),
               fieldSchema: (template.fieldSchema || []).map((field, order) => ({ ...field, id: uuidv4(), order })),
               objections: template.objections || [],
@@ -1253,14 +1288,14 @@ export const useStore = create<AppState>()(
         return aliases;
       }),
 
-      addFunnelStage: (funnelId, name, color) => set((state) => {
+      addFunnelStage: (funnelId, name, color, semanticKey) => set((state) => {
         const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === funnelId
             ? {
                 ...funnel,
                 updatedAt: new Date().toISOString(),
-                stages: [...funnel.stages, { id: uuidv4(), name, color, order: funnel.stages.length }],
+                stages: [...funnel.stages, { id: uuidv4(), name, color, order: funnel.stages.length, semanticKey: semanticKey || 'other' }],
               }
             : funnel,
         );
@@ -1288,7 +1323,7 @@ export const useStore = create<AppState>()(
             ? {
                 ...funnel,
                 updatedAt: new Date().toISOString(),
-                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== stageId)),
+                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== stageId), funnel.operation),
               }
             : funnel,
         );
@@ -1302,7 +1337,7 @@ export const useStore = create<AppState>()(
             ? {
                 ...funnel,
                 updatedAt: new Date().toISOString(),
-                stages: normalizeStages(stages),
+                stages: normalizeStages(stages, funnel.operation),
               }
             : funnel,
         );
@@ -1701,7 +1736,7 @@ export const useStore = create<AppState>()(
             ? {
                 ...funnel,
                 updatedAt: new Date().toISOString(),
-                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== id)),
+                stages: normalizeStages(funnel.stages.filter((stage) => stage.id !== id), funnel.operation),
               }
             : funnel,
         );
@@ -1712,7 +1747,7 @@ export const useStore = create<AppState>()(
         const aliases = buildFunnelAliases(state.funnels, state.fieldTemplates, state.commercialDefaultFunnelId, state.prospectingDefaultFunnelId);
         const nextFunnels = aliases.funnels.map((funnel) =>
           funnel.id === aliases.prospectingDefaultFunnelId
-            ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages) }
+            ? { ...funnel, updatedAt: new Date().toISOString(), stages: normalizeStages(stages, funnel.operation) }
             : funnel,
         );
         return buildFunnelAliases(nextFunnels, state.fieldTemplates, aliases.commercialDefaultFunnelId, aliases.prospectingDefaultFunnelId);

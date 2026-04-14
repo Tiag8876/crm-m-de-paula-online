@@ -21,13 +21,14 @@ import {
 } from 'lucide-react';
 import { isAdminUser } from '@/lib/access';
 import { buildEffectiveFieldSchema, createFieldOptions, getTemplatesForOperation } from '@/lib/funnelFieldSchema';
+import { STAGE_SEMANTIC_OPTIONS } from '@/lib/funnelStages';
 import { UsersAdminPage } from '@/pages/UsersAdminPage';
 import type { FieldTemplate, FunnelConfig, FunnelFieldOption, FunnelFieldType, FieldTemplateSource } from '@/types/crm';
 
 type SettingsTab = 'profile' | 'documentation' | 'team' | 'operations';
 type OperationsSection = 'funnels' | 'areas' | 'sources' | 'tasks';
-type StageDraft = { name: string; color: string };
-type FunnelDraft = { name: string; description: string };
+type StageDraft = { name: string; color: string; semanticKey: NonNullable<FunnelConfig['stages'][number]['semanticKey']> };
+type FunnelDraft = { name: string; description: string; linkedCampaignId: string };
 type ServiceDraft = { name: string; description: string; price: string };
 type FieldDraft = {
   label: string;
@@ -133,6 +134,7 @@ export function Settings() {
     areasOfLaw,
     services,
     leadSources,
+    campaigns,
     standardTasks,
     fieldTemplates,
     funnels,
@@ -180,6 +182,7 @@ export function Settings() {
   const [newFunnelDescription, setNewFunnelDescription] = useState('');
   const [newFunnelOperation, setNewFunnelOperation] = useState<FunnelConfig['operation']>('commercial');
   const [newFunnelAreaId, setNewFunnelAreaId] = useState('');
+  const [newFunnelCampaignId, setNewFunnelCampaignId] = useState('');
   const [stageDrafts, setStageDrafts] = useState<Record<string, StageDraft>>({});
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, FieldDraft>>({});
   const [objectionDrafts, setObjectionDrafts] = useState<Record<string, string>>({});
@@ -237,6 +240,7 @@ export function Settings() {
       nextDrafts[funnel.id] = {
         name: funnel.name,
         description: funnel.description || '',
+        linkedCampaignId: funnel.linkedCampaignId || '',
       };
     }
     setFunnelDrafts(nextDrafts);
@@ -288,7 +292,7 @@ export function Settings() {
     setActiveOperationSection(sectionId);
   };
 
-  const getStageDraft = (funnelId: string) => stageDrafts[funnelId] || { name: '', color: '#D4AF37' };
+  const getStageDraft = (funnelId: string) => stageDrafts[funnelId] || { name: '', color: '#D4AF37', semanticKey: 'other' };
   const getServiceDraft = (areaId: string): ServiceDraft =>
     serviceDrafts[areaId] || { name: '', description: '', price: '' };
   const getFieldDraft = (funnelId: string): FieldDraft =>
@@ -407,11 +411,13 @@ export function Settings() {
       description: newFunnelDescription.trim() || undefined,
       operation: newFunnelOperation,
       areaOfLawId: newFunnelAreaId || undefined,
+      linkedCampaignId: newFunnelOperation === 'commercial' ? newFunnelCampaignId || undefined : undefined,
     });
     setNewFunnelName('');
     setNewFunnelDescription('');
     setNewFunnelOperation('commercial');
     setNewFunnelAreaId('');
+    setNewFunnelCampaignId('');
   };
 
   const handleUpdateOwnProfile = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -662,6 +668,15 @@ export function Settings() {
                 <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Descrição</label>
                 <input type="text" value={newFunnelDescription} onChange={(event) => setNewFunnelDescription(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3" />
               </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Campanha vinculada</label>
+                <select value={newFunnelCampaignId} onChange={(event) => setNewFunnelCampaignId(event.target.value)} disabled={newFunnelOperation !== 'commercial'} className="w-full rounded-lg border border-border bg-background px-4 py-3 disabled:opacity-60">
+                  <option value="">Sem campanha vinculada</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="lg:col-span-2 flex justify-end">
                 <button onClick={handleAddFunnel} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400">
                   <Plus className="h-4 w-4" /> Criar funil
@@ -672,7 +687,7 @@ export function Settings() {
               {sortedFunnels.map((funnel) => {
                 const isDefault = funnel.operation === 'commercial' ? funnel.id === commercialDefaultFunnelId : funnel.id === prospectingDefaultFunnelId;
                 const sortedStages = [...(funnel.stages || [])].sort((a, b) => a.order - b.order);
-                const draft = funnelDrafts[funnel.id] || { name: funnel.name, description: funnel.description || '' };
+                const draft = funnelDrafts[funnel.id] || { name: funnel.name, description: funnel.description || '', linkedCampaignId: funnel.linkedCampaignId || '' };
                 const stageDraft = getStageDraft(funnel.id);
                 const objectionDraft = getObjectionDraft(funnel.id);
                 const effectiveFields = buildEffectiveFieldSchema(funnel);
@@ -782,6 +797,25 @@ export function Settings() {
                               ))}
                             </select>
                           </div>
+                          {funnel.operation === 'commercial' && (
+                            <div className="space-y-2 xl:max-w-md">
+                              <label className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Campanha vinculada</label>
+                              <select
+                                value={draft.linkedCampaignId}
+                                onChange={(event) => {
+                                  const nextValue = event.target.value;
+                                  setFunnelDrafts((current) => ({ ...current, [funnel.id]: { ...draft, linkedCampaignId: nextValue } }));
+                                  updateFunnel(funnel.id, { linkedCampaignId: nextValue || undefined });
+                                }}
+                                className="w-full rounded-lg border border-border bg-card px-4 py-3"
+                              >
+                                <option value="">Sem campanha vinculada</option>
+                                {campaigns.map((campaign) => (
+                                  <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
 
                         <section className="space-y-3 rounded-xl border border-border bg-card p-4">
@@ -833,6 +867,15 @@ export function Settings() {
                                     onChange={(event) => updateFunnelStage(funnel.id, stage.id, { name: event.target.value })}
                                     className="flex-1 rounded-lg border border-border bg-background px-3 py-2"
                                   />
+                                  <select
+                                    value={stage.semanticKey || 'other'}
+                                    onChange={(event) => updateFunnelStage(funnel.id, stage.id, { semanticKey: event.target.value as NonNullable<typeof stage.semanticKey> })}
+                                    className="rounded-lg border border-border bg-background px-3 py-2 lg:w-56"
+                                  >
+                                    {STAGE_SEMANTIC_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
                                   <input
                                     type="color"
                                     value={stage.color}
@@ -856,6 +899,15 @@ export function Settings() {
                                   placeholder="Nova etapa"
                                   className="rounded-lg border border-border bg-background px-3 py-2"
                                 />
+                                <select
+                                  value={stageDraft.semanticKey}
+                                  onChange={(event) => updateStageDraft(funnel.id, { semanticKey: event.target.value as StageDraft['semanticKey'] })}
+                                  className="rounded-lg border border-border bg-background px-3 py-2"
+                                >
+                                  {STAGE_SEMANTIC_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </select>
                                 <input
                                   type="color"
                                   value={stageDraft.color}
@@ -866,8 +918,8 @@ export function Settings() {
                                   type="button"
                                   onClick={() => {
                                     if (!stageDraft.name.trim()) return;
-                                    addFunnelStage(funnel.id, stageDraft.name.trim(), stageDraft.color);
-                                    setStageDrafts((current) => ({ ...current, [funnel.id]: { name: '', color: '#D4AF37' } }));
+                                    addFunnelStage(funnel.id, stageDraft.name.trim(), stageDraft.color, stageDraft.semanticKey);
+                                    setStageDrafts((current) => ({ ...current, [funnel.id]: { name: '', color: '#D4AF37', semanticKey: 'other' } }));
                                   }}
                                   className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground transition-colors hover:bg-gold-400"
                                 >

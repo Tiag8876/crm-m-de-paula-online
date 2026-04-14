@@ -1,29 +1,44 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
   ArrowRight,
   BadgeDollarSign,
   BarChart3,
-  BriefcaseBusiness,
+  CalendarRange,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   Download,
-  FileSpreadsheet,
-  GitBranchPlus,
-  Layers3,
+  Filter,
   Target,
+  TrendingDown,
   TrendingUp,
   Users,
   WalletCards,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useStore } from '@/store/useStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { getLeadIdleHours } from '@/lib/leadMetrics';
 import type { ReactNode } from 'react';
 import type { AppUser } from '@/types/auth';
-import type { CampaignSpendEntry, FunnelConfig, FollowUp, Task } from '@/types/crm';
+import type { Campaign, CampaignSpendEntry, FunnelConfig, FollowUp, StageSemantic, Task } from '@/types/crm';
 import { PremiumSelect } from '@/components/PremiumSelect';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useStore } from '@/store/useStore';
+import { getStageSemantic, isClosedSemantic, isLostSemantic } from '@/lib/funnelStages';
+import { getLeadIdleHours } from '@/lib/leadMetrics';
 import { cn } from '@/lib/utils';
 
 type PeriodFilter = '7' | '30' | '90' | 'all';
@@ -36,11 +51,12 @@ type ReportRecord = {
   createdAt: string;
   funnelId?: string;
   ownerUserId?: string;
-  status: string;
+  sourceId?: string;
+  sourceName: string;
+  stageId: string;
+  semantic: StageSemantic;
   closed: boolean;
   lost: boolean;
-  sourceName: string;
-  sourceId?: string;
   idleHours: number;
   followUps: FollowUp[];
   tasks: Task[];
@@ -63,21 +79,14 @@ type MetricsSummary = {
   roi: number;
 };
 
-type StageSummary = {
-  id: string;
-  name: string;
-  color: string;
-  total: number;
-  share: number;
-};
-
 type FunnelSummary = MetricsSummary & {
   id: string;
   name: string;
-  operation: 'commercial' | 'prospecting';
+  operation: FunnelConfig['operation'];
+  linkedCampaignId?: string;
+  linkedCampaignName?: string;
   ownersCount: number;
-  sourcesCount: number;
-  stageRows: StageSummary[];
+  stageCount: number;
 };
 
 type OwnerSummary = MetricsSummary & {
@@ -90,19 +99,67 @@ type OwnerSummary = MetricsSummary & {
 type CampaignSummary = MetricsSummary & {
   id: string;
   name: string;
-  ownersCount: number;
-  funnelsCount: number;
+  funnelCount: number;
+  ownerCount: number;
+};
+
+type TimelinePoint = {
+  key: string;
+  label: string;
+  entradas: number;
+  fechados: number;
+  perdidos: number;
+};
+
+type StagePoint = {
+  id: string;
+  name: string;
+  total: number;
+  share: number;
+  color: string;
+};
+
+type RankingItem = {
+  id: string;
+  label: string;
+  supporting: string;
+  value: string;
+  secondaryValue: string;
+  onClick?: () => void;
 };
 
 const ALL_OPERATIONS = 'all';
-const UNASSIGNED_OWNER_ID = '__unassigned__';
+const NO_OWNER_ID = '__no_owner__';
 const NO_CAMPAIGN_ID = '__no_campaign__';
+const CHART_COLORS = ['#D4AF37', '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4', '#EC4899'];
 
-const sortFunnels = (items: FunnelConfig[]) =>
-  [...items].sort((a, b) => {
-    if (a.operation !== b.operation) return a.operation === 'commercial' ? -1 : 1;
-    return a.name.localeCompare(b.name, 'pt-BR');
-  });
+const SEMANTIC_META: Record<StageSemantic, { label: string; color: string; order: number }> = {
+  new: { label: 'Novos', color: '#D4AF37', order: 0 },
+  contact: { label: 'Contato', color: '#3B82F6', order: 1 },
+  waiting: { label: 'Aguardando', color: '#F59E0B', order: 2 },
+  meeting: { label: 'Reuniao', color: '#8B5CF6', order: 3 },
+  qualified: { label: 'Qualificados', color: '#06B6D4', order: 4 },
+  proposal: { label: 'Proposta', color: '#6366F1', order: 5 },
+  negotiation: { label: 'Negociacao', color: '#EC4899', order: 6 },
+  inspection: { label: 'Inspecao', color: '#22C55E', order: 7 },
+  won: { label: 'Fechados', color: '#10B981', order: 8 },
+  lost: { label: 'Perdidos', color: '#EF4444', order: 9 },
+  other: { label: 'Personalizada', color: '#64748B', order: 10 },
+};
+
+const formatCurrency = (value: number) =>
+  `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+
+const getPeriodRange = (period: PeriodFilter) => {
+  if (period === 'all') return { start: null as Date | null, end: new Date() };
+  const end = new Date();
+  const start = new Date(end);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - Number(period) + 1);
+  return { start, end };
+};
 
 const isValidPeriod = (value: string | null): value is PeriodFilter =>
   value === '7' || value === '30' || value === '90' || value === 'all';
@@ -110,17 +167,11 @@ const isValidPeriod = (value: string | null): value is PeriodFilter =>
 const isValidOperation = (value: string | null): value is OperationFilter =>
   value === 'all' || value === 'commercial' || value === 'prospecting';
 
-const isValidDetailType = (value: string | null): value is DetailType =>
-  value === 'funnel' || value === 'owner' || value === 'campaign';
+const isValidDetail = (value: string | null): value is DetailType =>
+  value === 'campaign' || value === 'owner' || value === 'funnel';
 
 const getProspectIdleHours = (
-  lead: {
-    createdAt: string;
-    lastInteractionAt?: string;
-    followUps?: Array<{ date: string }>;
-    tasks?: Array<{ date: string }>;
-    notes?: Array<{ createdAt: string }>;
-  },
+  lead: { createdAt: string; lastInteractionAt?: string; followUps?: Array<{ date: string }>; tasks?: Array<{ date: string }>; notes?: Array<{ createdAt: string }> },
   nowMs = Date.now(),
 ) => {
   const candidates = [Date.parse(lead.createdAt || ''), Date.parse(lead.lastInteractionAt || '')].filter((value) => !Number.isNaN(value));
@@ -140,104 +191,178 @@ const getProspectIdleHours = (
   return Math.max(0, (nowMs - base) / 36e5);
 };
 
-const escapeHtml = (value: string | number) =>
-  String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const formatCurrency = (value: number) =>
-  `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const formatPercent = (value: number) => `${value.toFixed(1)}%`;
-
-const getPeriodRange = (period: PeriodFilter) => {
-  if (period === 'all') return { start: null as Date | null, end: new Date() };
-  const end = new Date();
-  const start = new Date(end);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - Number(period) + 1);
-  return { start, end };
-};
-
 const getOverlapAmount = (entry: CampaignSpendEntry, start: Date | null, end: Date) => {
   const amount = Number(entry.amount) || 0;
   if (!start) return amount;
-
   const entryStart = new Date(`${entry.startDate}T00:00:00`);
   const entryEnd = new Date(`${entry.endDate}T23:59:59.999`);
   if (Number.isNaN(entryStart.getTime()) || Number.isNaN(entryEnd.getTime())) return 0;
   if (entryEnd < start || entryStart > end) return 0;
-
   const overlapStart = entryStart > start ? entryStart : start;
   const overlapEnd = entryEnd < end ? entryEnd : end;
   const dayMs = 24 * 60 * 60 * 1000;
   const totalDays = Math.max(1, Math.ceil((entryEnd.getTime() - entryStart.getTime() + 1) / dayMs));
   const overlapDays = Math.max(0, Math.ceil((overlapEnd.getTime() - overlapStart.getTime() + 1) / dayMs));
-  if (overlapDays <= 0) return 0;
-  return amount * (overlapDays / totalDays);
+  return overlapDays > 0 ? amount * (overlapDays / totalDays) : 0;
 };
 
-const matchesOwner = (record: ReportRecord, ownerId: string) =>
-  ownerId === UNASSIGNED_OWNER_ID ? !record.ownerUserId : record.ownerUserId === ownerId;
-
-const summarizeMetrics = (records: ReportRecord[], totalSpend: number, now: number): MetricsSummary => {
+const summarizeMetrics = (records: ReportRecord[], totalSpend: number, nowMs: number): MetricsSummary => {
   const total = records.length;
-  const won = records.filter((item) => item.closed).length;
-  const lost = records.filter((item) => item.lost).length;
-  const active = total - won - lost;
-  const stalled = records.filter((item) => !item.closed && !item.lost && item.idleHours >= 24).length;
-  const overdue = records.reduce(
-    (acc, item) => acc + item.followUps.filter((followUp) => followUp.status === 'pendente' && new Date(followUp.date).getTime() < now).length,
-    0,
-  );
+  const won = records.filter((record) => record.closed).length;
+  const lost = records.filter((record) => record.lost).length;
+  const active = Math.max(0, total - won - lost);
+  const stalled = records.filter((record) => !record.closed && !record.lost && record.idleHours >= 24).length;
+  const overdue = records.reduce((sum, record) => sum + record.followUps.filter((followUp) => followUp.status === 'pendente' && new Date(followUp.date).getTime() < nowMs).length, 0);
   const wonRevenue = records.reduce((sum, record) => sum + (record.closed ? record.estimatedValue : 0), 0);
   const pipelineValue = records.reduce((sum, record) => sum + record.estimatedValue, 0);
   const conversion = total > 0 ? (won / total) * 100 : 0;
   const cpl = total > 0 ? totalSpend / total : 0;
   const cac = won > 0 ? totalSpend / won : 0;
   const roi = totalSpend > 0 ? ((wonRevenue - totalSpend) / totalSpend) * 100 : 0;
-
-  return {
-    total,
-    won,
-    lost,
-    active,
-    stalled,
-    overdue,
-    totalSpend,
-    wonRevenue,
-    pipelineValue,
-    conversion,
-    cpl,
-    cac,
-    roi,
-  };
+  return { total, won, lost, active, stalled, overdue, totalSpend, wonRevenue, pipelineValue, conversion, cpl, cac, roi };
 };
 
-const buildStageRows = (records: ReportRecord[], funnel: FunnelConfig): StageSummary[] => {
-  const total = records.length;
-  return [...(funnel.stages || [])]
-    .sort((a, b) => a.order - b.order)
-    .map((stage) => {
-      const count = records.filter((record) => record.status === stage.id).length;
-      return {
-        id: stage.id,
-        name: stage.name,
-        color: stage.color,
-        total: count,
-        share: total > 0 ? (count / total) * 100 : 0,
-      };
-    });
-};
+const sortFunnels = (funnels: FunnelConfig[]) =>
+  [...funnels].sort((a, b) => (a.operation !== b.operation ? (a.operation === 'commercial' ? -1 : 1) : a.name.localeCompare(b.name, 'pt-BR')));
 
 const getOwnerLabel = (ownerId: string, users: AppUser[], currentUser: AppUser | null) => {
-  if (ownerId === UNASSIGNED_OWNER_ID) return 'Sem responsavel';
+  if (ownerId === NO_OWNER_ID) return 'Sem responsavel';
   const found = users.find((item) => item.id === ownerId) || (currentUser?.id === ownerId ? currentUser : null);
   return found?.name || 'Usuario';
 };
+
+const buildTimeline = (records: ReportRecord[], period: PeriodFilter): TimelinePoint[] => {
+  const groupByMonth = period === 'all';
+  const formatter = new Intl.DateTimeFormat('pt-BR', groupByMonth ? { month: 'short', year: '2-digit' } : { day: '2-digit', month: 'short' });
+  const buckets = new Map<string, TimelinePoint>();
+  for (const record of records) {
+    const date = new Date(record.createdAt);
+    if (Number.isNaN(date.getTime())) continue;
+    const bucket = new Date(date);
+    bucket.setHours(0, 0, 0, 0);
+    if (groupByMonth) bucket.setDate(1);
+    const key = bucket.toISOString();
+    if (!buckets.has(key)) buckets.set(key, { key, label: formatter.format(bucket), entradas: 0, fechados: 0, perdidos: 0 });
+    const point = buckets.get(key)!;
+    point.entradas += 1;
+    if (record.closed) point.fechados += 1;
+    if (record.lost) point.perdidos += 1;
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+};
+
+const buildSemanticStageData = (records: ReportRecord[]): StagePoint[] => {
+  const counts = new Map<StageSemantic, number>();
+  for (const record of records) counts.set(record.semantic, (counts.get(record.semantic) || 0) + 1);
+  const total = records.length || 1;
+  return Object.entries(SEMANTIC_META)
+    .map(([semantic, meta]) => ({
+      id: semantic,
+      name: meta.label,
+      total: counts.get(semantic as StageSemantic) || 0,
+      share: ((counts.get(semantic as StageSemantic) || 0) / total) * 100,
+      color: meta.color,
+    }))
+    .filter((item) => item.total > 0)
+    .sort((a, b) => SEMANTIC_META[a.id as StageSemantic].order - SEMANTIC_META[b.id as StageSemantic].order);
+};
+
+const buildFunnelStageData = (records: ReportRecord[], funnel: FunnelConfig | undefined): StagePoint[] => {
+  if (!funnel) return buildSemanticStageData(records);
+  const total = records.length || 1;
+  return [...(funnel.stages || [])]
+    .sort((a, b) => a.order - b.order)
+    .map((stage) => {
+      const count = records.filter((record) => record.stageId === stage.id).length;
+      return { id: stage.id, name: stage.name, total: count, share: (count / total) * 100, color: stage.color };
+    })
+    .filter((item) => item.total > 0);
+};
+
+const buildCampaignRows = (records: ReportRecord[], campaigns: Campaign[], getAllocatedSpend: (subset: ReportRecord[]) => number, nowMs: number): CampaignSummary[] => {
+  const map = new Map<string, ReportRecord[]>();
+  for (const record of records) {
+    if (record.kind !== 'commercial') continue;
+    const key = record.sourceId || NO_CAMPAIGN_ID;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(record);
+  }
+  return Array.from(map.entries())
+    .map(([campaignId, subset]) => {
+      const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), nowMs);
+      return {
+        ...metrics,
+        id: campaignId,
+        name: campaignId === NO_CAMPAIGN_ID ? 'Sem campanha' : campaigns.find((campaign) => campaign.id === campaignId)?.name || 'Campanha',
+        funnelCount: new Set(subset.map((record) => record.funnelId || 'sem_funil')).size,
+        ownerCount: new Set(subset.map((record) => record.ownerUserId || NO_OWNER_ID)).size,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+};
+
+const buildOwnerRows = (
+  records: ReportRecord[],
+  users: AppUser[],
+  currentUser: AppUser | null,
+  getAllocatedSpend: (subset: ReportRecord[]) => number,
+  nowMs: number,
+): OwnerSummary[] => {
+  const map = new Map<string, ReportRecord[]>();
+  for (const record of records) {
+    const key = record.ownerUserId || NO_OWNER_ID;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(record);
+  }
+  return Array.from(map.entries())
+    .map(([ownerId, subset]) => {
+      const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), nowMs);
+      return {
+        ...metrics,
+        id: ownerId,
+        name: getOwnerLabel(ownerId, users, currentUser),
+        campaignsCount: new Set(subset.filter((record) => record.kind === 'commercial').map((record) => record.sourceId || NO_CAMPAIGN_ID)).size,
+        funnelsCount: new Set(subset.map((record) => record.funnelId || 'sem_funil')).size,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+};
+
+const buildFunnelRows = (
+  records: ReportRecord[],
+  funnels: FunnelConfig[],
+  campaigns: Campaign[],
+  getAllocatedSpend: (subset: ReportRecord[]) => number,
+  nowMs: number,
+): FunnelSummary[] =>
+  funnels
+    .map((funnel) => {
+      const subset = records.filter((record) => record.funnelId === funnel.id);
+      const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), nowMs);
+      const linkedCampaign = funnel.linkedCampaignId ? campaigns.find((campaign) => campaign.id === funnel.linkedCampaignId) : undefined;
+      return {
+        ...metrics,
+        id: funnel.id,
+        name: funnel.name,
+        operation: funnel.operation,
+        linkedCampaignId: funnel.linkedCampaignId,
+        linkedCampaignName: linkedCampaign?.name,
+        ownersCount: new Set(subset.map((record) => record.ownerUserId || NO_OWNER_ID)).size,
+        stageCount: (funnel.stages || []).length,
+      };
+    })
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+const buildHtmlTable = (title: string, columns: string[], rows: string[][]) => `
+  <section style="margin-top:24px">
+    <h2 style="font-size:18px;margin-bottom:10px;color:#111827">${title}</h2>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb">
+      <thead><tr>${columns.map((column) => `<th style="padding:10px;border:1px solid #e5e7eb;background:#faf3d8;text-align:left;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7c5a0a">${column}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="padding:10px;border:1px solid #e5e7eb;font-size:12px;color:#111827">${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>
+  </section>
+`;
 
 export function SalesReports() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -249,83 +374,96 @@ export function SalesReports() {
   }, [fetchUsers]);
 
   const allFunnels = useMemo(() => sortFunnels(funnels || []), [funnels]);
-
   const period = isValidPeriod(searchParams.get('period')) ? searchParams.get('period') : '30';
   const operationFilter = isValidOperation(searchParams.get('operation')) ? searchParams.get('operation') : ALL_OPERATIONS;
-  const detailType = isValidDetailType(searchParams.get('detail')) ? searchParams.get('detail') : null;
+  const detailType = isValidDetail(searchParams.get('detail')) ? searchParams.get('detail') : null;
   const detailId = searchParams.get('entityId');
   const detailOwnerId = searchParams.get('ownerId');
-  const now = Date.now();
+  const nowMs = Date.now();
   const { start: rangeStart, end: rangeEnd } = getPeriodRange(period);
 
   const updateParams = (updates: Record<string, string | null>) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
       for (const [key, value] of Object.entries(updates)) {
-        if (!value) {
-          next.delete(key);
-          continue;
-        }
-        next.set(key, value);
+        if (!value) next.delete(key);
+        else next.set(key, value);
       }
       return next;
     }, { replace: true });
   };
 
   const periodOptions = [
-    { value: '7', label: 'Ultimos 7 dias', description: 'Janela curta de leitura', group: 'Periodo' },
-    { value: '30', label: 'Ultimos 30 dias', description: 'Visao mensal padrao', group: 'Periodo' },
+    { value: '7', label: 'Ultimos 7 dias', description: 'Leitura curta', group: 'Periodo' },
+    { value: '30', label: 'Ultimos 30 dias', description: 'Janela principal', group: 'Periodo' },
     { value: '90', label: 'Ultimos 90 dias', description: 'Comparativo trimestral', group: 'Periodo' },
-    { value: 'all', label: 'Todo o periodo', description: 'Historico completo', group: 'Periodo' },
+    { value: 'all', label: 'Historico completo', description: 'Tudo que existe', group: 'Periodo' },
   ];
-
   const operationOptions = [
-    { value: 'all', label: 'Toda a operacao', description: 'Comercial e prospeccao juntos', group: 'Escopo' },
+    { value: 'all', label: 'Toda a operacao', description: 'Comercial e prospeccao', group: 'Escopo' },
     { value: 'commercial', label: 'Somente comercial', description: 'Campanhas e fechamento', group: 'Escopo' },
-    { value: 'prospecting', label: 'Somente prospeccao', description: 'Clinicas e qualificacao', group: 'Escopo' },
+    { value: 'prospecting', label: 'Somente prospeccao', description: 'Qualificacao e retorno', group: 'Escopo' },
   ];
 
   const records = useMemo<ReportRecord[]>(() => {
-    const base = [
-      ...(leads || []).map((lead) => ({
+    const commercial = (leads || []).map((lead) => {
+      const funnel = allFunnels.find((item) => item.id === lead.funnelId) || allFunnels.find((item) => item.operation === 'commercial');
+      const semantic = getStageSemantic(funnel, lead.status, 'commercial');
+      const sourceId = lead.campaignId || funnel?.linkedCampaignId;
+      const sourceName = sourceId ? campaigns.find((campaign) => campaign.id === sourceId)?.name || 'Campanha' : 'Sem campanha';
+      return {
         id: lead.id,
         kind: 'commercial' as const,
         createdAt: lead.createdAt,
         funnelId: lead.funnelId,
         ownerUserId: lead.ownerUserId,
-        status: lead.status,
-        closed: lead.status === 'fechado',
-        lost: lead.status === 'perdido',
-        sourceName: campaigns.find((campaign) => campaign.id === lead.campaignId)?.name || 'Sem campanha',
-        sourceId: lead.campaignId,
-        idleHours: getLeadIdleHours(lead, now),
+        sourceId,
+        sourceName,
+        stageId: lead.status,
+        semantic,
+        closed: isClosedSemantic(semantic),
+        lost: isLostSemantic(semantic),
+        idleHours: getLeadIdleHours(lead, nowMs),
         followUps: lead.followUps || [],
         tasks: lead.tasks || [],
         estimatedValue: Number(lead.estimatedValue) || 0,
-      })),
-      ...(prospectLeads || []).map((lead) => ({
+      };
+    });
+    const prospecting = (prospectLeads || []).map((lead) => {
+      const funnel = allFunnels.find((item) => item.id === lead.funnelId) || allFunnels.find((item) => item.operation === 'prospecting');
+      const semantic = getStageSemantic(funnel, lead.status, 'prospecting');
+      return {
         id: lead.id,
         kind: 'prospecting' as const,
         createdAt: lead.createdAt,
         funnelId: lead.funnelId,
         ownerUserId: lead.ownerUserId,
-        status: lead.status,
-        closed: lead.status === 'p_fechada',
-        lost: lead.status === 'p_perdida',
-        sourceName: services.find((service) => service.id === lead.serviceId)?.name || 'Sem servico',
         sourceId: lead.serviceId,
-        idleHours: getProspectIdleHours(lead, now),
+        sourceName: services.find((service) => service.id === lead.serviceId)?.name || 'Sem servico',
+        stageId: lead.status,
+        semantic,
+        closed: isClosedSemantic(semantic),
+        lost: isLostSemantic(semantic),
+        idleHours: getProspectIdleHours(lead, nowMs),
         followUps: lead.followUps || [],
         tasks: lead.tasks || [],
         estimatedValue: 0,
-      })),
-    ]
-      .filter((item) => !item.ownerUserId || item.ownerUserId === user?.id || user?.role === 'admin')
-      .filter((item) => !rangeStart || new Date(item.createdAt) >= rangeStart)
-      .filter((item) => operationFilter === ALL_OPERATIONS || item.kind === operationFilter);
+      };
+    });
+    return [...commercial, ...prospecting]
+      .filter((record) => user?.role === 'admin' || !record.ownerUserId || record.ownerUserId === user?.id)
+      .filter((record) => !rangeStart || new Date(record.createdAt) >= rangeStart)
+      .filter((record) => operationFilter === ALL_OPERATIONS || record.kind === operationFilter);
+  }, [allFunnels, campaigns, leads, nowMs, operationFilter, prospectLeads, rangeStart, services, user?.id, user?.role]);
 
-    return base;
-  }, [campaigns, leads, now, operationFilter, prospectLeads, rangeStart, services, user?.id, user?.role]);
+  const campaignLeadCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const record of records) {
+      if (record.kind !== 'commercial' || !record.sourceId) continue;
+      counts.set(record.sourceId, (counts.get(record.sourceId) || 0) + 1);
+    }
+    return counts;
+  }, [records]);
 
   const campaignSpendTotals = useMemo(() => {
     const totals = new Map<string, number>();
@@ -337,283 +475,117 @@ export function SalesReports() {
     return totals;
   }, [campaignSpendEntries, rangeEnd, rangeStart]);
 
-  const baseCampaignLeadCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const record of records) {
-      if (record.kind !== 'commercial' || !record.sourceId) continue;
-      counts.set(record.sourceId, (counts.get(record.sourceId) || 0) + 1);
-    }
-    return counts;
-  }, [records]);
-
   const getAllocatedSpend = useCallback((subset: ReportRecord[]) => {
     const subsetCounts = new Map<string, number>();
     for (const record of subset) {
       if (record.kind !== 'commercial' || !record.sourceId) continue;
       subsetCounts.set(record.sourceId, (subsetCounts.get(record.sourceId) || 0) + 1);
     }
-
     let total = 0;
     for (const [campaignId, subsetCount] of subsetCounts.entries()) {
-      const totalCampaignLeads = baseCampaignLeadCounts.get(campaignId) || 0;
-      if (totalCampaignLeads <= 0) continue;
-      total += (campaignSpendTotals.get(campaignId) || 0) * (subsetCount / totalCampaignLeads);
+      const fullCount = campaignLeadCounts.get(campaignId) || 0;
+      if (fullCount <= 0) continue;
+      total += (campaignSpendTotals.get(campaignId) || 0) * (subsetCount / fullCount);
     }
     return total;
-  }, [baseCampaignLeadCounts, campaignSpendTotals]);
+  }, [campaignLeadCounts, campaignSpendTotals]);
 
-  const overallMetrics = useMemo(() => summarizeMetrics(records, getAllocatedSpend(records), now), [getAllocatedSpend, now, records]);
+  const overallMetrics = useMemo(() => summarizeMetrics(records, getAllocatedSpend(records), nowMs), [getAllocatedSpend, nowMs, records]);
+  const funnelRows = useMemo(() => buildFunnelRows(records, allFunnels.filter((funnel) => operationFilter === ALL_OPERATIONS || funnel.operation === operationFilter), campaigns, getAllocatedSpend, nowMs), [allFunnels, campaigns, getAllocatedSpend, nowMs, operationFilter, records]);
+  const ownerRows = useMemo(() => buildOwnerRows(records, users, user, getAllocatedSpend, nowMs), [getAllocatedSpend, nowMs, records, user, users]);
+  const campaignRows = useMemo(() => buildCampaignRows(records, campaigns, getAllocatedSpend, nowMs), [campaigns, getAllocatedSpend, nowMs, records]);
 
-  const funnelSummaries = useMemo<FunnelSummary[]>(() => {
-    return allFunnels
-      .filter((funnel) => operationFilter === ALL_OPERATIONS || funnel.operation === operationFilter)
-      .map((funnel) => {
-        const funnelRecords = records.filter((record) => record.funnelId === funnel.id);
-        const metrics = summarizeMetrics(funnelRecords, getAllocatedSpend(funnelRecords), now);
-        return {
-          ...metrics,
-          id: funnel.id,
-          name: funnel.name,
-          operation: funnel.operation,
-          ownersCount: new Set(funnelRecords.map((record) => record.ownerUserId || UNASSIGNED_OWNER_ID)).size,
-          sourcesCount: new Set(
-            funnelRecords
-              .filter((record) => record.kind === 'commercial')
-              .map((record) => record.sourceId || NO_CAMPAIGN_ID),
-          ).size,
-          stageRows: buildStageRows(funnelRecords, funnel),
-        };
-      })
-      .filter((item) => item.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [allFunnels, getAllocatedSpend, now, operationFilter, records]);
-
-  const ownerSummaries = useMemo<OwnerSummary[]>(() => {
-    const ownerMap = new Map<string, ReportRecord[]>();
-    for (const record of records) {
-      const key = record.ownerUserId || UNASSIGNED_OWNER_ID;
-      if (!ownerMap.has(key)) ownerMap.set(key, []);
-      ownerMap.get(key)!.push(record);
-    }
-
-    return Array.from(ownerMap.entries())
-      .map(([ownerId, ownerRecords]) => {
-        const metrics = summarizeMetrics(ownerRecords, getAllocatedSpend(ownerRecords), now);
-        return {
-          ...metrics,
-          id: ownerId,
-          name: getOwnerLabel(ownerId, users, user),
-          campaignsCount: new Set(
-            ownerRecords.filter((record) => record.kind === 'commercial').map((record) => record.sourceId || NO_CAMPAIGN_ID),
-          ).size,
-          funnelsCount: new Set(ownerRecords.map((record) => record.funnelId || 'sem_funil')).size,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [getAllocatedSpend, now, records, user, users]);
-
-  const campaignSummaries = useMemo<CampaignSummary[]>(() => {
-    const campaignMap = new Map<string, ReportRecord[]>();
-    for (const record of records) {
-      if (record.kind !== 'commercial') continue;
-      const key = record.sourceId || NO_CAMPAIGN_ID;
-      if (!campaignMap.has(key)) campaignMap.set(key, []);
-      campaignMap.get(key)!.push(record);
-    }
-
-    return Array.from(campaignMap.entries())
-      .map(([campaignId, campaignRecords]) => {
-        const metrics = summarizeMetrics(campaignRecords, getAllocatedSpend(campaignRecords), now);
-        return {
-          ...metrics,
-          id: campaignId,
-          name: campaignId === NO_CAMPAIGN_ID
-            ? 'Sem campanha'
-            : campaigns.find((campaign) => campaign.id === campaignId)?.name || 'Campanha',
-          ownersCount: new Set(campaignRecords.map((record) => record.ownerUserId || UNASSIGNED_OWNER_ID)).size,
-          funnelsCount: new Set(campaignRecords.map((record) => record.funnelId || 'sem_funil')).size,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [campaigns, getAllocatedSpend, now, records]);
-
-  const selectedFunnel = detailType === 'funnel' ? funnelSummaries.find((item) => item.id === detailId) : undefined;
-  const selectedOwner = detailType === 'owner' ? ownerSummaries.find((item) => item.id === detailId) : undefined;
-  const selectedCampaign = detailType === 'campaign' ? campaignSummaries.find((item) => item.id === detailId) : undefined;
-
-  const activeDetail: DetailType | 'overview' = selectedFunnel
-    ? 'funnel'
-    : selectedOwner
-      ? 'owner'
-      : selectedCampaign
-        ? 'campaign'
-        : 'overview';
+  const selectedCampaign = detailType === 'campaign' ? campaignRows.find((item) => item.id === detailId) : undefined;
+  const selectedOwner = detailType === 'owner' ? ownerRows.find((item) => item.id === detailId) : undefined;
+  const selectedFunnel = detailType === 'funnel' ? funnelRows.find((item) => item.id === detailId) : undefined;
 
   const detailRecords = useMemo(() => {
-    if (activeDetail === 'funnel' && selectedFunnel) {
-      return records.filter((record) => record.funnelId === selectedFunnel.id);
-    }
-    if (activeDetail === 'owner' && selectedOwner) {
-      return records.filter((record) => matchesOwner(record, selectedOwner.id));
-    }
-    if (activeDetail === 'campaign' && selectedCampaign) {
+    if (selectedCampaign) {
       return records.filter((record) => {
-        const matchesCampaign = selectedCampaign.id === NO_CAMPAIGN_ID ? !record.sourceId : record.sourceId === selectedCampaign.id;
-        if (!matchesCampaign || record.kind !== 'commercial') return false;
+        if (record.kind !== 'commercial') return false;
+        const matchCampaign = selectedCampaign.id === NO_CAMPAIGN_ID ? !record.sourceId : record.sourceId === selectedCampaign.id;
+        if (!matchCampaign) return false;
         if (!detailOwnerId) return true;
-        return matchesOwner(record, detailOwnerId);
+        return detailOwnerId === NO_OWNER_ID ? !record.ownerUserId : record.ownerUserId === detailOwnerId;
       });
     }
+    if (selectedOwner) return records.filter((record) => (selectedOwner.id === NO_OWNER_ID ? !record.ownerUserId : record.ownerUserId === selectedOwner.id));
+    if (selectedFunnel) return records.filter((record) => record.funnelId === selectedFunnel.id);
     return records;
-  }, [activeDetail, detailOwnerId, records, selectedCampaign, selectedFunnel, selectedOwner]);
+  }, [detailOwnerId, records, selectedCampaign, selectedFunnel, selectedOwner]);
 
-  const detailMetrics = useMemo(
-    () => summarizeMetrics(detailRecords, getAllocatedSpend(detailRecords), now),
-    [detailRecords, getAllocatedSpend, now],
-  );
+  const detailMetrics = useMemo(() => summarizeMetrics(detailRecords, getAllocatedSpend(detailRecords), nowMs), [detailRecords, getAllocatedSpend, nowMs]);
 
-  const detailOwnerLabel = detailOwnerId ? getOwnerLabel(detailOwnerId, users, user) : null;
-
-  const detailCampaignRows = useMemo<CampaignSummary[]>(() => {
-    if (detailRecords.length === 0) return [];
-    const campaignMap = new Map<string, ReportRecord[]>();
+  const primaryDetailFunnel = useMemo(() => {
+    if (selectedFunnel) return allFunnels.find((funnel) => funnel.id === selectedFunnel.id);
+    if (!selectedCampaign) return undefined;
+    const linkedFunnels = allFunnels.filter((funnel) => funnel.linkedCampaignId === selectedCampaign.id);
+    if (linkedFunnels.length === 1) return linkedFunnels[0];
+    const counts = new Map<string, number>();
     for (const record of detailRecords) {
-      if (record.kind !== 'commercial') continue;
-      const key = record.sourceId || NO_CAMPAIGN_ID;
-      if (!campaignMap.has(key)) campaignMap.set(key, []);
-      campaignMap.get(key)!.push(record);
+      if (!record.funnelId) continue;
+      counts.set(record.funnelId, (counts.get(record.funnelId) || 0) + 1);
     }
+    const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
+    return top ? allFunnels.find((funnel) => funnel.id === top[0]) : undefined;
+  }, [allFunnels, detailRecords, selectedCampaign, selectedFunnel]);
 
-    return Array.from(campaignMap.entries())
-      .map(([campaignId, subset]) => {
-        const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), now);
-        return {
-          ...metrics,
-          id: campaignId,
-          name: campaignId === NO_CAMPAIGN_ID
-            ? 'Sem campanha'
-            : campaigns.find((campaign) => campaign.id === campaignId)?.name || 'Campanha',
-          ownersCount: new Set(subset.map((record) => record.ownerUserId || UNASSIGNED_OWNER_ID)).size,
-          funnelsCount: new Set(subset.map((record) => record.funnelId || 'sem_funil')).size,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [campaigns, detailRecords, getAllocatedSpend, now]);
+  const overviewTimeline = useMemo(() => buildTimeline(records, period), [period, records]);
+  const detailTimeline = useMemo(() => buildTimeline(detailRecords, period), [detailRecords, period]);
+  const overviewStageData = useMemo(() => buildSemanticStageData(records), [records]);
+  const detailStageData = useMemo(() => buildFunnelStageData(detailRecords, primaryDetailFunnel), [detailRecords, primaryDetailFunnel]);
 
-  const detailOwnerRows = useMemo<OwnerSummary[]>(() => {
-    if (detailRecords.length === 0) return [];
-    const ownerMap = new Map<string, ReportRecord[]>();
-    for (const record of detailRecords) {
-      const key = record.ownerUserId || UNASSIGNED_OWNER_ID;
-      if (!ownerMap.has(key)) ownerMap.set(key, []);
-      ownerMap.get(key)!.push(record);
-    }
+  const topCampaignChart = campaignRows.slice(0, 6).map((item) => ({ id: item.id, name: item.name.length > 18 ? `${item.name.slice(0, 18)}...` : item.name, total: item.total }));
+  const topOwnerChart = ownerRows.slice(0, 6).map((item) => ({ id: item.id, name: item.name.length > 16 ? `${item.name.slice(0, 16)}...` : item.name, total: item.total, fechados: item.won }));
+  const topFunnelChart = funnelRows.slice(0, 6).map((item) => ({ id: item.id, name: item.name.length > 20 ? `${item.name.slice(0, 20)}...` : item.name, total: item.total }));
 
-    return Array.from(ownerMap.entries())
-      .map(([ownerId, subset]) => {
-        const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), now);
-        return {
-          ...metrics,
-          id: ownerId,
-          name: getOwnerLabel(ownerId, users, user),
-          campaignsCount: new Set(
-            subset.filter((record) => record.kind === 'commercial').map((record) => record.sourceId || NO_CAMPAIGN_ID),
-          ).size,
-          funnelsCount: new Set(subset.map((record) => record.funnelId || 'sem_funil')).size,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [detailRecords, getAllocatedSpend, now, user, users]);
+  const detailComparisonRows = useMemo(() => {
+    if (selectedCampaign) return buildOwnerRows(detailRecords, users, user, getAllocatedSpend, nowMs);
+    if (selectedOwner) return buildCampaignRows(detailRecords, campaigns, getAllocatedSpend, nowMs);
+    if (selectedFunnel) return buildOwnerRows(detailRecords, users, user, getAllocatedSpend, nowMs);
+    return [];
+  }, [campaigns, detailRecords, getAllocatedSpend, nowMs, selectedCampaign, selectedFunnel, selectedOwner, user, users]);
 
-  const detailFunnelRows = useMemo<FunnelSummary[]>(() => {
-    if (detailRecords.length === 0) return [];
-    return allFunnels
-      .map((funnel) => {
-        const subset = detailRecords.filter((record) => record.funnelId === funnel.id);
-        const metrics = summarizeMetrics(subset, getAllocatedSpend(subset), now);
-        return {
-          ...metrics,
-          id: funnel.id,
-          name: funnel.name,
-          operation: funnel.operation,
-          ownersCount: new Set(subset.map((record) => record.ownerUserId || UNASSIGNED_OWNER_ID)).size,
-          sourcesCount: new Set(
-            subset.filter((record) => record.kind === 'commercial').map((record) => record.sourceId || NO_CAMPAIGN_ID),
-          ).size,
-          stageRows: buildStageRows(subset, funnel),
-        };
-      })
-      .filter((item) => item.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [allFunnels, detailRecords, getAllocatedSpend, now]);
+  const detailComparisonChart = detailComparisonRows.slice(0, 6).map((item) => ({
+    id: item.id,
+    name: item.name.length > 18 ? `${item.name.slice(0, 18)}...` : item.name,
+    total: item.total,
+  }));
 
-  const detailTitle = activeDetail === 'funnel'
-    ? selectedFunnel?.name || 'Funil'
-    : activeDetail === 'owner'
-      ? selectedOwner?.name || 'Responsavel'
-      : activeDetail === 'campaign'
-        ? `${selectedCampaign?.name || 'Campanha'}${detailOwnerLabel ? ` · ${detailOwnerLabel}` : ''}`
-        : 'Panorama geral da operacao';
+  const detailSecondaryFunnels = useMemo(() => buildFunnelRows(detailRecords, allFunnels, campaigns, getAllocatedSpend, nowMs), [allFunnels, campaigns, detailRecords, getAllocatedSpend, nowMs]);
+  const biggestBottleneck = [...overviewStageData.filter((stage) => !['Fechados', 'Perdidos'].includes(stage.name))].sort((a, b) => b.total - a.total)[0];
+  const bestCampaign = campaignRows.find((item) => item.total > 0);
+  const bestOwner = ownerRows.find((item) => item.total > 0);
+  const linkedFunnelsCount = funnelRows.filter((item) => item.linkedCampaignId).length;
 
-  const detailSubtitle = activeDetail === 'funnel'
-    ? 'Leitura completa do funil, com etapas, campanhas e distribuicao por responsavel.'
-    : activeDetail === 'owner'
-      ? 'Visao consolidada do responsavel, com funis e campanhas clicaveis para aprofundamento.'
-      : activeDetail === 'campaign'
-        ? 'Relatorio detalhado da campanha, com recorte por funil e responsavel quando aplicavel.'
-        : 'Visao panoramica com tudo sobre funis, campanhas e vendedores, pronta para drill-down.';
+  const detailTitle = selectedCampaign
+    ? `Campanha: ${selectedCampaign.name}${detailOwnerId ? ` / ${getOwnerLabel(detailOwnerId, users, user)}` : ''}`
+    : selectedOwner
+      ? `Vendedor: ${selectedOwner.name}`
+      : selectedFunnel
+        ? `Funil: ${selectedFunnel.name}`
+        : null;
 
   const exportReport = () => {
-    const rows = activeDetail === 'overview'
-      ? funnelSummaries.map((item) => [item.name, item.total, item.won, formatPercent(item.conversion), formatCurrency(item.totalSpend), formatCurrency(item.wonRevenue), formatPercent(item.roi)])
-      : activeDetail === 'owner'
-        ? detailCampaignRows.map((item) => [item.name, item.total, item.won, formatPercent(item.conversion), formatCurrency(item.totalSpend), formatCurrency(item.wonRevenue), formatPercent(item.roi)])
-        : activeDetail === 'campaign'
-          ? detailOwnerRows.map((item) => [item.name, item.total, item.won, formatPercent(item.conversion), formatCurrency(item.totalSpend), formatCurrency(item.wonRevenue), formatPercent(item.roi)])
-          : detailFunnelRows.map((item) => [item.name, item.total, item.won, formatPercent(item.conversion), formatCurrency(item.totalSpend), formatCurrency(item.wonRevenue), formatPercent(item.roi)]);
-
-    const firstColumnLabel = activeDetail === 'overview'
-      ? 'Funil'
-      : activeDetail === 'owner'
-        ? 'Campanha'
-        : activeDetail === 'campaign'
-          ? 'Responsavel'
-          : 'Funil relacionado';
-
-    const html = `
-      <html><head><meta charset="utf-8" />
-      <style>
-        body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#111827;background:#fffaf0}
-        table{border-collapse:collapse;width:100%;margin-top:16px;background:#fff;border-top:4px solid #d4af37}
-        th,td{border:1px solid #e5e7eb;padding:10px 12px;text-align:left;font-size:12px}
-        th{background:#f8f0d0;color:#5b4310;text-transform:uppercase;font-size:10px;letter-spacing:.12em}
-        .summary{width:100%;border-collapse:separate;border-spacing:12px 0;margin:18px 0}
-        .card{border:1px solid #ead9ac;border-radius:14px;padding:12px;background:#fffdf7;min-width:120px}
-        .label{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:#8a6a15}
-        .value{font-size:20px;font-weight:700;margin-top:6px;color:#111827}
-        .brand{border:1px solid #e5d3a1;border-radius:16px;background:linear-gradient(180deg,#111111 0%,#171717 100%);padding:20px 24px;color:#f5d06f}
-        .brand-top{height:4px;background:#d4af37;border-radius:999px;margin-bottom:16px}
-        .brand-kicker{font-size:10px;letter-spacing:.32em;text-transform:uppercase;color:#f3d98a}
-        .brand-title{font-size:28px;font-family:Georgia,serif;font-weight:700;margin-top:10px;color:#f5d06f}
-        .brand-sub{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#d7bf7a;margin-top:8px}
-        .meta{margin-top:16px;color:#6b7280;font-size:12px}
-      </style>
-      </head><body>
-      <div class="brand"><div class="brand-top"></div><div class="brand-kicker">Relatorio Premium</div><div class="brand-title">CRM M DE PAULA</div><div class="brand-sub">${escapeHtml(detailTitle)}</div></div>
-      <p class="meta">Periodo: ${escapeHtml(period)} | Gerado em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
-      <table class="summary"><tr>
-        <td class="card"><div class="label">Entradas</div><div class="value">${escapeHtml(detailMetrics.total)}</div></td>
-        <td class="card"><div class="label">Fechados</div><div class="value">${escapeHtml(detailMetrics.won)}</div></td>
-        <td class="card"><div class="label">Conversao</div><div class="value">${escapeHtml(formatPercent(detailMetrics.conversion))}</div></td>
-        <td class="card"><div class="label">Investimento</div><div class="value">${escapeHtml(formatCurrency(detailMetrics.totalSpend))}</div></td>
-        <td class="card"><div class="label">Receita</div><div class="value">${escapeHtml(formatCurrency(detailMetrics.wonRevenue))}</div></td>
-        <td class="card"><div class="label">ROI</div><div class="value">${escapeHtml(formatPercent(detailMetrics.roi))}</div></td>
-      </tr></table>
-      <table><thead><tr><th>${firstColumnLabel}</th><th>Entradas</th><th>Fechados</th><th>Conversao</th><th>Investimento</th><th>Receita</th><th>ROI</th></tr></thead><tbody>
-      ${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}
-      </tbody></table>
-      </body></html>`;
-
+    const summaryRows = [
+      ['Entradas', String(detailTitle ? detailMetrics.total : overallMetrics.total)],
+      ['Fechados', String(detailTitle ? detailMetrics.won : overallMetrics.won)],
+      ['Perdidos', String(detailTitle ? detailMetrics.lost : overallMetrics.lost)],
+      ['Conversao', detailTitle ? formatPercent(detailMetrics.conversion) : formatPercent(overallMetrics.conversion)],
+      ['Investimento', detailTitle ? formatCurrency(detailMetrics.totalSpend) : formatCurrency(overallMetrics.totalSpend)],
+      ['Receita', detailTitle ? formatCurrency(detailMetrics.wonRevenue) : formatCurrency(overallMetrics.wonRevenue)],
+      ['ROI', detailTitle ? formatPercent(detailMetrics.roi) : formatPercent(overallMetrics.roi)],
+    ];
+    const focusRows = (detailTitle ? detailComparisonRows : campaignRows.slice(0, 12)).map((item) => [
+      item.name,
+      String(item.total),
+      String(item.won),
+      formatPercent(item.conversion),
+      formatCurrency(item.totalSpend),
+      formatCurrency(item.wonRevenue),
+      formatPercent(item.roi),
+    ]);
+    const html = `<html><head><meta charset="utf-8" /></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;background:#fffaf0;color:#111827"><div style="background:linear-gradient(180deg,#111111 0%,#171717 100%);border-radius:18px;padding:24px;color:#f5d06f"><div style="height:4px;background:#d4af37;border-radius:999px;margin-bottom:14px"></div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:#f3d98a">CRM M De Paula</div><h1 style="margin:12px 0 0;font-size:28px">${detailTitle || 'Panorama geral'}</h1><p style="margin:8px 0 0;color:#d7bf7a;font-size:12px">Periodo ${period} | Gerado em ${new Date().toLocaleString('pt-BR')}</p></div>${buildHtmlTable('Resumo executivo', ['Indicador', 'Valor'], summaryRows)}${buildHtmlTable(detailTitle ? 'Aprofundamento atual' : 'Campanhas em destaque', ['Nome', 'Entradas', 'Fechados', 'Conversao', 'Investimento', 'Receita', 'ROI'], focusRows)}</body></html>`;
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -623,574 +595,244 @@ export function SalesReports() {
     URL.revokeObjectURL(url);
   };
 
+  const campaignRanking: RankingItem[] = campaignRows.slice(0, 5).map((item) => ({ id: item.id, label: item.name, supporting: `${item.ownerCount} responsaveis / ${item.funnelCount} funis`, value: `${item.total} leads`, secondaryValue: `${formatPercent(item.conversion)} conv.`, onClick: () => updateParams({ detail: 'campaign', entityId: item.id, ownerId: null }) }));
+  const ownerRanking: RankingItem[] = ownerRows.slice(0, 5).map((item) => ({ id: item.id, label: item.name, supporting: `${item.campaignsCount} campanhas / ${item.funnelsCount} funis`, value: `${item.won} fechados`, secondaryValue: `${formatPercent(item.conversion)} conv.`, onClick: () => updateParams({ detail: 'owner', entityId: item.id, ownerId: null }) }));
+  const funnelRanking: RankingItem[] = funnelRows.slice(0, 5).map((item) => ({ id: item.id, label: item.name, supporting: item.linkedCampaignName ? `Vinculado a ${item.linkedCampaignName}` : `${item.stageCount} etapas`, value: `${item.total} entradas`, secondaryValue: `${formatPercent(item.conversion)} conv.`, onClick: () => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null }) }));
+
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-      <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-bold gold-text-gradient tracking-tight">Relatorios</h1>
-          <p className="text-muted-foreground mt-2 text-[11px] uppercase tracking-widest">
-            Panorama navegavel da operacao com drill-down por funil, vendedor e campanha
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <PremiumSelect
-            options={operationOptions}
-            value={operationFilter}
-            onChange={(nextValue) => updateParams({ operation: nextValue === ALL_OPERATIONS ? null : nextValue, detail: null, entityId: null, ownerId: null })}
-            placeholder="Selecionar escopo"
-          />
-          <PremiumSelect
-            options={periodOptions}
-            value={period}
-            onChange={(nextValue) => updateParams({ period: nextValue })}
-            placeholder="Selecionar periodo"
-          />
-          <button
-            onClick={exportReport}
-            className="px-4 py-3 rounded-xl bg-primary text-primary-foreground text-xs uppercase tracking-widest font-black inline-flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
-        </div>
-      </header>
-
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard icon={FileSpreadsheet} label="Entradas" value={overallMetrics.total} />
-        <MetricCard icon={CheckCircle2} label="Fechados" value={overallMetrics.won} />
-        <MetricCard icon={TrendingUp} label="Conversao" value={formatPercent(overallMetrics.conversion)} />
-        <MetricCard icon={WalletCards} label="Investimento" value={formatCurrency(overallMetrics.totalSpend)} />
-        <MetricCard icon={BadgeDollarSign} label="Receita fechada" value={formatCurrency(overallMetrics.wonRevenue)} />
-        <MetricCard icon={Target} label="ROI" value={formatPercent(overallMetrics.roi)} />
-        <MetricCard icon={Layers3} label="Pipeline" value={formatCurrency(overallMetrics.pipelineValue)} />
-        <MetricCard icon={Clock3} label="Follow-up atrasado" value={overallMetrics.overdue} />
-      </section>
-
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <OverviewPanel
-          title="Funis estrategicos"
-          description="Clique em um funil para abrir o detalhamento por etapas."
-          icon={GitBranchPlus}
-          emptyMessage="Nenhum funil com dados neste periodo."
-        >
-          {funnelSummaries.map((funnel) => (
-            <button
-              key={funnel.id}
-              type="button"
-              onClick={() => updateParams({ detail: 'funnel', entityId: funnel.id, ownerId: null })}
-              className="w-full rounded-2xl border border-border bg-background/40 p-4 text-left transition-all hover:border-gold-500/40 hover:bg-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/60">
-                    {funnel.operation === 'commercial' ? 'Comercial' : 'Prospeccao'}
-                  </p>
-                  <h3 className="text-sm font-bold text-foreground mt-1">{funnel.name}</h3>
-                </div>
-                <ArrowRight className="w-4 h-4 text-primary shrink-0" />
-              </div>
-              <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
-                <StatPill label="Entradas" value={funnel.total} />
-                <StatPill label="Fechados" value={funnel.won} />
-                <StatPill label="Conversao" value={formatPercent(funnel.conversion)} />
-              </div>
-              <div className="mt-4 space-y-2">
-                {funnel.stageRows.slice(0, 3).map((stage) => (
-                  <ProgressRow key={stage.id} label={stage.name} value={stage.total} percentage={stage.share} color={stage.color} />
-                ))}
-              </div>
-            </button>
-          ))}
-        </OverviewPanel>
-
-        <OverviewPanel
-          title="Equipe"
-          description="Clique em um vendedor para abrir o relatorio individual."
-          icon={Users}
-          emptyMessage="Nenhum responsavel com dados neste periodo."
-        >
-          {ownerSummaries.map((owner) => (
-            <button
-              key={owner.id}
-              type="button"
-              onClick={() => updateParams({ detail: 'owner', entityId: owner.id, ownerId: null })}
-              className="w-full rounded-2xl border border-border bg-background/40 p-4 text-left transition-all hover:border-gold-500/40 hover:bg-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-foreground">{owner.name}</p>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/60 mt-1">
-                    {owner.campaignsCount} campanhas · {owner.funnelsCount} funis
-                  </p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-primary shrink-0" />
-              </div>
-              <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
-                <StatPill label="Entradas" value={owner.total} />
-                <StatPill label="Fechados" value={owner.won} />
-                <StatPill label="ROI" value={formatPercent(owner.roi)} />
-              </div>
-            </button>
-          ))}
-        </OverviewPanel>
-
-        <OverviewPanel
-          title="Campanhas"
-          description="Clique em uma campanha para ver o relatorio detalhado."
-          icon={BriefcaseBusiness}
-          emptyMessage="Nenhuma campanha com dados neste periodo."
-        >
-          {campaignSummaries.map((campaign) => (
-            <button
-              key={campaign.id}
-              type="button"
-              onClick={() => updateParams({ detail: 'campaign', entityId: campaign.id, ownerId: null })}
-              className="w-full rounded-2xl border border-border bg-background/40 p-4 text-left transition-all hover:border-gold-500/40 hover:bg-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-foreground">{campaign.name}</p>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/60 mt-1">
-                    {campaign.ownersCount} responsaveis · {campaign.funnelsCount} funis
-                  </p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-primary shrink-0" />
-              </div>
-              <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
-                <StatPill label="Entradas" value={campaign.total} />
-                <StatPill label="Fechados" value={campaign.won} />
-                <StatPill label="ROI" value={formatPercent(campaign.roi)} />
-              </div>
-            </button>
-          ))}
-        </OverviewPanel>
-      </section>
-
-      <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-border bg-accent/70 space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gold-500/70">
-            <button type="button" onClick={() => updateParams({ detail: null, entityId: null, ownerId: null })} className="hover:text-primary transition-colors">
-              Geral
-            </button>
-            {activeDetail === 'owner' && selectedOwner ? (
-              <>
-                <ChevronText />
-                <span className="text-primary">{selectedOwner.name}</span>
-              </>
-            ) : null}
-            {activeDetail === 'funnel' && selectedFunnel ? (
-              <>
-                <ChevronText />
-                <span className="text-primary">{selectedFunnel.name}</span>
-              </>
-            ) : null}
-            {activeDetail === 'campaign' && selectedCampaign ? (
-              <>
-                {detailOwnerLabel ? (
-                  <>
-                    <ChevronText />
-                    <button type="button" onClick={() => updateParams({ detail: 'owner', entityId: detailOwnerId, ownerId: null })} className="hover:text-primary transition-colors">
-                      {detailOwnerLabel}
-                    </button>
-                  </>
-                ) : null}
-                <ChevronText />
-                <span className="text-primary">{selectedCampaign.name}</span>
-              </>
-            ) : null}
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6">
+      <section className="rounded-[32px] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.25),_transparent_32%),linear-gradient(135deg,_rgba(17,17,17,1)_0%,_rgba(24,24,24,1)_38%,_rgba(37,31,14,1)_100%)] p-6 md:p-8 shadow-[0_30px_120px_rgba(0,0,0,0.28)]">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-gold-300/70">Relatorios executivos</p>
+            <h1 className="mt-3 text-3xl md:text-5xl font-serif font-bold text-white leading-tight">Panorama completo da operacao com leitura real de campanhas, funis e equipe.</h1>
+            <p className="mt-4 max-w-2xl text-sm md:text-base text-white/70">Esta pagina virou o hub analitico do CRM. O painel de trafego fica operacional, e o aprofundamento acontece aqui com visao geral, graficos e drill-down.</p>
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-            <div>
-              <h2 className="text-xl md:text-2xl font-serif font-bold gold-text-gradient">{detailTitle}</h2>
-              <p className="text-sm text-muted-foreground mt-2">{detailSubtitle}</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 min-w-full lg:min-w-[520px]">
-              <MetricMiniCard label="Entradas" value={detailMetrics.total} />
-              <MetricMiniCard label="Fechados" value={detailMetrics.won} />
-              <MetricMiniCard label="Conversao" value={formatPercent(detailMetrics.conversion)} />
-              <MetricMiniCard label="ROI" value={formatPercent(detailMetrics.roi)} />
-            </div>
+          <div className="grid w-full gap-3 md:grid-cols-3 xl:w-auto xl:min-w-[760px]">
+            <PremiumSelect options={operationOptions} value={operationFilter} onChange={(nextValue) => updateParams({ operation: nextValue === ALL_OPERATIONS ? null : nextValue, detail: null, entityId: null, ownerId: null })} placeholder="Selecionar escopo" />
+            <PremiumSelect options={periodOptions} value={period} onChange={(nextValue) => updateParams({ period: nextValue })} placeholder="Selecionar periodo" />
+            <button type="button" onClick={exportReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gold-500/40 bg-gold-500/20 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-gold-100 transition hover:bg-gold-500/30"><Download className="h-4 w-4" />Exportar leitura</button>
           </div>
         </div>
-
-        <div className="p-5 md:p-6 space-y-6">
-          {activeDetail === 'overview' ? (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <DataTableSection
-                title="Top funis"
-                description="Os funis abaixo concentram a maior parte das entradas no periodo."
-                icon={GitBranchPlus}
-                emptyMessage="Nenhum funil para listar."
-                columns={['Funil', 'Entradas', 'Fechados', 'Conversao', 'Etapas ativas']}
-                rows={funnelSummaries.map((item) => ({
-                  key: item.id,
-                  onClick: () => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null }),
-                  cells: [
-                    item.name,
-                    String(item.total),
-                    String(item.won),
-                    formatPercent(item.conversion),
-                    `${item.stageRows.filter((stage) => stage.total > 0).length}/${item.stageRows.length}`,
-                  ],
-                }))}
-              />
-              <DataTableSection
-                title="Top vendedores"
-                description="Clicando em um vendedor, voce abre o panorama dele e depois aprofunda nas campanhas."
-                icon={Users}
-                emptyMessage="Nenhum responsavel para listar."
-                columns={['Responsavel', 'Entradas', 'Fechados', 'Conversao', 'Campanhas']}
-                rows={ownerSummaries.map((item) => ({
-                  key: item.id,
-                  onClick: () => updateParams({ detail: 'owner', entityId: item.id, ownerId: null }),
-                  cells: [
-                    item.name,
-                    String(item.total),
-                    String(item.won),
-                    formatPercent(item.conversion),
-                    String(item.campaignsCount),
-                  ],
-                }))}
-              />
-            </div>
-          ) : null}
-
-          {activeDetail === 'funnel' && selectedFunnel ? (
-            <div className="grid grid-cols-1 xl:grid-cols-[1.25fr,0.9fr] gap-6">
-              <PanelCard title="Distribuicao por etapa" description="Grafico de etapa a etapa dentro do funil." icon={BarChart3}>
-                <div className="space-y-3">
-                  {selectedFunnel.stageRows.length === 0 ? (
-                    <EmptyState message="Nenhuma etapa configurada para este funil." />
-                  ) : (
-                    selectedFunnel.stageRows.map((stage) => (
-                      <ProgressRow key={stage.id} label={stage.name} value={stage.total} percentage={stage.share} color={stage.color} emphasize />
-                    ))
-                  )}
-                </div>
-              </PanelCard>
-
-              <div className="space-y-6">
-                <DataTableSection
-                  title="Responsaveis do funil"
-                  description="Clique em um responsavel para continuar o drill-down."
-                  icon={Users}
-                  emptyMessage="Nenhum responsavel com registros neste funil."
-                  columns={['Responsavel', 'Entradas', 'Fechados', 'Conversao', 'ROI']}
-                  rows={detailOwnerRows.map((item) => ({
-                    key: item.id,
-                    onClick: () => updateParams({ detail: 'owner', entityId: item.id, ownerId: null }),
-                    cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), formatPercent(item.roi)],
-                  }))}
-                />
-                <DataTableSection
-                  title={selectedFunnel.operation === 'commercial' ? 'Campanhas do funil' : 'Servicos do funil'}
-                  description="Aprofunde para ver detalhes especificos por campanha."
-                  icon={BriefcaseBusiness}
-                  emptyMessage="Nenhuma origem vinculada neste funil."
-                  columns={[selectedFunnel.operation === 'commercial' ? 'Campanha' : 'Servico', 'Entradas', 'Fechados', 'Conversao', 'ROI']}
-                  rows={detailCampaignRows.map((item) => ({
-                    key: item.id,
-                    onClick: selectedFunnel.operation === 'commercial'
-                      ? () => updateParams({ detail: 'campaign', entityId: item.id, ownerId: null })
-                      : undefined,
-                    cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), formatPercent(item.roi)],
-                  }))}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {activeDetail === 'owner' && selectedOwner ? (
-            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-6">
-              <DataTableSection
-                title="Campanhas do vendedor"
-                description="Clique em uma campanha para abrir o relatorio especifico deste vendedor naquela campanha."
-                icon={BriefcaseBusiness}
-                emptyMessage="Nenhuma campanha encontrada para este responsavel."
-                columns={['Campanha', 'Entradas', 'Fechados', 'Conversao', 'ROI']}
-                rows={detailCampaignRows.map((item) => ({
-                  key: item.id,
-                  onClick: () => updateParams({ detail: 'campaign', entityId: item.id, ownerId: selectedOwner.id }),
-                  cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), formatPercent(item.roi)],
-                }))}
-              />
-              <div className="space-y-6">
-                <DataTableSection
-                  title="Funis do vendedor"
-                  description="Mapa dos funis em que este responsavel atua."
-                  icon={GitBranchPlus}
-                  emptyMessage="Nenhum funil encontrado para este responsavel."
-                  columns={['Funil', 'Entradas', 'Fechados', 'Conversao', 'Ativos']}
-                  rows={detailFunnelRows.map((item) => ({
-                    key: item.id,
-                    onClick: () => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null }),
-                    cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), String(item.active)],
-                  }))}
-                />
-                <PanelCard title="Disciplina operacional" description="Indicadores de rotina e resposta deste responsavel." icon={Clock3}>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricMiniCard label="Sem acao 24h+" value={selectedOwner.stalled} />
-                    <MetricMiniCard label="Follow-up atrasado" value={selectedOwner.overdue} />
-                    <MetricMiniCard label="Investimento alocado" value={formatCurrency(selectedOwner.totalSpend)} />
-                    <MetricMiniCard label="Pipeline" value={formatCurrency(selectedOwner.pipelineValue)} />
-                  </div>
-                </PanelCard>
-              </div>
-            </div>
-          ) : null}
-
-          {activeDetail === 'campaign' && selectedCampaign ? (
-            <div className="grid grid-cols-1 xl:grid-cols-[1fr,1fr] gap-6">
-              {!detailOwnerId ? (
-                <DataTableSection
-                  title="Responsaveis da campanha"
-                  description="Clique em um responsavel para ver esta campanha filtrada apenas por ele."
-                  icon={Users}
-                  emptyMessage="Nenhum responsavel com registros nesta campanha."
-                  columns={['Responsavel', 'Entradas', 'Fechados', 'Conversao', 'ROI']}
-                  rows={detailOwnerRows.map((item) => ({
-                    key: item.id,
-                    onClick: () => updateParams({ detail: 'campaign', entityId: selectedCampaign.id, ownerId: item.id }),
-                    cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), formatPercent(item.roi)],
-                  }))}
-                />
-              ) : (
-                <PanelCard title="Contexto da campanha" description="Voce esta vendo a campanha filtrada por um unico responsavel." icon={Users}>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricMiniCard label="Responsavel" value={detailOwnerLabel || '-'} />
-                    <MetricMiniCard label="Entradas" value={detailMetrics.total} />
-                    <MetricMiniCard label="Investimento alocado" value={formatCurrency(detailMetrics.totalSpend)} />
-                    <MetricMiniCard label="Receita fechada" value={formatCurrency(detailMetrics.wonRevenue)} />
-                  </div>
-                </PanelCard>
-              )}
-
-              <div className="space-y-6">
-                <DataTableSection
-                  title="Funis dentro da campanha"
-                  description="Veja em quais funis essa campanha performa melhor."
-                  icon={GitBranchPlus}
-                  emptyMessage="Nenhum funil encontrado para esta campanha."
-                  columns={['Funil', 'Entradas', 'Fechados', 'Conversao', 'ROI']}
-                  rows={detailFunnelRows.map((item) => ({
-                    key: item.id,
-                    onClick: () => updateParams({ detail: 'funnel', entityId: item.id, ownerId: null }),
-                    cells: [item.name, String(item.total), String(item.won), formatPercent(item.conversion), formatPercent(item.roi)],
-                  }))}
-                />
-
-                <PanelCard title="Leitura executiva" description="Resumo rapido da eficiencia desta campanha." icon={Target}>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricMiniCard label="CPL" value={formatCurrency(detailMetrics.cpl)} />
-                    <MetricMiniCard label="CAC" value={formatCurrency(detailMetrics.cac)} />
-                    <MetricMiniCard label="Pipeline" value={formatCurrency(detailMetrics.pipelineValue)} />
-                    <MetricMiniCard label="Ativos" value={detailMetrics.active} />
-                  </div>
-                </PanelCard>
-              </div>
-            </div>
-          ) : null}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <HeroMetricCard icon={BarChart3} label="Entradas" value={overallMetrics.total} helper="volume no periodo" />
+          <HeroMetricCard icon={CheckCircle2} label="Fechados" value={overallMetrics.won} helper={`${formatPercent(overallMetrics.conversion)} de conversao`} />
+          <HeroMetricCard icon={WalletCards} label="Investimento" value={formatCurrency(overallMetrics.totalSpend)} helper={`${formatCurrency(overallMetrics.cpl)} por lead`} />
+          <HeroMetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(overallMetrics.wonRevenue)} helper={`${formatPercent(overallMetrics.roi)} de ROI`} />
         </div>
       </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard icon={TrendingUp} label="Conversao geral" value={formatPercent(overallMetrics.conversion)} helper={`${overallMetrics.active} ativos em andamento`} />
+        <MetricCard icon={Clock3} label="Leads parados" value={overallMetrics.stalled} helper="sem interacao por 24h+" />
+        <MetricCard icon={Target} label="Pipeline" value={formatCurrency(overallMetrics.pipelineValue)} helper={`${overallMetrics.active} oportunidades abertas`} />
+        <MetricCard icon={CalendarRange} label="Follow-up atrasado" value={overallMetrics.overdue} helper="fila de retorno pendente" />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <ChartCard title="Evolucao do periodo" description="Entradas, fechamentos e perdas na mesma linha para leitura rapida." actionLabel="Filtros ativos" actionValue={`${period} / ${operationFilter === 'all' ? 'toda operacao' : operationFilter}`}>
+          <ResponsiveContainer width="100%" height={320}>
+            <AreaChart data={overviewTimeline}>
+              <defs><linearGradient id="entriesGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.5} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0.05} /></linearGradient><linearGradient id="wonGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.45} /><stop offset="95%" stopColor="#10B981" stopOpacity={0.05} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+              <XAxis dataKey="label" stroke="#94A3B8" fontSize={12} />
+              <YAxis stroke="#94A3B8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+              <Area type="monotone" dataKey="entradas" stroke="#D4AF37" fill="url(#entriesGradient)" strokeWidth={3} />
+              <Area type="monotone" dataKey="fechados" stroke="#10B981" fill="url(#wonGradient)" strokeWidth={3} />
+              <Area type="monotone" dataKey="perdidos" stroke="#EF4444" fill="transparent" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title={operationFilter === 'prospecting' ? 'Funis com maior volume' : 'Campanhas em destaque'} description={operationFilter === 'prospecting' ? 'Onde a prospeccao mais se concentra.' : 'Top campanhas para abrir e aprofundar no funil.'}>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={operationFilter === 'prospecting' ? topFunnelChart : topCampaignChart} layout="vertical" margin={{ left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+              <XAxis type="number" stroke="#94A3B8" fontSize={12} />
+              <YAxis dataKey="name" type="category" width={110} stroke="#94A3B8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+              <Bar dataKey="total" radius={[0, 12, 12, 0]}>{(operationFilter === 'prospecting' ? topFunnelChart : topCampaignChart).map((entry, index) => <Cell key={entry.id} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          {operationFilter !== 'prospecting' ? <div className="mt-4 grid gap-2">{campaignRows.slice(0, 5).map((campaign) => <QuickActionRow key={campaign.id} title={campaign.name} subtitle={`${campaign.ownerCount} responsaveis / ${campaign.funnelCount} funis`} metric={`${formatPercent(campaign.conversion)} conv.`} onClick={() => updateParams({ detail: 'campaign', entityId: campaign.id, ownerId: null })} />)}</div> : null}
+        </ChartCard>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-3">
+        <ChartCard title="Distribuicao das etapas" description="Mostra em que ponto a operacao esta ficando presa hoje.">
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={overviewStageData} dataKey="total" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={3}>
+                {overviewStageData.map((entry) => <Cell key={entry.id} fill={entry.color} />)}
+              </Pie>
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="mt-4 space-y-2">{overviewStageData.slice(0, 5).map((stage) => <ProgressRow key={stage.id} label={stage.name} value={stage.total} percentage={stage.share} color={stage.color} />)}</div>
+        </ChartCard>
+
+        <ChartCard title="Equipe" description="Volume e conversao para achar quem precisa de apoio ou onde acelerar.">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={topOwnerChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+              <XAxis dataKey="name" stroke="#94A3B8" fontSize={12} />
+              <YAxis stroke="#94A3B8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+              <Bar dataKey="fechados" fill="#10B981" radius={[12, 12, 0, 0]} />
+              <Bar dataKey="total" fill="#D4AF37" radius={[12, 12, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-4 grid gap-2">{ownerRows.slice(0, 5).map((owner) => <QuickActionRow key={owner.id} title={owner.name} subtitle={`${owner.campaignsCount} campanhas / ${owner.funnelsCount} funis`} metric={`${owner.won} fechados`} onClick={() => updateParams({ detail: 'owner', entityId: owner.id, ownerId: null })} />)}</div>
+        </ChartCard>
+
+        <ChartCard title="Funis vinculados" description="Quais funis ja estao ligados a campanhas e quais ainda estao soltos.">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={topFunnelChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+              <XAxis dataKey="name" stroke="#94A3B8" fontSize={12} />
+              <YAxis stroke="#94A3B8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+              <Bar dataKey="total" fill="#8B5CF6" radius={[12, 12, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-4 grid gap-2">{funnelRows.slice(0, 5).map((funnel) => <QuickActionRow key={funnel.id} title={funnel.name} subtitle={funnel.linkedCampaignName ? `Vinculado a ${funnel.linkedCampaignName}` : 'Sem campanha vinculada'} metric={`${funnel.total} entradas`} onClick={() => updateParams({ detail: 'funnel', entityId: funnel.id, ownerId: null })} />)}</div>
+        </ChartCard>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <InsightCard icon={TrendingUp} title="Melhor campanha agora" description={bestCampaign ? `${bestCampaign.name} lidera o volume do periodo.` : 'Ainda nao ha campanha suficiente para comparar.'} metric={bestCampaign ? `${bestCampaign.total} leads / ${formatPercent(bestCampaign.conversion)}` : 'Sem dados'} />
+        <InsightCard icon={TrendingDown} title="Maior gargalo" description={biggestBottleneck ? `${biggestBottleneck.name} concentra a maior fila ativa.` : 'Sem gargalo relevante no periodo.'} metric={biggestBottleneck ? `${biggestBottleneck.total} registros / ${formatPercent(biggestBottleneck.share)}` : 'Sem dados'} />
+        <InsightCard icon={Filter} title="Arquitetura do CRM" description={`${linkedFunnelsCount} funis ja estao vinculados a campanhas para leitura mais precisa nos relatorios.`} metric={bestOwner ? `${bestOwner.name} lidera com ${bestOwner.won} fechados` : 'Equipe ainda sem destaque'} />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-3">
+        <RankingCard title="Campanhas para abrir agora" description="O clique abre a leitura da campanha dentro desta pagina." items={campaignRanking} />
+        <RankingCard title="Vendedores para aprofundar" description="Abrindo o vendedor, voce desce para as campanhas dele." items={ownerRanking} />
+        <RankingCard title="Funis que pedem leitura" description="Abre o detalhamento por etapa, com campanha vinculada quando existir." items={funnelRanking} />
+      </section>
+
+      {detailTitle ? (
+        <section className="rounded-[32px] border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.18)] overflow-hidden">
+          <div className="border-b border-border bg-[radial-gradient(circle_at_top_right,_rgba(212,175,55,0.18),_transparent_28%),linear-gradient(180deg,_rgba(17,17,17,0.96)_0%,_rgba(24,24,24,0.92)_100%)] px-6 py-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-gold-300/70">
+                  <button type="button" className="transition hover:text-gold-100" onClick={() => updateParams({ detail: null, entityId: null, ownerId: null })}>Geral</button>
+                  {selectedOwner ? <><ChevronRight className="h-4 w-4" /><span className="text-gold-100">{selectedOwner.name}</span></> : null}
+                  {selectedCampaign ? <>{detailOwnerId ? <><ChevronRight className="h-4 w-4" /><button type="button" className="transition hover:text-gold-100" onClick={() => updateParams({ detail: 'owner', entityId: detailOwnerId, ownerId: null })}>{getOwnerLabel(detailOwnerId, users, user)}</button></> : null}<ChevronRight className="h-4 w-4" /><span className="text-gold-100">{selectedCampaign.name}</span></> : null}
+                  {selectedFunnel ? <><ChevronRight className="h-4 w-4" /><span className="text-gold-100">{selectedFunnel.name}</span></> : null}
+                </div>
+                <h2 className="mt-3 text-2xl md:text-3xl font-serif font-bold text-white">{detailTitle}</h2>
+                <p className="mt-2 text-sm text-white/65 max-w-3xl">{selectedCampaign ? (primaryDetailFunnel ? `Leitura completa da campanha com foco no funil ${primaryDetailFunnel.name}.` : 'Leitura completa da campanha com distribuicao por etapa, responsavel e conversao.') : selectedOwner ? 'Panorama do vendedor com campanhas, funis, produtividade e gargalos.' : 'Aprofundamento do funil com etapas, campanha vinculada e equipe envolvida.'}</p>
+              </div>
+              <button type="button" onClick={() => updateParams({ detail: null, entityId: null, ownerId: null })} className="inline-flex items-center gap-2 self-start rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-white/80 transition hover:bg-white/10">Fechar detalhe</button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <HeroMetricCard icon={BarChart3} label="Entradas" value={detailMetrics.total} helper="volume deste recorte" />
+              <HeroMetricCard icon={CheckCircle2} label="Fechados" value={detailMetrics.won} helper={formatPercent(detailMetrics.conversion)} />
+              <HeroMetricCard icon={WalletCards} label="Investimento" value={formatCurrency(detailMetrics.totalSpend)} helper={`CAC ${formatCurrency(detailMetrics.cac)}`} />
+              <HeroMetricCard icon={BadgeDollarSign} label="Receita" value={formatCurrency(detailMetrics.wonRevenue)} helper={`ROI ${formatPercent(detailMetrics.roi)}`} />
+              <HeroMetricCard icon={Clock3} label="Leads parados" value={detailMetrics.stalled} helper={`${detailMetrics.overdue} follow-ups atrasados`} />
+            </div>
+          </div>
+          <div className="p-6 space-y-6">
+            <div className="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
+              <ChartCard title="Linha do tempo deste recorte" description="Ajuda a entender se o detalhe clicado acelerou ou travou.">
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={detailTimeline}>
+                    <defs><linearGradient id="detailGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="5%" stopColor="#D4AF37" stopOpacity={0.45} /><stop offset="95%" stopColor="#D4AF37" stopOpacity={0.04} /></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                    <XAxis dataKey="label" stroke="#94A3B8" fontSize={12} />
+                    <YAxis stroke="#94A3B8" fontSize={12} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+                    <Area type="monotone" dataKey="entradas" stroke="#D4AF37" fill="url(#detailGradient)" strokeWidth={3} />
+                    <Area type="monotone" dataKey="fechados" stroke="#10B981" fill="transparent" strokeWidth={2} />
+                    <Area type="monotone" dataKey="perdidos" stroke="#EF4444" fill="transparent" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title={primaryDetailFunnel ? `Etapas do funil ${primaryDetailFunnel.name}` : 'Distribuicao das etapas'} description={primaryDetailFunnel ? 'Aqui voce enxerga exatamente onde esta o gargalo deste recorte.' : 'Leitura do recorte atual por significado de etapa.'}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={detailStageData} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                    <XAxis type="number" stroke="#94A3B8" fontSize={12} />
+                    <YAxis dataKey="name" type="category" width={120} stroke="#94A3B8" fontSize={12} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+                    <Bar dataKey="total" radius={[0, 12, 12, 0]}>{detailStageData.map((entry) => <Cell key={entry.id} fill={entry.color} />)}</Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+              <ChartCard title={selectedCampaign ? 'Equipe dentro desta campanha' : selectedOwner ? 'Campanhas dentro deste vendedor' : 'Equipe dentro deste funil'} description="O clique aprofunda mais um nivel quando fizer sentido.">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={detailComparisonChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                    <XAxis dataKey="name" stroke="#94A3B8" fontSize={12} />
+                    <YAxis stroke="#94A3B8" fontSize={12} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 16 }} />
+                    <Bar dataKey="total" fill="#D4AF37" radius={[12, 12, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 grid gap-2">{detailComparisonRows.slice(0, 5).map((item) => <QuickActionRow key={item.id} title={item.name} subtitle={`${item.total} entradas / ${item.won} fechados`} metric={`${formatPercent(item.conversion)} conv.`} onClick={selectedOwner ? () => updateParams({ detail: 'campaign', entityId: item.id, ownerId: selectedOwner.id }) : selectedCampaign || selectedFunnel ? () => updateParams({ detail: 'owner', entityId: item.id, ownerId: null }) : undefined} />)}</div>
+              </ChartCard>
+
+              <div className="grid gap-6">
+                <ChartCard title="Leituras rapidas deste detalhe" description="Resumo gerencial para agir sem interpretar tudo manualmente.">
+                  <div className="space-y-3">
+                    <DetailInsightRow label="Gargalo atual" value={detailStageData.length > 0 ? `${[...detailStageData].sort((a, b) => b.total - a.total)[0].name} (${[...detailStageData].sort((a, b) => b.total - a.total)[0].total})` : 'Sem dados'} />
+                    <DetailInsightRow label="Funil principal" value={primaryDetailFunnel ? primaryDetailFunnel.name : 'Nao identificado'} />
+                    <DetailInsightRow label="ROI deste recorte" value={formatPercent(detailMetrics.roi)} />
+                    <DetailInsightRow label="Pipeline aberto" value={formatCurrency(detailMetrics.pipelineValue)} />
+                  </div>
+                </ChartCard>
+                <ChartCard title="Funis relacionados" description="Especialmente util ao abrir vendedor ou campanha.">
+                  <div className="space-y-2">{detailSecondaryFunnels.slice(0, 5).map((funnel) => <QuickActionRow key={funnel.id} title={funnel.name} subtitle={funnel.linkedCampaignName ? `Vinculado a ${funnel.linkedCampaignName}` : 'Sem campanha vinculada'} metric={`${funnel.total} entradas`} onClick={() => updateParams({ detail: 'funnel', entityId: funnel.id, ownerId: null })} />)}{detailSecondaryFunnels.length === 0 ? <EmptyInlineState message="Nenhum funil relacionado para mostrar." /> : null}</div>
+                </ChartCard>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string | number }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 shadow-xl">
-      <div className="w-9 h-9 rounded-lg bg-accent border border-border flex items-center justify-center text-primary">
-        <Icon className="w-4 h-4" />
-      </div>
-      <div>
-        <p className="text-[10px] uppercase tracking-widest text-gold-500/60">{label}</p>
-        <p className="text-base font-serif font-bold">{value}</p>
-      </div>
-    </div>
-  );
+function HeroMetricCard({ icon: Icon, label, value, helper }: { icon: LucideIcon; label: string; value: string | number; helper: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-sm"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.22em] text-white/55">{label}</p><p className="mt-2 text-2xl font-black text-white">{value}</p></div><div className="rounded-xl border border-gold-500/30 bg-gold-500/15 p-3 text-gold-100"><Icon className="h-5 w-5" /></div></div><p className="mt-3 text-xs text-white/55">{helper}</p></div>;
 }
 
-function MetricMiniCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-border bg-background/40 px-4 py-3">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/60">{label}</p>
-      <p className="text-sm font-bold text-foreground mt-1">{value}</p>
-    </div>
-  );
+function MetricCard({ icon: Icon, label, value, helper }: { icon: LucideIcon; label: string; value: string | number; helper: string }) {
+  return <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-[0_16px_50px_rgba(0,0,0,0.08)]"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/70">{label}</p><p className="mt-2 text-xl font-black text-foreground">{value}</p></div><div className="rounded-xl bg-gold-500/12 p-3 text-primary"><Icon className="h-5 w-5" /></div></div><p className="mt-3 text-xs text-muted-foreground">{helper}</p></div>;
 }
 
-function StatPill({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/60 px-3 py-2">
-      <p className="text-[9px] uppercase tracking-[0.18em] text-gold-500/60">{label}</p>
-      <p className="text-sm font-bold text-foreground mt-1">{value}</p>
-    </div>
-  );
+function ChartCard({ title, description, actionLabel, actionValue, children }: { title: string; description: string; actionLabel?: string; actionValue?: string; children: ReactNode }) {
+  return <div className="rounded-[28px] border border-border bg-card p-5 shadow-[0_22px_80px_rgba(0,0,0,0.08)]"><div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div><h3 className="text-lg font-semibold text-foreground">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>{actionLabel && actionValue ? <div className="rounded-2xl border border-gold-500/20 bg-gold-500/10 px-3 py-2 text-right"><p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/70">{actionLabel}</p><p className="mt-1 text-xs font-semibold text-foreground">{actionValue}</p></div> : null}</div><div className="mt-5">{children}</div></div>;
 }
 
-function OverviewPanel({
-  title,
-  description,
-  icon: Icon,
-  emptyMessage,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  emptyMessage: string;
-  children: ReactNode;
-}) {
-  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
-
-  return (
-    <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-border bg-accent flex items-start gap-3">
-        <div className="w-10 h-10 rounded-2xl border border-border bg-background/60 flex items-center justify-center text-primary shrink-0">
-          <Icon className="w-5 h-5" />
-        </div>
-        <div>
-          <h2 className="text-base font-serif font-bold">{title}</h2>
-          <p className="text-sm text-muted-foreground mt-1">{description}</p>
-        </div>
-      </div>
-      <div className="p-5 space-y-3">
-        {hasChildren ? children : <EmptyState message={emptyMessage} compact />}
-      </div>
-    </section>
-  );
+function InsightCard({ icon: Icon, title, description, metric }: { icon: LucideIcon; title: string; description: string; metric: string }) {
+  return <div className="rounded-[28px] border border-border bg-card p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)]"><div className="flex items-start gap-3"><div className="rounded-2xl bg-gold-500/12 p-3 text-primary"><Icon className="h-5 w-5" /></div><div><h3 className="text-lg font-semibold text-foreground">{title}</h3><p className="mt-2 text-sm text-muted-foreground">{description}</p><p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-primary">{metric}</p></div></div></div>;
 }
 
-function PanelCard({
-  title,
-  description,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-border bg-background/40 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border bg-card/80 flex items-start gap-3">
-        <div className="w-10 h-10 rounded-2xl border border-border bg-background/60 flex items-center justify-center text-primary shrink-0">
-          <Icon className="w-5 h-5" />
-        </div>
-        <div>
-          <h3 className="text-base font-serif font-bold">{title}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{description}</p>
-        </div>
-      </div>
-      <div className="p-5">{children}</div>
-    </section>
-  );
+function RankingCard({ title, description, items }: { title: string; description: string; items: RankingItem[] }) {
+  return <div className="rounded-[28px] border border-border bg-card p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)]"><h3 className="text-lg font-semibold text-foreground">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p><div className="mt-5 space-y-2">{items.length === 0 ? <EmptyInlineState message="Nada para listar neste periodo." /> : null}{items.map((item) => <button key={item.id} type="button" onClick={item.onClick} className={cn('flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-background/40 px-4 py-3 text-left transition hover:border-gold-500/30 hover:bg-accent/30', !item.onClick && 'cursor-default hover:border-border hover:bg-background/40')}><div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{item.label}</p><p className="truncate text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{item.supporting}</p></div><div className="shrink-0 text-right"><p className="text-sm font-black text-foreground">{item.value}</p><p className="text-[11px] uppercase tracking-[0.16em] text-primary">{item.secondaryValue}</p></div></button>)}</div></div>;
 }
 
-function DataTableSection({
-  title,
-  description,
-  icon: Icon,
-  columns,
-  rows,
-  emptyMessage,
-}: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  columns: string[];
-  rows: Array<{ key: string; cells: string[]; onClick?: () => void }>;
-  emptyMessage: string;
-}) {
-  return (
-    <PanelCard title={title} description={description} icon={Icon}>
-      <div className="overflow-x-auto scrollbar-none">
-        <table className="w-full text-sm">
-          <thead className="text-[10px] uppercase tracking-[0.18em] text-gold-500/70 border-b border-border">
-            <tr>
-              {columns.map((column) => (
-                <th key={column} className="px-3 py-3 text-left font-black">{column}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-3 py-8">
-                  <EmptyState message={emptyMessage} compact />
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.key} className="border-b border-border/50 last:border-b-0">
-                  {row.cells.map((cell, index) => (
-                    <td key={`${row.key}-${index}`} className="px-3 py-3 align-middle">
-                      {index === 0 && row.onClick ? (
-                        <button type="button" onClick={row.onClick} className="font-semibold text-left text-foreground hover:text-primary transition-colors inline-flex items-center gap-2">
-                          <span>{cell}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (
-                        <span className={cn(index === 0 ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                          {cell}
-                        </span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </PanelCard>
-  );
+function QuickActionRow({ title, subtitle, metric, onClick }: { title: string; subtitle: string; metric: string; onClick?: () => void }) {
+  return <button type="button" onClick={onClick} className={cn('flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-background/30 px-4 py-3 text-left transition hover:border-gold-500/30 hover:bg-accent/30', !onClick && 'cursor-default hover:border-border hover:bg-background/30')}><div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{title}</p><p className="truncate text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{subtitle}</p></div><div className="flex items-center gap-2 shrink-0"><span className="text-xs font-black uppercase tracking-[0.16em] text-primary">{metric}</span>{onClick ? <ArrowRight className="h-4 w-4 text-primary" /> : null}</div></button>;
 }
 
-function ProgressRow({
-  label,
-  value,
-  percentage,
-  color,
-  emphasize = false,
-}: {
-  label: string;
-  value: number;
-  percentage: number;
-  color?: string;
-  emphasize?: boolean;
-}) {
-  return (
-    <div className={cn('space-y-2 rounded-2xl border border-border bg-card/50 px-4 py-3', emphasize ? 'shadow-lg' : '')}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color || '#D4AF37' }} />
-          <span className="text-sm font-semibold text-foreground truncate">{label}</span>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-sm font-bold text-foreground">{value}</p>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/60">{formatPercent(percentage)}</p>
-        </div>
-      </div>
-      <div className="h-2 rounded-full bg-border/80 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${Math.max(percentage, value > 0 ? 6 : 0)}%`, backgroundColor: color || '#D4AF37' }}
-        />
-      </div>
-    </div>
-  );
+function ProgressRow({ label, value, percentage, color }: { label: string; value: number; percentage: number; color: string }) {
+  return <div><div className="mb-2 flex items-center justify-between gap-3"><span className="truncate text-sm font-medium text-foreground">{label}</span><span className="shrink-0 text-xs uppercase tracking-[0.16em] text-muted-foreground">{value} / {formatPercent(percentage)}</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full" style={{ width: `${Math.max(percentage, 4)}%`, backgroundColor: color }} /></div></div>;
 }
 
-function EmptyState({ message, compact = false }: { message: string; compact?: boolean }) {
-  return (
-    <div className={cn('rounded-2xl border border-dashed border-border text-center text-muted-foreground', compact ? 'px-4 py-6' : 'px-6 py-10')}>
-      {message}
-    </div>
-  );
+function DetailInsightRow({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-border bg-background/30 px-4 py-3"><p className="text-[10px] uppercase tracking-[0.18em] text-gold-500/70">{label}</p><p className="mt-2 text-sm font-semibold text-foreground">{value}</p></div>;
 }
 
-function ChevronText() {
-  return <span className="text-gold-500/40">/</span>;
+function EmptyInlineState({ message }: { message: string }) {
+  return <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">{message}</div>;
 }

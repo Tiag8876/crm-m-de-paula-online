@@ -15,6 +15,7 @@ import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getTemplatesForOperation } from '@/lib/funnelFieldSchema';
+import { getStageSemantic } from '@/lib/funnelStages';
 import { isAdminUser } from '@/lib/access';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
 import { PremiumSelect } from '@/components/PremiumSelect';
@@ -289,7 +290,8 @@ export function LeadDetails() {
   };
 
   const handleStatusChange = (nextStatus: string) => {
-    if (nextStatus === 'perdido') {
+    const nextSemantic = getStageSemantic(currentFunnel, nextStatus, 'commercial');
+    if (nextSemantic === 'lost') {
       const reasonLabel = prompt(`Motivo de perda:\n${LOSS_REASON_OPTIONS.map((o) => `- ${o.label}`).join('\n')}`);
       if (!reasonLabel) return;
       const matched = LOSS_REASON_OPTIONS.find((o) => o.label.toLowerCase() === reasonLabel.trim().toLowerCase());
@@ -303,7 +305,7 @@ export function LeadDetails() {
         return;
       }
       const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
-      const lockMessage = validateLeadStatusChange(nextLead, nextStatus);
+      const lockMessage = validateLeadStatusChange(nextLead, nextStatus, currentFunnel);
       if (lockMessage) {
         alert(lockMessage);
         return;
@@ -312,7 +314,7 @@ export function LeadDetails() {
       return;
     }
 
-    const lockMessage = validateLeadStatusChange(lead, nextStatus);
+    const lockMessage = validateLeadStatusChange(lead, nextStatus, currentFunnel);
     if (lockMessage) {
       alert(lockMessage);
       return;
@@ -539,7 +541,7 @@ export function LeadDetails() {
                 unassignedLabel="Sem atribui??o definida"
               />
             </div>
-            {lead.status === 'perdido' && lead.lossReasonCode && (
+            {getStageSemantic(currentFunnel, lead.status, 'commercial') === 'lost' && lead.lossReasonCode && (
               <p className="text-[10px] text-muted-foreground mt-2">
                 Motivo da perda: {LOSS_REASON_OPTIONS.find((o) => o.value === lead.lossReasonCode)?.label || lead.lossReasonCode}
               </p>

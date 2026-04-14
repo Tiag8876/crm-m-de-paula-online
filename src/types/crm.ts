@@ -1,8 +1,22 @@
+export type StageSemantic =
+  | 'new'
+  | 'contact'
+  | 'waiting'
+  | 'meeting'
+  | 'qualified'
+  | 'proposal'
+  | 'negotiation'
+  | 'inspection'
+  | 'won'
+  | 'lost'
+  | 'other';
+
 export interface KanbanStage {
   id: string;
   name: string;
   color: string;
   order: number;
+  semanticKey?: StageSemantic;
 }
 
 export type FunnelFieldType =
@@ -68,6 +82,7 @@ export interface FunnelConfig {
   description?: string;
   operation: 'commercial' | 'prospecting';
   areaOfLawId?: string;
+  linkedCampaignId?: string;
   stages: KanbanStage[];
   fieldSchema?: FunnelFieldConfig[];
   objections?: string[];

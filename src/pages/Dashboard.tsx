@@ -5,6 +5,7 @@ import { isToday, format } from 'date-fns';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getLeadIdleHours } from '@/lib/leadMetrics';
+import { getStageSemantic, isClosedSemantic, isLostSemantic } from '@/lib/funnelStages';
 import type { FunnelConfig } from '@/types/crm';
 
 const sortFunnels = (items: FunnelConfig[]) =>
@@ -54,8 +55,8 @@ export function Dashboard() {
       tasks: lead.tasks || [],
       logs: (lead.logs || []).map((log) => ({ ...log, label: lead.name })),
       idleHours: getLeadIdleHours(lead, now),
-      closed: lead.status === 'fechado',
-      lost: lead.status === 'perdido',
+      closed: isClosedSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'commercial')),
+      lost: isLostSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'commercial')),
     }));
 
     const prospecting = (prospectLeads || []).map((lead) => ({
@@ -71,12 +72,12 @@ export function Dashboard() {
       tasks: lead.tasks || [],
       logs: (lead.logs || []).map((log) => ({ ...log, label: lead.clinicName })),
       idleHours: getProspectIdleHours(lead, now),
-      closed: lead.status === 'p_fechada',
-      lost: lead.status === 'p_perdida',
+      closed: isClosedSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'prospecting')),
+      lost: isLostSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'prospecting')),
     }));
 
     return [...commercial, ...prospecting].filter((item) => !item.ownerUserId || item.ownerUserId === user?.id || user?.role === 'admin');
-  }, [leads, prospectLeads, now, user?.id, user?.role]);
+  }, [allFunnels, leads, prospectLeads, now, user?.id, user?.role]);
 
   const metrics = useMemo(() => {
     const total = records.length;

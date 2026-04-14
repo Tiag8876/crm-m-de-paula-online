@@ -1,4 +1,5 @@
 import { Link, Navigate } from 'react-router-dom';
+import { getStageSemantic, isClosedSemantic } from '@/lib/funnelStages';
 import { getOfflineSnapshot } from '@/lib/offlineSnapshot';
 import type { Lead } from '@/types/crm';
 
@@ -10,6 +11,7 @@ export function OfflineSnapshotPage() {
 
   const state = snapshot.state as {
     leads?: Lead[];
+    funnels?: Array<{ id: string; operation: 'commercial' | 'prospecting'; stages: Array<{ id: string; semanticKey?: string; name: string; color: string; order: number }> }>;
     campaigns?: { id: string; name: string }[];
     adGroups?: unknown[];
     ads?: unknown[];
@@ -18,7 +20,8 @@ export function OfflineSnapshotPage() {
 
   const leads = state.leads || [];
   const campaigns = state.campaigns || [];
-  const closed = leads.filter((lead) => lead.status === 'fechado').length;
+  const funnels = state.funnels || [];
+  const closed = leads.filter((lead) => isClosedSemantic(getStageSemantic(funnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'commercial'))).length;
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 md:p-8">

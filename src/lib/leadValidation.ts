@@ -1,4 +1,5 @@
-﻿import type { Lead } from '@/types/crm';
+import type { FunnelConfig, Lead } from '@/types/crm';
+import { getStageSemantic } from '@/lib/funnelStages';
 
 export const LOSS_REASON_OPTIONS = [
   { value: 'sem_orcamento', label: 'Sem orcamento' },
@@ -30,26 +31,27 @@ function hasLeadInteraction(lead: Lead): boolean {
   );
 }
 
-export function validateLeadStatusChange(lead: Lead, nextStatus: string): string | null {
+export function validateLeadStatusChange(lead: Lead, nextStatus: string, funnel?: FunnelConfig): string | null {
+  const nextSemantic = getStageSemantic(funnel, nextStatus, 'commercial');
   if (nextStatus === lead.status) return null;
 
-  if (nextStatus !== 'novo' && !lead.ownerUserId) {
+  if (nextSemantic !== 'new' && !lead.ownerUserId) {
     return 'Defina o vendedor responsavel antes de avancar o lead.';
   }
 
-  if (nextStatus === 'em_contato' && !hasLeadInteraction(lead)) {
-  return 'Registre a primeira interação (observação, tarefa ou follow-up) antes de avançar para Em Contato.';
+  if (nextSemantic === 'contact' && !hasLeadInteraction(lead)) {
+    return 'Registre a primeira interacao (observacao, tarefa ou follow-up) antes de avancar para Em Contato.';
   }
 
-  if (nextStatus === 'reuniao_agendada' && (lead.followUps || []).length === 0) {
+  if (nextSemantic === 'meeting' && (lead.followUps || []).length === 0) {
     return 'Agende ao menos um follow-up antes de mover para Reuniao Agendada.';
   }
 
-  if (nextStatus === 'fechado' && !hasLeadInteraction(lead)) {
+  if (nextSemantic === 'won' && !hasLeadInteraction(lead)) {
     return 'Para fechar, o lead precisa ter historico minimo de interacao registrado.';
   }
 
-  if (nextStatus === 'perdido') {
+  if (nextSemantic === 'lost') {
     if (!lead.lossReasonCode) {
       return 'Motivo de perda obrigatorio para mover o lead para Perdido.';
     }

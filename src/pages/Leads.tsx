@@ -7,6 +7,7 @@ import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange 
 import { getLeadServiceIds, leadMatchesService } from '@/lib/leadServices';
 import { isAdminUser } from '@/lib/access';
 import { buildEffectiveFieldSchema, getTemplatesForOperation } from '@/lib/funnelFieldSchema';
+import { getStageSemantic } from '@/lib/funnelStages';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -450,7 +451,8 @@ export function Leads() {
   };
 
   const handleCommercialDrop = (lead: Lead, status: string) => {
-    if (status === 'perdido') {
+    const nextSemantic = getStageSemantic(activeFunnel, status, 'commercial');
+    if (nextSemantic === 'lost') {
       const reasonLabel = prompt(`Motivo de perda:\n${LOSS_REASON_OPTIONS.map((option) => `- ${option.label}`).join('\n')}`);
       if (!reasonLabel) return;
       const matched = LOSS_REASON_OPTIONS.find((option) => option.label.toLowerCase() === reasonLabel.trim().toLowerCase());
@@ -464,7 +466,7 @@ export function Leads() {
         return;
       }
       const nextLead = { ...lead, lossReasonCode: matched.value, lossReasonDetail: detail.trim() };
-      const lockMessage = validateLeadStatusChange(nextLead, status);
+      const lockMessage = validateLeadStatusChange(nextLead, status, activeFunnel);
       if (lockMessage) {
         alert(lockMessage);
         return;
@@ -473,7 +475,7 @@ export function Leads() {
       return;
     }
 
-    const lockMessage = validateLeadStatusChange(lead, status);
+    const lockMessage = validateLeadStatusChange(lead, status, activeFunnel);
     if (lockMessage) {
       alert(lockMessage);
       return;
