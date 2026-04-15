@@ -4,6 +4,19 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import {
+  buildLegacyStateFromRelational,
+  loadFunnelsFromDb,
+  loadLeadDetailsFromDb,
+  loadLeadsFromDb,
+  loadReceivablesSummary,
+  parseLegacyState,
+  runProperSchemaMigration,
+  serializeActivityRow,
+  serializeReceivableRow,
+  syncFunnelsFromLegacyState,
+  syncLeadsFromLegacyState,
+} from "./relational-crm.mjs";
 
 const app = express();
 const port = Number(process.env.API_PORT || 3001);
@@ -104,6 +117,51 @@ const isIncomingEntityNewer = (existingItem, incomingItem) => {
 
 const isDatabaseConfigured = () => Boolean(databaseUrl);
 
+const withUtf8ConnectionString = (rawUrl) => {
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.searchParams.set("client_encoding", "UTF8");
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
+const sendError = (res, status, message, code) =>
+  res.status(status).json({
+    error: true,
+    message,
+    code,
+  });
+
+const sanitizeText = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const asNumericValue = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const normalizeDateOnly = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+};
+
+const normalizeSemanticActivityDescription = (previousFunnelName, nextFunnelName, previousStageName, nextStageName) => {
+  if (previousFunnelName && nextFunnelName && previousFunnelName !== nextFunnelName) {
+    return `Lead movido do funil '${previousFunnelName}' para o funil '${nextFunnelName}'`;
+  }
+  if (previousStageName && nextStageName && previousStageName !== nextStageName) {
+    return `Lead movido da etapa '${previousStageName}' para '${nextStageName}'`;
+  }
+  return "Lead movimentado no funil";
+};
+
 const createPool = () => {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL nao configurada.");
@@ -111,7 +169,7 @@ const createPool = () => {
 
   const useSsl = !/(localhost|127\.0\.0\.1)/i.test(databaseUrl);
   return new Pool({
-    connectionString: databaseUrl,
+    connectionString: withUtf8ConnectionString(databaseUrl),
     ssl: useSsl ? { rejectUnauthorized: false } : false,
     max: 10,
   });
@@ -120,6 +178,9 @@ const createPool = () => {
 const getPool = () => {
   if (!pool) {
     pool = createPool();
+    pool.on("connect", (client) => {
+      void client.query("SET client_encoding TO 'UTF8'");
+    });
   }
   return pool;
 };
@@ -180,6 +241,7 @@ const runMigrations = async () => {
   `);
 
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+  await runProperSchemaMigration(query);
 
   await query(
     `INSERT INTO app_state (id, state_json, updated_at, updated_by)
@@ -252,6 +314,7 @@ const ensureDatabaseReady = async () => {
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 app.use((_req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -407,19 +470,37 @@ const signToken = (user) => jwt.sign(
   { expiresIn: tokenExpiresIn }
 );
 
+const ensureLeadPermission = (leadRow, user) => {
+  if (!leadRow) return { allowed: false, reason: "Lead nao encontrado", status: 404, code: "LEAD_NOT_FOUND" };
+  if (isSystemAdmin(user)) return { allowed: true };
+  if (!leadRow.owner_user_id || leadRow.owner_user_id === user.id) return { allowed: true };
+  return { allowed: false, reason: "Voce nao tem acesso a este lead", status: 403, code: "LEAD_FORBIDDEN" };
+};
+
+const findLeadRow = async (leadId) => {
+  const result = await query("SELECT * FROM leads WHERE id = $1", [leadId]);
+  return result.rows[0] || null;
+};
+
+const findFunnelsSnapshot = async () => {
+  const funnels = await loadFunnelsFromDb(query);
+  return {
+    funnels,
+    stagesById: new Map(funnels.flatMap((funnel) => funnel.stages.map((stage) => [stage.id, { ...stage, funnelId: funnel.id, funnelName: funnel.name }]))),
+    funnelsById: new Map(funnels.map((funnel) => [funnel.id, funnel])),
+  };
+};
+
 app.get(["/api/health", "/health"], async (_req, res) => {
   if (!isDatabaseConfigured()) {
-    return res.status(503).json({ ok: false, message: "DATABASE_URL nao configurada" });
+    return sendError(res, 503, "DATABASE_URL nao configurada", "DATABASE_NOT_CONFIGURED");
   }
 
   try {
     await ensureDatabaseReady();
     return res.json({ ok: true, database: "connected", mode: "online" });
   } catch (error) {
-    return res.status(503).json({
-      ok: false,
-      message: error instanceof Error ? error.message : "Banco indisponivel",
-    });
+    return sendError(res, 503, error instanceof Error ? error.message : "Banco indisponivel", "DATABASE_UNAVAILABLE");
   }
 });
 
@@ -435,7 +516,7 @@ app.use(async (_req, _res, next) => {
 const authRequired = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Nao autenticado" });
+    return sendError(res, 401, "Nao autenticado", "AUTH_REQUIRED");
   }
 
   const token = authHeader.slice(7);
@@ -444,18 +525,18 @@ const authRequired = async (req, res, next) => {
     const { rows } = await query("SELECT * FROM users WHERE id = $1", [payload.sub]);
     const user = rows[0];
     if (!user || !user.active) {
-      return res.status(401).json({ message: "Sessao invalida" });
+      return sendError(res, 401, "Sessao invalida", "INVALID_SESSION");
     }
     req.user = toPublicUser(user);
     return next();
   } catch {
-    return res.status(401).json({ message: "Token invalido" });
+    return sendError(res, 401, "Token invalido", "INVALID_TOKEN");
   }
 };
 
 const adminRequired = (req, res, next) => {
   if (!isSystemAdmin(req.user)) {
-    return res.status(403).json({ message: "Acesso restrito ao administrador" });
+    return sendError(res, 403, "Acesso restrito ao administrador", "ADMIN_REQUIRED");
   }
   return next();
 };
@@ -475,19 +556,17 @@ app.get(["/api/setup/status", "/setup/status", "/api/setup-status", "/setup-stat
 
 app.post(["/api/setup/initialize", "/setup/initialize", "/api/setup-initialize", "/setup-initialize"], async (req, res) => {
   if (!allowPublicSetup) {
-    return res.status(403).json({
-      message: "Provisionamento publico desabilitado nesta instancia.",
-    });
+    return sendError(res, 403, "Provisionamento publico desabilitado nesta instancia.", "PUBLIC_SETUP_DISABLED");
   }
 
   const status = await query("SELECT COUNT(*)::int AS count FROM users");
   if (Number(status.rows[0]?.count || 0) > 0) {
-    return res.status(409).json({ message: "Setup inicial ja foi concluido" });
+    return sendError(res, 409, "Setup inicial ja foi concluido", "SETUP_ALREADY_COMPLETED");
   }
 
   const { name, email, password } = req.body || {};
   if (!name || !email || !password) {
-    return res.status(400).json({ message: "name, email e password sao obrigatorios" });
+    return sendError(res, 400, "name, email e password sao obrigatorios", "INVALID_SETUP_PAYLOAD");
   }
 
   const normalizedEmail = String(email).toLowerCase();
@@ -512,9 +591,7 @@ app.post(["/api/setup/initialize", "/setup/initialize", "/api/setup-initialize",
       await audit(adminId, "setup_initialized", "Primeiro administrador criado", client.query.bind(client));
     });
   } catch (error) {
-    return res.status(500).json({
-      message: error instanceof Error ? error.message : "Falha ao concluir setup inicial",
-    });
+    return sendError(res, 500, error instanceof Error ? error.message : "Falha ao concluir setup inicial", "SETUP_FAILED");
   }
 
   return res.status(201).json({ ok: true });
@@ -523,7 +600,7 @@ app.post(["/api/setup/initialize", "/setup/initialize", "/api/setup-initialize",
 app.post(["/api/auth/login", "/auth/login", "/api/auth-login", "/auth-login"], async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
-    return res.status(400).json({ message: "Email e senha sao obrigatorios" });
+    return sendError(res, 400, "Email e senha sao obrigatorios", "INVALID_LOGIN_PAYLOAD");
   }
 
   const normalizedEmail = String(email).toLowerCase();
@@ -532,13 +609,13 @@ app.post(["/api/auth/login", "/auth/login", "/api/auth-login", "/auth-login"], a
 
   if (!user || !user.active) {
     await audit(null, "login_failed", `email=${normalizedEmail}`);
-    return res.status(401).json({ message: "Credenciais invalidas" });
+    return sendError(res, 401, "Credenciais invalidas", "INVALID_CREDENTIALS");
   }
 
   const valid = bcrypt.compareSync(String(password), user.password_hash);
   if (!valid) {
     await audit(user.id, "login_failed", "senha incorreta");
-    return res.status(401).json({ message: "Credenciais invalidas" });
+    return sendError(res, 401, "Credenciais invalidas", "INVALID_CREDENTIALS");
   }
 
   const publicUser = toPublicUser(user);
@@ -566,16 +643,16 @@ app.get(["/api/users/assignable", "/users/assignable", "/api/users-assignable", 
 app.post(["/api/users", "/users"], authRequired, adminRequired, async (req, res) => {
   const { name, email, password, role, sector, active } = req.body || {};
   if (!name || !email || !password || !role || !sector) {
-    return res.status(400).json({ message: "name, email, password, role e sector sao obrigatorios" });
+    return sendError(res, 400, "name, email, password, role e sector sao obrigatorios", "INVALID_USER_PAYLOAD");
   }
   if (!["admin", "user"].includes(role)) {
-    return res.status(400).json({ message: "role invalido" });
+    return sendError(res, 400, "role invalido", "INVALID_USER_ROLE");
   }
 
   const normalizedEmail = String(email).toLowerCase();
   const exists = await query("SELECT id FROM users WHERE email = $1", [normalizedEmail]);
   if (exists.rows[0]) {
-    return res.status(409).json({ message: "Email ja cadastrado" });
+    return sendError(res, 409, "Email ja cadastrado", "EMAIL_ALREADY_EXISTS");
   }
 
   const id = randomUUID();
@@ -596,7 +673,7 @@ app.put(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (re
   const currentResult = await query("SELECT * FROM users WHERE id = $1", [id]);
   const current = currentResult.rows[0];
   if (!current) {
-    return res.status(404).json({ message: "Usuario nao encontrado" });
+    return sendError(res, 404, "Usuario nao encontrado", "USER_NOT_FOUND");
   }
 
   const { name, email, avatarUrl, role, sector, active, password } = req.body || {};
@@ -608,12 +685,12 @@ app.put(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async (re
   const nextActive = typeof active === "boolean" ? active : current.active;
 
   if (!["admin", "user"].includes(nextRole)) {
-    return res.status(400).json({ message: "role invalido" });
+    return sendError(res, 400, "role invalido", "INVALID_USER_ROLE");
   }
 
   const emailOwner = await query("SELECT id FROM users WHERE email = $1 AND id <> $2", [nextEmail, id]);
   if (emailOwner.rows[0]) {
-    return res.status(409).json({ message: "Email ja utilizado por outro usuario" });
+    return sendError(res, 409, "Email ja utilizado por outro usuario", "EMAIL_ALREADY_EXISTS");
   }
 
   const passwordHash = password ? bcrypt.hashSync(String(password), 10) : current.password_hash;
@@ -635,7 +712,7 @@ app.put(["/api/profile", "/profile", "/api/profile-update", "/profile-update"], 
   const currentResult = await query("SELECT * FROM users WHERE id = $1", [req.user.id]);
   const current = currentResult.rows[0];
   if (!current) {
-    return res.status(404).json({ message: "Usuario nao encontrado" });
+    return sendError(res, 404, "Usuario nao encontrado", "USER_NOT_FOUND");
   }
 
   const { name, email, avatarUrl, currentPassword, newPassword } = req.body || {};
@@ -643,7 +720,7 @@ app.put(["/api/profile", "/profile", "/api/profile-update", "/profile-update"], 
 
   if (wantsSensitiveChange) {
     if (!currentPassword || !bcrypt.compareSync(String(currentPassword), current.password_hash)) {
-      return res.status(400).json({ message: "Senha atual invalida para alterar email ou senha" });
+      return sendError(res, 400, "Senha atual invalida para alterar email ou senha", "INVALID_CURRENT_PASSWORD");
     }
   }
 
@@ -653,7 +730,7 @@ app.put(["/api/profile", "/profile", "/api/profile-update", "/profile-update"], 
 
   const emailOwner = await query("SELECT id FROM users WHERE email = $1 AND id <> $2", [nextEmail, req.user.id]);
   if (emailOwner.rows[0]) {
-    return res.status(409).json({ message: "Email ja utilizado por outro usuario" });
+    return sendError(res, 409, "Email ja utilizado por outro usuario", "EMAIL_ALREADY_EXISTS");
   }
 
   const nextPasswordHash =
@@ -679,17 +756,17 @@ app.delete(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async 
   const currentResult = await query("SELECT * FROM users WHERE id = $1", [id]);
   const current = currentResult.rows[0];
   if (!current) {
-    return res.status(404).json({ message: "Usuario nao encontrado" });
+    return sendError(res, 404, "Usuario nao encontrado", "USER_NOT_FOUND");
   }
 
   if (id === req.user.id) {
-    return res.status(400).json({ message: "Nao e permitido excluir o proprio usuario logado" });
+    return sendError(res, 400, "Nao e permitido excluir o proprio usuario logado", "SELF_DELETE_FORBIDDEN");
   }
 
   if (current.role === "admin" && current.active) {
     const admins = await query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin' AND active = TRUE");
     if (Number(admins.rows[0]?.count || 0) <= 1) {
-      return res.status(400).json({ message: "Nao e permitido excluir o ultimo administrador ativo" });
+      return sendError(res, 400, "Nao e permitido excluir o ultimo administrador ativo", "LAST_ADMIN_DELETE_FORBIDDEN");
     }
   }
 
@@ -718,35 +795,597 @@ app.delete(["/api/users/:id", "/users/:id"], authRequired, adminRequired, async 
   return res.json({ ok: true });
 });
 
+app.get(["/api/funnels", "/funnels"], authRequired, async (_req, res) => {
+  const funnels = await loadFunnelsFromDb(query);
+  return res.json({ funnels });
+});
+
+app.post(["/api/funnels", "/funnels"], authRequired, async (req, res) => {
+  const { name, color, operation, description, areaOfLawId, linkedCampaignId, fieldSchema, objections, playbook } = req.body || {};
+  if (!name) {
+    return sendError(res, 400, "Nome do funil e obrigatorio", "FUNNEL_NAME_REQUIRED");
+  }
+
+  const now = new Date().toISOString();
+  const funnelId = randomUUID();
+  await query(
+    `INSERT INTO funnels (id, name, color, position, operation, description, area_of_law_id, linked_campaign_id, field_schema, objections, playbook, metadata, created_at, updated_at)
+     VALUES (
+      $1, $2, COALESCE($3, '#d4af37'),
+      COALESCE((SELECT MAX(position) + 1 FROM funnels), 0),
+      $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, '{}'::jsonb, $11, $12
+     )`,
+    [
+      funnelId,
+      String(name).trim(),
+      color || null,
+      operation || "commercial",
+      sanitizeText(description),
+      areaOfLawId || null,
+      linkedCampaignId || null,
+      JSON.stringify(Array.isArray(fieldSchema) ? fieldSchema : []),
+      JSON.stringify(Array.isArray(objections) ? objections : []),
+      sanitizeText(playbook),
+      now,
+      now,
+    ],
+  );
+
+  const stageId = randomUUID();
+  await query(
+    `INSERT INTO funnel_stages (id, funnel_id, name, position, color, semantic_key, metadata, created_at, updated_at)
+     VALUES ($1, $2, 'Novo Lead', 0, '#d4af37', 'new', '{}'::jsonb, $3, $4)`,
+    [stageId, funnelId, now, now],
+  );
+
+  const funnel = (await loadFunnelsFromDb(query)).find((item) => item.id === funnelId);
+  await audit(req.user.id, "funnel_created", `id=${funnelId}`);
+  return res.status(201).json({ funnel });
+});
+
+app.put(["/api/funnels/:id", "/funnels/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const current = await query("SELECT id FROM funnels WHERE id = $1", [id]);
+  if (!current.rows[0]) {
+    return sendError(res, 404, "Funil nao encontrado", "FUNNEL_NOT_FOUND");
+  }
+
+  const { name, color, position, operation, description, areaOfLawId, linkedCampaignId, fieldSchema, objections, playbook } = req.body || {};
+  const now = new Date().toISOString();
+  await query(
+    `UPDATE funnels
+     SET name = COALESCE($1, name),
+         color = COALESCE($2, color),
+         position = COALESCE($3, position),
+         operation = COALESCE($4, operation),
+         description = COALESCE($5, description),
+         area_of_law_id = $6,
+         linked_campaign_id = $7,
+         field_schema = COALESCE($8::jsonb, field_schema),
+         objections = COALESCE($9::jsonb, objections),
+         playbook = COALESCE($10, playbook),
+         updated_at = $11
+     WHERE id = $12`,
+    [
+      sanitizeText(name),
+      color || null,
+      Number.isFinite(Number(position)) ? Number(position) : null,
+      operation || null,
+      sanitizeText(description),
+      areaOfLawId || null,
+      linkedCampaignId || null,
+      Array.isArray(fieldSchema) ? JSON.stringify(fieldSchema) : null,
+      Array.isArray(objections) ? JSON.stringify(objections) : null,
+      typeof playbook === "string" ? playbook : null,
+      now,
+      id,
+    ],
+  );
+
+  const funnel = (await loadFunnelsFromDb(query)).find((item) => item.id === id);
+  await audit(req.user.id, "funnel_updated", `id=${id}`);
+  return res.json({ funnel });
+});
+
+app.delete(["/api/funnels/:id", "/funnels/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const current = await query("SELECT id FROM funnels WHERE id = $1", [id]);
+  if (!current.rows[0]) {
+    return sendError(res, 404, "Funil nao encontrado", "FUNNEL_NOT_FOUND");
+  }
+
+  await query("DELETE FROM funnels WHERE id = $1", [id]);
+  await audit(req.user.id, "funnel_deleted", `id=${id}`);
+  return res.json({ ok: true });
+});
+
+app.post(["/api/funnels/:funnelId/stages", "/funnels/:funnelId/stages"], authRequired, async (req, res) => {
+  const { funnelId } = req.params;
+  const { name, position, color, semanticKey } = req.body || {};
+  if (!name) {
+    return sendError(res, 400, "Nome da etapa e obrigatorio", "STAGE_NAME_REQUIRED");
+  }
+
+  const funnel = await query("SELECT id FROM funnels WHERE id = $1", [funnelId]);
+  if (!funnel.rows[0]) {
+    return sendError(res, 404, "Funil nao encontrado", "FUNNEL_NOT_FOUND");
+  }
+
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  await query(
+    `INSERT INTO funnel_stages (id, funnel_id, name, position, color, semantic_key, metadata, created_at, updated_at)
+     VALUES (
+       $1, $2, $3,
+       COALESCE($4, (SELECT COALESCE(MAX(position) + 1, 0) FROM funnel_stages WHERE funnel_id = $2)),
+       COALESCE($5, '#6b7280'), COALESCE($6, 'other'), '{}'::jsonb, $7, $8
+     )`,
+    [id, funnelId, String(name).trim(), Number.isFinite(Number(position)) ? Number(position) : null, color || null, semanticKey || null, now, now],
+  );
+
+  const stages = (await loadFunnelsFromDb(query)).find((item) => item.id === funnelId)?.stages || [];
+  const stage = stages.find((item) => item.id === id);
+  await audit(req.user.id, "funnel_stage_created", `id=${id}`);
+  return res.status(201).json({ stage });
+});
+
+app.put(["/api/stages/:id", "/stages/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const { name, position, color, semanticKey } = req.body || {};
+  const current = await query("SELECT id, funnel_id FROM funnel_stages WHERE id = $1", [id]);
+  if (!current.rows[0]) {
+    return sendError(res, 404, "Etapa nao encontrada", "STAGE_NOT_FOUND");
+  }
+
+  await query(
+    `UPDATE funnel_stages
+     SET name = COALESCE($1, name),
+         position = COALESCE($2, position),
+         color = COALESCE($3, color),
+         semantic_key = COALESCE($4, semantic_key),
+         updated_at = $5
+     WHERE id = $6`,
+    [
+      sanitizeText(name),
+      Number.isFinite(Number(position)) ? Number(position) : null,
+      color || null,
+      semanticKey || null,
+      new Date().toISOString(),
+      id,
+    ],
+  );
+
+  const stages = (await loadFunnelsFromDb(query)).find((item) => item.id === current.rows[0].funnel_id)?.stages || [];
+  const stage = stages.find((item) => item.id === id);
+  return res.json({ stage });
+});
+
+app.delete(["/api/stages/:id", "/stages/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const current = await query("SELECT id FROM funnel_stages WHERE id = $1", [id]);
+  if (!current.rows[0]) {
+    return sendError(res, 404, "Etapa nao encontrada", "STAGE_NOT_FOUND");
+  }
+
+  await query("DELETE FROM funnel_stages WHERE id = $1", [id]);
+  await audit(req.user.id, "funnel_stage_deleted", `id=${id}`);
+  return res.json({ ok: true });
+});
+
+app.get(["/api/leads", "/leads"], authRequired, async (req, res) => {
+  const filters = {
+    funnelId: typeof req.query.funnel_id === "string" ? req.query.funnel_id : undefined,
+    stageId: typeof req.query.stage_id === "string" ? req.query.stage_id : undefined,
+  };
+  const leads = await loadLeadsFromDb(query, filters);
+  const scoped = isSystemAdmin(req.user)
+    ? leads
+    : leads.filter((lead) => !lead.ownerUserId || lead.ownerUserId === req.user.id);
+  return res.json({ leads: scoped });
+});
+
+app.get(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
+  const details = await loadLeadDetailsFromDb(query, req.params.id);
+  const leadRow = await findLeadRow(req.params.id);
+  const permission = ensureLeadPermission(leadRow, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+  if (!details) {
+    return sendError(res, 404, "Lead nao encontrado", "LEAD_NOT_FOUND");
+  }
+  return res.json(details);
+});
+
+app.post(["/api/leads", "/leads"], authRequired, async (req, res) => {
+  const {
+    funnel_id,
+    stage_id,
+    name,
+    email,
+    phone,
+    company,
+    notes,
+    cpf,
+    legal_area,
+    campaign_id,
+    ad_group_id,
+    ad_id,
+    area_of_law_id,
+    service_id,
+    service_ids,
+    source_id,
+    source_details,
+    loss_reason_code,
+    loss_reason_detail,
+    contract_value,
+  } = req.body || {};
+
+  if (!name) {
+    return sendError(res, 400, "Nome do lead e obrigatorio", "LEAD_NAME_REQUIRED");
+  }
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await query(
+    `INSERT INTO leads (
+      id, funnel_id, stage_id, owner_user_id, name, email, phone, company, notes, cpf, legal_area,
+      campaign_id, ad_group_id, ad_id, area_of_law_id, service_id, service_ids, source_id, source_details,
+      loss_reason_code, loss_reason_detail, contract_value, contract_currency, metadata, created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+      $12, $13, $14, $15, $16, $17::text[], $18, $19,
+      $20, $21, $22, 'BRL', $23::jsonb, $24, $25
+    )`,
+    [
+      id,
+      funnel_id || null,
+      stage_id || null,
+      isSystemAdmin(req.user) ? req.body?.owner_user_id || null : req.user.id,
+      String(name).trim(),
+      sanitizeText(email),
+      sanitizeText(phone),
+      sanitizeText(company),
+      sanitizeText(notes),
+      sanitizeText(cpf),
+      sanitizeText(legal_area),
+      campaign_id || null,
+      ad_group_id || null,
+      ad_id || null,
+      area_of_law_id || null,
+      service_id || null,
+      Array.isArray(service_ids) ? service_ids : [],
+      source_id || null,
+      sanitizeText(source_details),
+      sanitizeText(loss_reason_code),
+      sanitizeText(loss_reason_detail),
+      asNumericValue(contract_value),
+      JSON.stringify({
+        notes: [],
+        followUps: [],
+        tasks: [],
+        logs: [],
+        documents: [],
+        customFields: {},
+        aiInsight: null,
+      }),
+      now,
+      now,
+    ],
+  );
+
+  const details = await loadLeadDetailsFromDb(query, id);
+  await audit(req.user.id, "lead_created", `id=${id}`);
+  return res.status(201).json(details);
+});
+
+app.put(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const current = await findLeadRow(id);
+  const permission = ensureLeadPermission(current, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const body = req.body || {};
+  const metadata = parseLegacyState(current.metadata, {});
+  const nextContractValue = Object.prototype.hasOwnProperty.call(body, "contract_value")
+    ? asNumericValue(body.contract_value)
+    : Object.prototype.hasOwnProperty.call(body, "estimatedValue")
+      ? asNumericValue(body.estimatedValue)
+      : Number(current.contract_value || 0);
+
+  const nextMetadata = {
+    notes: Array.isArray(body.notes) ? body.notes : Array.isArray(metadata.notes) ? metadata.notes : [],
+    followUps: Array.isArray(body.followUps) ? body.followUps : Array.isArray(metadata.followUps) ? metadata.followUps : [],
+    tasks: Array.isArray(body.tasks) ? body.tasks : Array.isArray(metadata.tasks) ? metadata.tasks : [],
+    logs: Array.isArray(body.logs) ? body.logs : Array.isArray(metadata.logs) ? metadata.logs : [],
+    documents: Array.isArray(body.documents) ? body.documents : Array.isArray(metadata.documents) ? metadata.documents : [],
+    customFields: body.customFields && typeof body.customFields === "object" ? body.customFields : metadata.customFields || {},
+    aiInsight: typeof body.aiInsight === "string" ? body.aiInsight : metadata.aiInsight || null,
+  };
+
+  await query(
+    `UPDATE leads
+     SET funnel_id = COALESCE($1, funnel_id),
+         stage_id = COALESCE($2, stage_id),
+         owner_user_id = $3,
+         name = COALESCE($4, name),
+         email = $5,
+         phone = $6,
+         company = $7,
+         notes = $8,
+         cpf = $9,
+         legal_area = $10,
+         campaign_id = $11,
+         ad_group_id = $12,
+         ad_id = $13,
+         area_of_law_id = $14,
+         service_id = $15,
+         service_ids = $16::text[],
+         source_id = $17,
+         source_details = $18,
+         loss_reason_code = $19,
+         loss_reason_detail = $20,
+         contract_value = $21,
+         metadata = $22::jsonb,
+         last_interaction_at = $23,
+         updated_at = $24
+     WHERE id = $25`,
+    [
+      body.funnel_id || body.funnelId || null,
+      body.stage_id || body.status || null,
+      isSystemAdmin(req.user) ? body.owner_user_id || body.ownerUserId || current.owner_user_id || null : current.owner_user_id || req.user.id,
+      sanitizeText(body.name) || current.name,
+      Object.prototype.hasOwnProperty.call(body, "email") ? sanitizeText(body.email) : current.email,
+      Object.prototype.hasOwnProperty.call(body, "phone") ? sanitizeText(body.phone) : current.phone,
+      Object.prototype.hasOwnProperty.call(body, "company") ? sanitizeText(body.company) : current.company,
+      Object.prototype.hasOwnProperty.call(body, "notesText") ? sanitizeText(body.notesText) : current.notes,
+      Object.prototype.hasOwnProperty.call(body, "cpf") ? sanitizeText(body.cpf) : current.cpf,
+      Object.prototype.hasOwnProperty.call(body, "legalArea") ? sanitizeText(body.legalArea) : current.legal_area,
+      Object.prototype.hasOwnProperty.call(body, "campaign_id") || Object.prototype.hasOwnProperty.call(body, "campaignId") ? body.campaign_id || body.campaignId || null : current.campaign_id,
+      Object.prototype.hasOwnProperty.call(body, "ad_group_id") || Object.prototype.hasOwnProperty.call(body, "adGroupId") ? body.ad_group_id || body.adGroupId || null : current.ad_group_id,
+      Object.prototype.hasOwnProperty.call(body, "ad_id") || Object.prototype.hasOwnProperty.call(body, "adId") ? body.ad_id || body.adId || null : current.ad_id,
+      Object.prototype.hasOwnProperty.call(body, "area_of_law_id") || Object.prototype.hasOwnProperty.call(body, "areaOfLawId") ? body.area_of_law_id || body.areaOfLawId || null : current.area_of_law_id,
+      Object.prototype.hasOwnProperty.call(body, "service_id") || Object.prototype.hasOwnProperty.call(body, "serviceId") ? body.service_id || body.serviceId || null : current.service_id,
+      Object.prototype.hasOwnProperty.call(body, "service_ids") || Object.prototype.hasOwnProperty.call(body, "serviceIds") ? (body.service_ids || body.serviceIds || []) : current.service_ids || [],
+      Object.prototype.hasOwnProperty.call(body, "source_id") || Object.prototype.hasOwnProperty.call(body, "sourceId") ? body.source_id || body.sourceId || null : current.source_id,
+      Object.prototype.hasOwnProperty.call(body, "source_details") || Object.prototype.hasOwnProperty.call(body, "sourceDetails") ? sanitizeText(body.source_details || body.sourceDetails) : current.source_details,
+      Object.prototype.hasOwnProperty.call(body, "loss_reason_code") || Object.prototype.hasOwnProperty.call(body, "lossReasonCode") ? sanitizeText(body.loss_reason_code || body.lossReasonCode) : current.loss_reason_code,
+      Object.prototype.hasOwnProperty.call(body, "loss_reason_detail") || Object.prototype.hasOwnProperty.call(body, "lossReasonDetail") ? sanitizeText(body.loss_reason_detail || body.lossReasonDetail) : current.loss_reason_detail,
+      nextContractValue,
+      JSON.stringify(nextMetadata),
+      body.lastInteractionAt || body.last_interaction_at || new Date().toISOString(),
+      new Date().toISOString(),
+      id,
+    ],
+  );
+
+  const details = await loadLeadDetailsFromDb(query, id);
+  await audit(req.user.id, "lead_updated", `id=${id}`);
+  return res.json(details);
+});
+
+app.delete(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const current = await findLeadRow(id);
+  const permission = ensureLeadPermission(current, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  await query("DELETE FROM leads WHERE id = $1", [id]);
+  await audit(req.user.id, "lead_deleted", `id=${id}`);
+  return res.json({ ok: true });
+});
+
+app.patch(["/api/leads/:id/move", "/leads/:id/move"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const { funnel_id, stage_id } = req.body || {};
+  if (!funnel_id || !stage_id) {
+    return sendError(res, 400, "funnel_id e stage_id sao obrigatorios", "MOVE_PAYLOAD_INVALID");
+  }
+
+  const current = await findLeadRow(id);
+  const permission = ensureLeadPermission(current, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const snapshot = await findFunnelsSnapshot();
+  const nextFunnel = snapshot.funnelsById.get(funnel_id);
+  const nextStage = snapshot.stagesById.get(stage_id);
+  const previousFunnel = current.funnel_id ? snapshot.funnelsById.get(current.funnel_id) : undefined;
+  const previousStage = current.stage_id ? snapshot.stagesById.get(current.stage_id) : undefined;
+  if (!nextFunnel) {
+    return sendError(res, 404, "Funil de destino nao encontrado", "DESTINATION_FUNNEL_NOT_FOUND");
+  }
+  if (!nextStage || nextStage.funnelId !== funnel_id) {
+    return sendError(res, 400, "Etapa de destino invalida para o funil selecionado", "DESTINATION_STAGE_INVALID");
+  }
+
+  await withTransaction(async (client) => {
+    const now = new Date().toISOString();
+    await client.query(
+      `UPDATE leads
+       SET funnel_id = $1, stage_id = $2, last_interaction_at = $3, updated_at = $4
+       WHERE id = $5`,
+      [funnel_id, stage_id, now, now, id],
+    );
+
+    await client.query(
+      `INSERT INTO lead_activities (id, lead_id, type, description, metadata, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+      [
+        randomUUID(),
+        id,
+        previousFunnel?.id !== nextFunnel.id ? "funnel_change" : "stage_change",
+        normalizeSemanticActivityDescription(previousFunnel?.name, nextFunnel.name, previousStage?.name, nextStage.name),
+        JSON.stringify({
+          fromFunnelId: previousFunnel?.id || null,
+          toFunnelId: nextFunnel.id,
+          fromStageId: previousStage?.id || null,
+          toStageId: nextStage.id,
+        }),
+        req.user.id,
+        now,
+      ],
+    );
+  });
+
+  const details = await loadLeadDetailsFromDb(query, id);
+  return res.json(details);
+});
+
+app.get(["/api/leads/:id/receivables", "/leads/:id/receivables"], authRequired, async (req, res) => {
+  const leadRow = await findLeadRow(req.params.id);
+  const permission = ensureLeadPermission(leadRow, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const result = await query("SELECT * FROM receivables WHERE lead_id = $1 ORDER BY due_date ASC, created_at ASC", [req.params.id]);
+  return res.json({ receivables: result.rows.map(serializeReceivableRow) });
+});
+
+app.post(["/api/leads/:id/receivables", "/leads/:id/receivables"], authRequired, async (req, res) => {
+  const leadRow = await findLeadRow(req.params.id);
+  const permission = ensureLeadPermission(leadRow, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const { description, amount, dueDate, paymentMethod, notes, invoiceNumber } = req.body || {};
+  if (!description || !dueDate) {
+    return sendError(res, 400, "Descricao e vencimento sao obrigatorios", "RECEIVABLE_REQUIRED_FIELDS");
+  }
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await query(
+    `INSERT INTO receivables (id, lead_id, description, amount, due_date, status, payment_method, invoice_number, notes, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10)`,
+    [id, req.params.id, String(description).trim(), asNumericValue(amount), normalizeDateOnly(dueDate), paymentMethod || null, sanitizeText(invoiceNumber), sanitizeText(notes), now, now],
+  );
+
+  const created = await query("SELECT * FROM receivables WHERE id = $1", [id]);
+  await query(
+    `INSERT INTO lead_activities (id, lead_id, type, description, metadata, created_by, created_at)
+     VALUES ($1, $2, 'payment', $3, $4::jsonb, $5, $6)`,
+    [
+      randomUUID(),
+      req.params.id,
+      `Recebivel criado: ${String(description).trim()}`,
+      JSON.stringify({ receivableId: id, amount: asNumericValue(amount) }),
+      req.user.id,
+      now,
+    ],
+  );
+  return res.status(201).json(serializeReceivableRow(created.rows[0]));
+});
+
+app.put(["/api/receivables/:id", "/receivables/:id"], authRequired, async (req, res) => {
+  const receivableResult = await query("SELECT * FROM receivables WHERE id = $1", [req.params.id]);
+  const receivable = receivableResult.rows[0];
+  if (!receivable) {
+    return sendError(res, 404, "Recebivel nao encontrado", "RECEIVABLE_NOT_FOUND");
+  }
+
+  const leadRow = await findLeadRow(receivable.lead_id);
+  const permission = ensureLeadPermission(leadRow, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const body = req.body || {};
+  const nextStatus = body.status || receivable.status;
+  const nextPaidDate = nextStatus === "paid"
+    ? normalizeDateOnly(body.paidDate || body.paid_date || new Date().toISOString())
+    : body.status === "pending" || body.status === "cancelled"
+      ? null
+      : receivable.paid_date;
+
+  await query(
+    `UPDATE receivables
+     SET description = COALESCE($1, description),
+         amount = COALESCE($2, amount),
+         due_date = COALESCE($3, due_date),
+         paid_date = $4,
+         status = COALESCE($5, status),
+         payment_method = $6,
+         invoice_number = $7,
+         notes = $8,
+         updated_at = $9
+     WHERE id = $10`,
+    [
+      sanitizeText(body.description),
+      Object.prototype.hasOwnProperty.call(body, "amount") ? asNumericValue(body.amount) : null,
+      normalizeDateOnly(body.dueDate || body.due_date),
+      nextPaidDate,
+      nextStatus,
+      Object.prototype.hasOwnProperty.call(body, "paymentMethod") || Object.prototype.hasOwnProperty.call(body, "payment_method") ? body.paymentMethod || body.payment_method || null : receivable.payment_method,
+      Object.prototype.hasOwnProperty.call(body, "invoiceNumber") || Object.prototype.hasOwnProperty.call(body, "invoice_number") ? sanitizeText(body.invoiceNumber || body.invoice_number) : receivable.invoice_number,
+      Object.prototype.hasOwnProperty.call(body, "notes") ? sanitizeText(body.notes) : receivable.notes,
+      new Date().toISOString(),
+      req.params.id,
+    ],
+  );
+
+  const updated = await query("SELECT * FROM receivables WHERE id = $1", [req.params.id]);
+  return res.json(serializeReceivableRow(updated.rows[0]));
+});
+
+app.delete(["/api/receivables/:id", "/receivables/:id"], authRequired, async (req, res) => {
+  const receivableResult = await query("SELECT * FROM receivables WHERE id = $1", [req.params.id]);
+  const receivable = receivableResult.rows[0];
+  if (!receivable) {
+    return sendError(res, 404, "Recebivel nao encontrado", "RECEIVABLE_NOT_FOUND");
+  }
+
+  const leadRow = await findLeadRow(receivable.lead_id);
+  const permission = ensureLeadPermission(leadRow, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  await query("DELETE FROM receivables WHERE id = $1", [req.params.id]);
+  return res.json({ ok: true });
+});
+
+app.get(["/api/receivables/summary", "/receivables/summary"], authRequired, async (_req, res) => {
+  const summary = await loadReceivablesSummary(query);
+  return res.json(summary);
+});
+
 app.get(["/api/state", "/state"], authRequired, async (req, res) => {
   const result = await query("SELECT state_json, updated_at FROM app_state WHERE id = 1");
   const row = result.rows[0];
-  if (!row) {
-    return res.json({ state: scopedStateForUser(buildDefaultState(), req.user), updatedAt: new Date().toISOString() });
-  }
-
-  const parsed = parseStateSafely(row.state_json);
-  const scoped = scopedStateForUser(parsed, req.user);
-  return res.json({ state: scoped, updatedAt: serializeTimestamp(row.updated_at) });
+  const parsed = parseStateSafely(row?.state_json);
+  const stateFromDb = row
+    ? await buildLegacyStateFromRelational(query, parsed)
+    : buildDefaultState();
+  const scoped = scopedStateForUser(stateFromDb, req.user);
+  return res.json({ state: scoped, updatedAt: serializeTimestamp(row?.updated_at) || new Date().toISOString() });
 });
 
 app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   const { state, clientUpdatedAt } = req.body || {};
   if (!state || typeof state !== "object") {
-    return res.status(400).json({ message: "Campo state invalido" });
+    return sendError(res, 400, "Campo state invalido", "INVALID_STATE_PAYLOAD");
   }
 
   const now = new Date().toISOString();
   const currentResult = await query("SELECT state_json, updated_at FROM app_state WHERE id = 1");
   const currentRow = currentResult.rows[0];
-
   const currentUpdatedAt = serializeTimestamp(currentRow?.updated_at);
 
   if (clientUpdatedAt && currentUpdatedAt && clientUpdatedAt !== currentUpdatedAt) {
-    const latestState = parseStateSafely(currentRow?.state_json);
+    const latestState = await buildLegacyStateFromRelational(query, parseStateSafely(currentRow?.state_json));
     const scoped = scopedStateForUser(latestState, req.user);
     return res.status(409).json({
+      error: true,
       message: "Estado desatualizado. Sincronize e tente novamente.",
+      code: "STATE_CONFLICT",
       state: scoped,
       updatedAt: currentUpdatedAt,
     });
@@ -757,12 +1396,18 @@ app.put(["/api/state", "/state"], authRequired, async (req, res) => {
   const serialized = JSON.stringify(mergedState);
 
   await withTransaction(async (client) => {
+    await client.query("SET client_encoding TO 'UTF8'");
     await client.query(
       `INSERT INTO app_state (id, state_json, updated_at, updated_by)
        VALUES (1, $1::jsonb, $2, $3)
        ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
       [serialized, now, req.user.id]
     );
+
+    if (isSystemAdmin(req.user)) {
+      await syncFunnelsFromLegacyState(client, Array.isArray(mergedState.funnels) ? mergedState.funnels : []);
+    }
+    await syncLeadsFromLegacyState(client, Array.isArray(mergedState.leads) ? mergedState.leads : [], req.user.id, isSystemAdmin(req.user));
 
     await client.query(
       `INSERT INTO state_revisions (id, state_json, created_at, updated_by)
@@ -797,7 +1442,7 @@ app.post(["/api/backup/now", "/backup/now", "/api/backup-now", "/backup-now"], a
 
 app.use((error, _req, res, _next) => {
   const message = error instanceof Error ? error.message : "Erro interno do servidor";
-  res.status(500).json({ message });
+  sendError(res, 500, message, "INTERNAL_SERVER_ERROR");
 });
 
 export const startApiServer = () => {

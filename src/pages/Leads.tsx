@@ -421,7 +421,8 @@ export function Leads() {
 
   const handleCardOpen = (path: string, id: string) => {
     if (draggedRecordIdRef.current === id) return;
-    navigate(path);
+    const nextSearch = searchParams.toString();
+    navigate(nextSearch ? `${path}?${nextSearch}` : path);
   };
 
   const startAutoScroll = useCallback((speed: number) => {
@@ -847,7 +848,14 @@ export function Leads() {
                   filteredCommercialLeads.map((lead) => {
                     const stage = sortedStages.find((item) => item.id === lead.status);
                     return (
-                      <tr key={lead.id} onClick={() => navigate(`/leads/${lead.id}`)} className="cursor-pointer hover:bg-accent transition-all group">
+                      <tr
+                        key={lead.id}
+                        onClick={() => {
+                          const nextSearch = searchParams.toString();
+                          navigate(nextSearch ? `/leads/${lead.id}?${nextSearch}` : `/leads/${lead.id}`);
+                        }}
+                        className="cursor-pointer hover:bg-accent transition-all group"
+                      >
                         <td className="px-8 py-5">
                           <div className="flex flex-col">
                             <span className="font-serif font-bold text-foreground text-base group-hover:text-primary transition-colors">{lead.name}</span>

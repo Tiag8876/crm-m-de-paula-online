@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   ChevronLeft, Phone, MessageCircle, Mail, Calendar,
   Clock, Plus, Send, CheckCircle2,
-  History, User, DollarSign, Briefcase, Pencil,
+  History, User, DollarSign, Briefcase, Pencil, ArrowRightLeft,
   FileText, Paperclip, AlertCircle, ListTodo, Video, X, ChevronDown
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -20,10 +20,31 @@ import { isAdminUser } from '@/lib/access';
 import { AssigneeSelect } from '@/components/AssigneeSelect';
 import { PremiumSelect } from '@/components/PremiumSelect';
 import { PremiumMultiSelect } from '@/components/PremiumMultiSelect';
+import {
+  useCreateReceivableMutation,
+  useDeleteReceivableMutation,
+  useFunnelsQuery,
+  useLeadDetailsQuery,
+  useMoveLeadMutation,
+  useUpdateLeadMutation,
+  useUpdateReceivableMutation,
+} from '@/lib/crmQueries';
+import type { ReceivablePaymentMethod } from '@/types/receivable';
+
+const formatBrlCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+}).format(value || 0);
+
+const parseBrlCurrencyInput = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  return Number(digits || '0') / 100;
+};
 
 export function LeadDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, users, assignableUsers, fetchAssignableUsers, fetchUsers } = useAuthStore();
   const {
     leads, campaigns, adGroups, ads, areasOfLaw, services, leadSources, standardTasks, funnels, fieldTemplates, commercialDefaultFunnelId,
@@ -33,6 +54,17 @@ export function LeadDetails() {
     addTaskToLead, updateTaskInLead, deleteTaskFromLead, updateTaskStatus
   } = useStore();
   const lead = leads.find(l => l.id === id);
+  const backToPipelinePath = useMemo(() => {
+    const nextSearch = searchParams.toString();
+    return nextSearch ? `/leads?${nextSearch}` : '/leads';
+  }, [searchParams]);
+  const leadDetailsQuery = useLeadDetailsQuery(id);
+  const funnelsQuery = useFunnelsQuery();
+  const updateLeadMutation = useUpdateLeadMutation(id);
+  const moveLeadMutation = useMoveLeadMutation(id);
+  const createReceivableMutation = useCreateReceivableMutation(id);
+  const updateReceivableMutation = useUpdateReceivableMutation(id);
+  const deleteReceivableMutation = useDeleteReceivableMutation(id);
 
   const [newNote, setNewNote] = useState('');
   const [newNoteType, setNewNoteType] = useState<'message' | 'call' | 'meeting' | 'other'>('message');
@@ -63,9 +95,22 @@ export function LeadDetails() {
     ownerUserId: '',
   });
 
-  const [activeTab, setActiveTab] = useState<'history' | 'documents' | 'tasks'>('tasks');
-  const detailTabs: Array<{ key: 'tasks' | 'documents' | 'history'; icon: LucideIcon; label: string }> = [
+  const [activeTab, setActiveTab] = useState<'history' | 'documents' | 'tasks' | 'finance'>('tasks');
+  const [contractValueInput, setContractValueInput] = useState('');
+  const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
+  const [isMoveFunnelModalOpen, setIsMoveFunnelModalOpen] = useState(false);
+  const [moveFunnelId, setMoveFunnelId] = useState('');
+  const [moveStageId, setMoveStageId] = useState('');
+  const [receivableForm, setReceivableForm] = useState({
+    description: '',
+    amount: 'R$ 0,00',
+    dueDate: format(new Date(), 'yyyy-MM-dd'),
+    paymentMethod: 'pix' as ReceivablePaymentMethod,
+    notes: '',
+  });
+  const detailTabs: Array<{ key: 'tasks' | 'documents' | 'history' | 'finance'; icon: LucideIcon; label: string }> = [
     { key: 'tasks', icon: ListTodo, label: 'Tarefas' },
+    { key: 'finance', icon: DollarSign, label: 'Financeiro' },
     { key: 'documents', icon: FileText, label: 'Documentos' },
     { key: 'history', icon: History, label: 'Historico & Observacoes' },
   ];
@@ -161,12 +206,15 @@ export function LeadDetails() {
     return (
       <div className="p-20 text-center">
         <h2 className="text-3xl font-serif font-bold text-primary">Lead não encontrado</h2>
-        <Link to="/leads" className="text-muted-foreground hover:text-gold-400 mt-4 inline-block underline">Voltar para a lista</Link>
+        <Link to={backToPipelinePath} className="text-muted-foreground hover:text-gold-400 mt-4 inline-block underline">Voltar para a lista</Link>
       </div>
     );
   }
 
-  const commercialFunnels = (funnels || []).filter((funnel) => funnel.operation === 'commercial');
+  const financialLead = leadDetailsQuery.data?.lead || lead;
+  const receivables = leadDetailsQuery.data?.receivables || [];
+  const liveFunnels = funnelsQuery.data || funnels || [];
+  const commercialFunnels = liveFunnels.filter((funnel) => funnel.operation === 'commercial');
   const currentFunnel = commercialFunnels.find((funnel) => funnel.id === (lead.funnelId || commercialDefaultFunnelId))
     || commercialFunnels.find((funnel) => funnel.id === commercialDefaultFunnelId)
     || commercialFunnels[0];
@@ -182,6 +230,7 @@ export function LeadDetails() {
     })
     .sort((a, b) => a.order - b.order);
   const currentStage = sortedStages.find(s => s.id === lead.status);
+
   const selectableUsers = Array.from(
     new Map(
       [...(assignableUsers || []), ...(users || []), ...(user ? [user] : [])]
@@ -197,12 +246,24 @@ export function LeadDetails() {
       },
     });
   };
+  const totalContractValue = Number(financialLead.estimatedValue || 0);
+  const totalReceived = receivables
+    .filter((item) => item.status === 'paid')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const totalPending = receivables
+    .filter((item) => item.status === 'pending')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const totalOverdue = receivables
+    .filter((item) => item.status === 'overdue' || (item.status === 'pending' && new Date(`${item.dueDate}T00:00:00`) < new Date()))
+    .reduce((sum, item) => sum + item.amount, 0);
+  const moveTargetFunnel = commercialFunnels.find((funnel) => funnel.id === moveFunnelId) || commercialFunnels[0];
+  const moveTargetStages = [...(moveTargetFunnel?.stages || [])].sort((a, b) => a.order - b.order);
 
   const handleDeleteLead = () => {
     const confirmed = window.confirm(`Deseja realmente excluir o lead "${lead.name}"?`);
     if (!confirmed) return;
     deleteLead(lead.id);
-    navigate('/leads');
+    navigate(backToPipelinePath);
   };
 
   const handleSaveLeadEdit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -289,6 +350,102 @@ export function LeadDetails() {
     deleteDocumentFromLead(lead.id, documentId);
   };
 
+  const handleContractValueSave = async () => {
+    const sourceValue = contractValueInput || formatBrlCurrency(Number(financialLead.estimatedValue || 0));
+    const nextValue = parseBrlCurrencyInput(sourceValue);
+    try {
+      await updateLeadMutation.mutateAsync({ contract_value: nextValue });
+      updateLead(lead.id, { estimatedValue: nextValue });
+      setContractValueInput(formatBrlCurrency(nextValue));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o valor do contrato.');
+      setContractValueInput(formatBrlCurrency(Number(financialLead.estimatedValue || 0)));
+    }
+  };
+
+  const handleCreateReceivable = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      await createReceivableMutation.mutateAsync({
+        description: receivableForm.description.trim(),
+        amount: parseBrlCurrencyInput(receivableForm.amount),
+        dueDate: receivableForm.dueDate,
+        paymentMethod: receivableForm.paymentMethod,
+        notes: receivableForm.notes.trim() || undefined,
+      });
+      setIsReceivableModalOpen(false);
+      setReceivableForm({
+        description: '',
+        amount: 'R$ 0,00',
+        dueDate: format(new Date(), 'yyyy-MM-dd'),
+        paymentMethod: 'pix',
+        notes: '',
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel criar o recebivel.');
+    }
+  };
+
+  const handleEditReceivable = async (receivableId: string, currentDescription: string, currentAmount: number, currentDueDate: string, currentPaymentMethod?: string, currentNotes?: string) => {
+    const nextDescription = prompt('Editar descricao do recebivel:', currentDescription);
+    if (nextDescription === null) return;
+    const nextAmount = prompt('Editar valor do recebivel (ex: 2500,00):', currentAmount.toFixed(2).replace('.', ','));
+    if (nextAmount === null) return;
+    const nextDueDate = prompt('Editar vencimento (YYYY-MM-DD):', currentDueDate);
+    if (nextDueDate === null) return;
+    const nextNotes = prompt('Editar observacoes:', currentNotes || '');
+    if (nextNotes === null) return;
+
+    try {
+      await updateReceivableMutation.mutateAsync({
+        receivableId,
+        payload: {
+          description: nextDescription.trim(),
+          amount: parseBrlCurrencyInput(nextAmount),
+          dueDate: nextDueDate,
+          paymentMethod: currentPaymentMethod as ReceivablePaymentMethod | undefined,
+          notes: nextNotes.trim() || undefined,
+        },
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel atualizar o recebivel.');
+    }
+  };
+
+  const handleMarkReceivableAsPaid = async (receivableId: string) => {
+    try {
+      await updateReceivableMutation.mutateAsync({
+        receivableId,
+        payload: {
+          status: 'paid',
+          paidDate: new Date().toISOString().slice(0, 10),
+        },
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel marcar o recebivel como pago.');
+    }
+  };
+
+  const handleDeleteReceivable = async (receivableId: string) => {
+    if (!confirm('Excluir este recebivel?')) return;
+    try {
+      await deleteReceivableMutation.mutateAsync(receivableId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel excluir o recebivel.');
+    }
+  };
+
+  const handleMoveLeadToFunnel = async () => {
+    if (!moveFunnelId || !moveStageId) return;
+    try {
+      await moveLeadMutation.mutateAsync({ funnel_id: moveFunnelId, stage_id: moveStageId });
+      updateLead(lead.id, { funnelId: moveFunnelId, status: moveStageId });
+      setIsMoveFunnelModalOpen(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel mover o lead.');
+    }
+  };
+
   const handleStatusChange = (nextStatus: string) => {
     const nextSemantic = getStageSemantic(currentFunnel, nextStatus, 'commercial');
     if (nextSemantic === 'lost') {
@@ -326,13 +483,27 @@ export function LeadDetails() {
     <div className="p-10 max-w-7xl mx-auto space-y-10">
       <header className="flex items-center justify-between">
         <button
-          onClick={() => navigate('/leads')}
+          onClick={() => navigate(backToPipelinePath)}
           className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
         >
           <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           <span className="text-xs font-black uppercase tracking-widest">Voltar ao Pipeline</span>
         </button>
         <div className="flex gap-3 items-center">
+          <button
+            type="button"
+            onClick={() => {
+              const nextFunnelId = financialLead.funnelId || commercialDefaultFunnelId || commercialFunnels[0]?.id || '';
+              const nextStages = [...(commercialFunnels.find((funnel) => funnel.id === nextFunnelId)?.stages || [])].sort((a, b) => a.order - b.order);
+              setMoveFunnelId(nextFunnelId);
+              setMoveStageId(financialLead.status || nextStages[0]?.id || '');
+              setIsMoveFunnelModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-lg border border-primary/40 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/10 transition-all inline-flex items-center gap-2"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            Mover para Funil
+          </button>
           <button
             type="button"
             onClick={() => setIsEditModalOpen(true)}
@@ -864,6 +1035,172 @@ export function LeadDetails() {
               </div>
             )}
 
+            {activeTab === 'finance' && (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Valor do Contrato', value: formatBrlCurrency(totalContractValue), tone: 'text-primary' },
+                    { label: 'Total Recebido', value: formatBrlCurrency(totalReceived), tone: 'text-emerald-400' },
+                    { label: 'Total Pendente', value: formatBrlCurrency(totalPending), tone: 'text-amber-400' },
+                    { label: 'Total Vencido', value: formatBrlCurrency(totalOverdue), tone: 'text-red-400' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-border bg-background/40 p-5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gold-500/60">{item.label}</p>
+                      <p className={cn('mt-3 text-2xl font-serif font-bold', item.tone)}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-3xl border border-border bg-background/30 p-6 space-y-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Contrato</h3>
+                      <p className="text-xs text-muted-foreground mt-2">Defina o valor total negociado com este lead.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        value={contractValueInput || formatBrlCurrency(totalContractValue)}
+                        onChange={(event) => setContractValueInput(formatBrlCurrency(parseBrlCurrencyInput(event.target.value)))}
+                        onBlur={() => {
+                          void handleContractValueSave();
+                        }}
+                        className="w-44 rounded-xl border border-border bg-background/60 px-4 py-3 text-right text-sm font-bold text-foreground focus:border-primary focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleContractValueSave();
+                        }}
+                        className="px-4 py-3 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest hover:bg-gold-400 transition-all"
+                      >
+                        Salvar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-border overflow-hidden">
+                  <div className="flex items-center justify-between gap-4 bg-accent border-b border-border px-6 py-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Contas a Receber</h3>
+                      <p className="text-xs text-muted-foreground mt-2">Acompanhe o fluxo financeiro deste lead em tempo real.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsReceivableModalOpen(true)}
+                      className="px-4 py-2.5 rounded-lg border border-primary/40 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/10 transition-all inline-flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Novo Recebível
+                    </button>
+                  </div>
+
+                  {leadDetailsQuery.isLoading ? (
+                    <div className="p-8 text-sm text-muted-foreground">Carregando financeiro...</div>
+                  ) : receivables.length === 0 ? (
+                    <div className="p-10 text-center text-sm text-muted-foreground">Nenhum recebível cadastrado para este lead.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[840px]">
+                        <thead>
+                          <tr className="border-b border-border bg-background/40">
+                            {['Descrição', 'Valor', 'Vencimento', 'Status', 'Forma', 'Ações'].map((label) => (
+                              <th key={label} className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-gold-500/70">
+                                {label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {receivables.map((receivable) => {
+                            const statusTone = receivable.status === 'paid'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : receivable.status === 'overdue'
+                                ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                                : receivable.status === 'cancelled'
+                                  ? 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30'
+                                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+
+                            const statusLabel = receivable.status === 'paid'
+                              ? 'Pago'
+                              : receivable.status === 'overdue'
+                                ? 'Vencido'
+                                : receivable.status === 'cancelled'
+                                  ? 'Cancelado'
+                                  : 'Pendente';
+
+                            return (
+                              <tr key={receivable.id} className="border-b border-border/80">
+                                <td className="px-6 py-4">
+                                  <p className="font-bold text-foreground">{receivable.description}</p>
+                                  {receivable.notes ? <p className="text-xs text-muted-foreground mt-1">{receivable.notes}</p> : null}
+                                </td>
+                                <td className="px-6 py-4 text-sm font-bold text-foreground">{formatBrlCurrency(receivable.amount)}</td>
+                                <td className="px-6 py-4 text-sm text-muted-foreground">{format(new Date(`${receivable.dueDate}T00:00:00`), 'dd/MM/yyyy')}</td>
+                                <td className="px-6 py-4">
+                                  <span className={cn('inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest', statusTone)}>
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-muted-foreground">
+                                  {receivable.paymentMethod === 'pix' ? 'PIX'
+                                    : receivable.paymentMethod === 'bank_transfer' ? 'Transferência Bancária'
+                                      : receivable.paymentMethod === 'credit_card' ? 'Cartão de Crédito'
+                                        : receivable.paymentMethod === 'boleto' ? 'Boleto'
+                                          : receivable.paymentMethod === 'cash' ? 'Dinheiro'
+                                            : '—'}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap gap-3">
+                                    {receivable.status !== 'paid' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void handleMarkReceivableAsPaid(receivable.id);
+                                        }}
+                                        className="text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:underline"
+                                      >
+                                        Marcar como pago
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleEditReceivable(
+                                          receivable.id,
+                                          receivable.description,
+                                          receivable.amount,
+                                          receivable.dueDate,
+                                          receivable.paymentMethod,
+                                          receivable.notes,
+                                        );
+                                      }}
+                                      className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleDeleteReceivable(receivable.id);
+                                      }}
+                                      className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:underline"
+                                    >
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {activeTab === 'documents' && (
               <div className="space-y-4">
                 {(lead.documents || []).length === 0 ? (
@@ -973,6 +1310,146 @@ export function LeadDetails() {
           </div>
         </div>
       </div>
+
+      {isMoveFunnelModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-3xl p-8 w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] overflow-y-auto scrollbar-none">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-serif font-bold gold-text-gradient">Mover para funil</h2>
+                <p className="text-sm text-muted-foreground mt-2">Escolha o funil e a etapa de destino para este lead.</p>
+              </div>
+              <button type="button" onClick={() => setIsMoveFunnelModalOpen(false)} className="p-2 text-muted-foreground hover:text-primary rounded-lg">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Funil de destino</label>
+                <select
+                  value={moveFunnelId}
+                  onChange={(event) => {
+                    const nextFunnelId = event.target.value;
+                    const nextStages = [...(commercialFunnels.find((funnel) => funnel.id === nextFunnelId)?.stages || [])].sort((a, b) => a.order - b.order);
+                    setMoveFunnelId(nextFunnelId);
+                    setMoveStageId(nextStages[0]?.id || '');
+                  }}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  {commercialFunnels.map((funnel) => (
+                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Etapa de destino</label>
+                <select
+                  value={moveStageId}
+                  onChange={(event) => setMoveStageId(event.target.value)}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  {moveTargetStages.map((stage) => (
+                    <option key={stage.id} value={stage.id}>{stage.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-4 pt-4">
+                <button type="button" onClick={() => setIsMoveFunnelModalOpen(false)} className="px-6 py-2 text-muted-foreground font-black text-[10px] uppercase tracking-widest">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleMoveLeadToFunnel();
+                  }}
+                  className="px-8 py-3 bg-primary text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gold-400 transition-all shadow-xl"
+                >
+                  Confirmar movimentação
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isReceivableModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-3xl p-8 w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] overflow-y-auto scrollbar-none">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-serif font-bold gold-text-gradient">Novo recebível</h2>
+                <p className="text-sm text-muted-foreground mt-2">Cadastre uma nova conta a receber para este lead.</p>
+              </div>
+              <button type="button" onClick={() => setIsReceivableModalOpen(false)} className="p-2 text-muted-foreground hover:text-primary rounded-lg">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateReceivable} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Descrição</label>
+                <input
+                  required
+                  value={receivableForm.description}
+                  onChange={(event) => setReceivableForm((current) => ({ ...current, description: event.target.value }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Valor</label>
+                <input
+                  value={receivableForm.amount}
+                  onChange={(event) => setReceivableForm((current) => ({ ...current, amount: formatBrlCurrency(parseBrlCurrencyInput(event.target.value)) }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Vencimento</label>
+                <input
+                  required
+                  type="date"
+                  value={receivableForm.dueDate}
+                  onChange={(event) => setReceivableForm((current) => ({ ...current, dueDate: event.target.value }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Forma de pagamento</label>
+                <select
+                  value={receivableForm.paymentMethod}
+                  onChange={(event) => setReceivableForm((current) => ({ ...current, paymentMethod: event.target.value as ReceivablePaymentMethod }))}
+                  className="w-full px-4 py-3 bg-background/40 border border-border rounded-xl"
+                >
+                  <option value="pix">PIX</option>
+                  <option value="bank_transfer">Transferência Bancária</option>
+                  <option value="credit_card">Cartão de Crédito</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="cash">Dinheiro</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest mb-2">Observações</label>
+                <textarea
+                  value={receivableForm.notes}
+                  onChange={(event) => setReceivableForm((current) => ({ ...current, notes: event.target.value }))}
+                  className="w-full min-h-[120px] px-4 py-3 bg-background/40 border border-border rounded-xl"
+                />
+              </div>
+              <div className="md:col-span-2 flex justify-end gap-4 pt-4">
+                <button type="button" onClick={() => setIsReceivableModalOpen(false)} className="px-6 py-2 text-muted-foreground font-black text-[10px] uppercase tracking-widest">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-8 py-3 bg-primary text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gold-400 transition-all shadow-xl">
+                  Salvar recebível
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Follow-up Modal */}
       {isEditModalOpen && (
