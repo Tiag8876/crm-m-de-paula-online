@@ -10,9 +10,17 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getLeadServiceIds } from '@/lib/leadServices';
 import { Calendar as DatePickerCalendar } from '@/components/ui/calendar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { LOSS_REASON_OPTIONS, isValidLossReasonDetail, validateLeadStatusChange } from '@/lib/leadValidation';
 import { getTemplatesForOperation } from '@/lib/funnelFieldSchema';
 import { getStageSemantic } from '@/lib/funnelStages';
@@ -259,6 +267,23 @@ export function LeadDetails() {
   const moveTargetFunnel = commercialFunnels.find((funnel) => funnel.id === moveFunnelId) || commercialFunnels[0];
   const moveTargetStages = [...(moveTargetFunnel?.stages || [])].sort((a, b) => a.order - b.order);
 
+  useEffect(() => {
+    const nextFunnelId = financialLead.funnelId || commercialDefaultFunnelId || commercialFunnels[0]?.id || '';
+    if (!nextFunnelId) {
+      setMoveFunnelId('');
+      setMoveStageId('');
+      return;
+    }
+
+    const nextStages = [...(commercialFunnels.find((funnel) => funnel.id === nextFunnelId)?.stages || [])].sort((a, b) => a.order - b.order);
+    const nextStageId = nextStages.some((stage) => stage.id === financialLead.status)
+      ? financialLead.status
+      : nextStages[0]?.id || '';
+
+    setMoveFunnelId(nextFunnelId);
+    setMoveStageId(nextStageId);
+  }, [commercialDefaultFunnelId, commercialFunnels, financialLead.funnelId, financialLead.status]);
+
   const handleDeleteLead = () => {
     const confirmed = window.confirm(`Deseja realmente excluir o lead "${lead.name}"?`);
     if (!confirmed) return;
@@ -440,9 +465,9 @@ export function LeadDetails() {
     try {
       await moveLeadMutation.mutateAsync({ funnel_id: moveFunnelId, stage_id: moveStageId });
       updateLead(lead.id, { funnelId: moveFunnelId, status: moveStageId });
-      setIsMoveFunnelModalOpen(false);
+      toast.success('Lead movido com sucesso.');
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Nao foi possivel mover o lead.');
+      toast.error(error instanceof Error ? error.message : 'Não foi possível mover o lead.');
     }
   };
 
@@ -490,20 +515,6 @@ export function LeadDetails() {
           <span className="text-xs font-black uppercase tracking-widest">Voltar ao Pipeline</span>
         </button>
         <div className="flex gap-3 items-center">
-          <button
-            type="button"
-            onClick={() => {
-              const nextFunnelId = financialLead.funnelId || commercialDefaultFunnelId || commercialFunnels[0]?.id || '';
-              const nextStages = [...(commercialFunnels.find((funnel) => funnel.id === nextFunnelId)?.stages || [])].sort((a, b) => a.order - b.order);
-              setMoveFunnelId(nextFunnelId);
-              setMoveStageId(financialLead.status || nextStages[0]?.id || '');
-              setIsMoveFunnelModalOpen(true);
-            }}
-            className="px-4 py-2.5 rounded-lg border border-primary/40 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/10 transition-all inline-flex items-center gap-2"
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-            Mover para Funil
-          </button>
           <button
             type="button"
             onClick={() => setIsEditModalOpen(true)}
@@ -793,6 +804,96 @@ export function LeadDetails() {
               {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
+        <div className="p-8 space-y-6">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-2xl font-serif font-bold gold-text-gradient">
+                <ArrowRightLeft className="w-5 h-5" />
+                Mover para Funil
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Escolha o funil e a etapa de destino para este lead.
+              </p>
+            </div>
+            <div className="text-xs font-black uppercase tracking-widest text-gold-500/60">
+              Atual: {currentFunnel?.name || 'Sem funil'} {currentStage?.name ? ` - ${currentStage.name}` : ''}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest">
+                Funil de destino
+              </label>
+              <Select
+                value={moveFunnelId}
+                onValueChange={(nextFunnelId) => {
+                  const nextStages = [...(commercialFunnels.find((funnel) => funnel.id === nextFunnelId)?.stages || [])].sort((a, b) => a.order - b.order);
+                  setMoveFunnelId(nextFunnelId);
+                  setMoveStageId(nextStages[0]?.id || '');
+                }}
+              >
+                <SelectTrigger className="h-12 rounded-xl border-border bg-background/40">
+                  <SelectValue placeholder="Selecione o funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commercialFunnels.map((funnel) => (
+                    <SelectItem key={funnel.id} value={funnel.id}>
+                      {funnel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-gold-500/60 uppercase tracking-widest">
+                Etapa de destino
+              </label>
+              <Select
+                value={moveStageId}
+                onValueChange={setMoveStageId}
+                disabled={moveTargetStages.length === 0}
+              >
+                <SelectTrigger className="h-12 rounded-xl border-border bg-background/40">
+                  <SelectValue placeholder="Selecione a etapa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {moveTargetStages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                void handleMoveLeadToFunnel();
+              }}
+              disabled={!moveFunnelId || !moveStageId || moveLeadMutation.isPending || moveTargetStages.length === 0}
+              className="h-12 rounded-xl bg-primary px-8 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-xl transition-all hover:bg-gold-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {moveLeadMutation.isPending ? 'Movendo...' : 'Confirmar'}
+            </button>
+          </div>
+
+          {commercialFunnels.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum funil comercial foi encontrado para movimentar este lead.
+            </p>
+          ) : null}
+          {commercialFunnels.length > 0 && moveTargetStages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              O funil selecionado não possui etapas disponíveis.
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -1849,7 +1950,6 @@ export function LeadDetails() {
     </div>
   );
 }
-
 
 
 

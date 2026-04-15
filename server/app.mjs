@@ -1168,6 +1168,68 @@ app.put(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
   return res.json(details);
 });
 
+app.patch(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
+  const { id } = req.params;
+  const { funnel_id, stage_id } = req.body || {};
+  if (!funnel_id || !stage_id) {
+    return sendError(res, 400, "funnel_id e stage_id são obrigatórios", "MOVE_PAYLOAD_INVALID");
+  }
+
+  const current = await findLeadRow(id);
+  const permission = ensureLeadPermission(current, req.user);
+  if (!permission.allowed) {
+    return sendError(res, permission.status, permission.reason, permission.code);
+  }
+
+  const snapshot = await findFunnelsSnapshot();
+  const nextFunnel = snapshot.funnelsById.get(funnel_id);
+  const nextStage = snapshot.stagesById.get(stage_id);
+  const previousFunnel = current.funnel_id ? snapshot.funnelsById.get(current.funnel_id) : undefined;
+  const previousStage = current.stage_id ? snapshot.stagesById.get(current.stage_id) : undefined;
+  if (!nextFunnel) {
+    return sendError(res, 404, "Funil de destino não encontrado", "DESTINATION_FUNNEL_NOT_FOUND");
+  }
+  if (!nextStage || nextStage.funnelId !== funnel_id) {
+    return sendError(res, 400, "Etapa de destino inválida para o funil selecionado", "DESTINATION_STAGE_INVALID");
+  }
+
+  await withTransaction(async (client) => {
+    const now = new Date().toISOString();
+    await client.query(
+      `UPDATE leads
+       SET funnel_id = $1, stage_id = $2, last_interaction_at = $3, updated_at = $4
+       WHERE id = $5`,
+      [funnel_id, stage_id, now, now, id],
+    );
+
+    await client.query(
+      `INSERT INTO lead_activities (id, lead_id, type, description, metadata, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+      [
+        randomUUID(),
+        id,
+        previousFunnel?.id !== nextFunnel.id ? "funnel_change" : "stage_change",
+        normalizeSemanticActivityDescription(previousFunnel?.name, nextFunnel.name, previousStage?.name, nextStage.name),
+        JSON.stringify({
+          fromFunnelId: previousFunnel?.id || null,
+          toFunnelId: nextFunnel.id,
+          fromStageId: previousStage?.id || null,
+          toStageId: nextStage.id,
+        }),
+        req.user.id,
+        now,
+      ],
+    );
+  });
+
+  const details = await loadLeadDetailsFromDb(query, id);
+  if (!details?.lead) {
+    return sendError(res, 404, "Lead não encontrado", "LEAD_NOT_FOUND");
+  }
+
+  return res.json(details.lead);
+});
+
 app.delete(["/api/leads/:id", "/leads/:id"], authRequired, async (req, res) => {
   const { id } = req.params;
   const current = await findLeadRow(id);
@@ -1459,4 +1521,3 @@ export const startApiServer = async () => {
 };
 
 export default app;
-

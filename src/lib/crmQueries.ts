@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import type { Lead } from '@/types/crm';
 import type { LeadDetailsResponse } from '@/types/lead';
 import type { FunnelListResponse } from '@/types/funnel';
 import type { Receivable, ReceivablesResponse, ReceivablesSummary } from '@/types/receivable';
@@ -70,7 +71,7 @@ export const useMoveLeadMutation = (leadId?: string) => {
       if (!leadId) {
         throw new Error('Lead inválido.');
       }
-      return api.patch<LeadDetailsResponse>(`/api/leads/${leadId}/move`, payload);
+      return api.patch<Lead>(`/api/leads/${leadId}`, payload);
     },
     onSuccess: () => {
       if (!leadId) return;
