@@ -6,5 +6,5 @@ export default app;
 
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectRun) {
-  startApiServer();
+  await startApiServer();
 }

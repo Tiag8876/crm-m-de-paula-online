@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { runRelationalTablesMigration } from "./migrate.mjs";
 import {
   buildLegacyStateFromRelational,
   loadFunnelsFromDb,
@@ -242,6 +243,7 @@ const runMigrations = async () => {
 
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
   await runProperSchemaMigration(query);
+  await runRelationalTablesMigration(query);
 
   await query(
     `INSERT INTO app_state (id, state_json, updated_at, updated_by)
@@ -1445,7 +1447,11 @@ app.use((error, _req, res, _next) => {
   sendError(res, 500, message, "INTERNAL_SERVER_ERROR");
 });
 
-export const startApiServer = () => {
+export const startApiServer = async () => {
+  if (isDatabaseConfigured()) {
+    await ensureDatabaseReady();
+  }
+
   const server = app.listen(port, () => {
     console.log(`API online em http://localhost:${port}`);
   });
@@ -1453,3 +1459,4 @@ export const startApiServer = () => {
 };
 
 export default app;
+
