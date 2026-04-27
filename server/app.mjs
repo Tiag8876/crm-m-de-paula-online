@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { runRelationalTablesMigration } from "./migrate.mjs";
+import { loadDashboardData } from "./dashboard.mjs";
 import {
   buildLegacyStateFromRelational,
   loadFunnelsFromDb,
@@ -542,6 +543,11 @@ const adminRequired = (req, res, next) => {
   }
   return next();
 };
+
+app.get(["/api/dashboard", "/dashboard"], authRequired, async (req, res) => {
+  const dashboard = await loadDashboardData(query, req.user, isSystemAdmin(req.user));
+  return res.json(dashboard);
+});
 
 app.get(["/api/setup/status", "/setup/status", "/api/setup-status", "/setup-status"], async (_req, res) => {
   const result = await query("SELECT COUNT(*)::int AS count FROM users");

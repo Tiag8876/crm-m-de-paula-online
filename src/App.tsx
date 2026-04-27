@@ -35,10 +35,10 @@ const App = () => (
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AuthGate />}>
-            <Route element={<StateSyncProvider />}>
-              <Route element={<AccessGate />}>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<Dashboard />} />
+            <Route element={<AccessGate />}>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Dashboard />} />
+                <Route element={<StateSyncProvider />}>
                   <Route path="leads" element={<Leads />} />
                   <Route path="leads/:id" element={<LeadDetails />} />
                   <Route path="campaigns" element={<Navigate to="/traffic?view=campaigns" replace />} />

@@ -4,13 +4,23 @@ import type { Lead } from '@/types/crm';
 import type { LeadDetailsResponse } from '@/types/lead';
 import type { FunnelListResponse } from '@/types/funnel';
 import type { Receivable, ReceivablesResponse, ReceivablesSummary } from '@/types/receivable';
+import type { DashboardSummaryResponse } from '@/types/dashboard';
 
 const crmKeys = {
+  dashboard: ['crm', 'dashboard'] as const,
   funnels: ['crm', 'funnels'] as const,
   lead: (leadId: string) => ['crm', 'lead', leadId] as const,
   receivables: (leadId: string) => ['crm', 'lead', leadId, 'receivables'] as const,
   receivablesSummary: ['crm', 'receivables-summary'] as const,
 };
+
+export const useDashboardQuery = () =>
+  useQuery({
+    queryKey: crmKeys.dashboard,
+    queryFn: () => api.get<DashboardSummaryResponse>('/api/dashboard'),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
 
 export const useFunnelsQuery = () =>
   useQuery({
@@ -59,6 +69,7 @@ export const useUpdateLeadMutation = (leadId?: string) => {
     onSuccess: () => {
       if (!leadId) return;
       void queryClient.invalidateQueries({ queryKey: crmKeys.lead(leadId) });
+      void queryClient.invalidateQueries({ queryKey: crmKeys.dashboard });
       void queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
     },
   });
@@ -77,6 +88,7 @@ export const useMoveLeadMutation = (leadId?: string) => {
       if (!leadId) return;
       void queryClient.invalidateQueries({ queryKey: crmKeys.lead(leadId) });
       void queryClient.invalidateQueries({ queryKey: crmKeys.funnels });
+      void queryClient.invalidateQueries({ queryKey: crmKeys.dashboard });
       void queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
     },
   });
