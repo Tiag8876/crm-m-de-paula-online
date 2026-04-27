@@ -101,7 +101,7 @@ export function Dashboard() {
           if (Boolean(a.nextFollowUp) !== Boolean(b.nextFollowUp)) return a.nextFollowUp ? -1 : 1;
           return b.idleHours - a.idleHours;
         })
-        .slice(0, 8),
+        .slice(0, 6),
     [now, records],
   );
 
@@ -147,43 +147,43 @@ export function Dashboard() {
   );
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-4 p-4 md:p-6">
-      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <h1 className="text-2xl font-serif font-bold tracking-tight gold-text-gradient">Painel de Controle</h1>
-
-        <div className="grid w-full grid-cols-2 gap-3 md:w-auto md:grid-cols-4">
-          <StatCard icon={LayoutDashboard} label="Registros" value={metrics.total} />
-          <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-          <StatCard icon={AlertTriangle} label="Parados" value={metrics.stalled} />
-          <StatCard icon={CalendarClock} label="Ações Hoje" value={metrics.dueToday} />
-        </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6 lg:p-8">
+      <header>
+        <h1 className="text-3xl font-serif font-bold tracking-tight gold-text-gradient md:text-4xl">Painel de Controle</h1>
       </header>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={LayoutDashboard} label="Registros" value={metrics.total} />
+        <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
+        <StatCard icon={AlertTriangle} label="Parados" value={metrics.stalled} />
+        <StatCard icon={CalendarClock} label="Ações Hoje" value={metrics.dueToday} />
+      </div>
+
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <QuickLink to="/leads" icon={KanbanSquare} title="Gestão de Leads" />
         <QuickLink to="/reports" icon={FileText} title="Relatórios" />
         <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" />
         <QuickLink to="/settings?tab=operations" icon={Settings} title="Configurações" />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md lg:col-span-7">
-          <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
-            <h2 className="text-sm font-semibold">Fila de Prioridades</h2>
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg lg:col-span-7">
+          <div className="flex items-center justify-between border-b border-border bg-accent/40 px-5 py-4">
+            <h2 className="text-base font-serif font-bold">Fila de Prioridades</h2>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{priorityQueue.length} itens</span>
           </div>
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-border/50 p-2">
             {priorityQueue.length === 0 ? (
-              <p className="py-8 text-center text-xs text-muted-foreground">Tudo limpo por aqui.</p>
+              <p className="py-12 text-center text-sm text-muted-foreground">Tudo limpo por aqui. Ótimo momento para prospectar.</p>
             ) : priorityQueue.map((item) => (
-              <Link key={item.id} to={item.detailPath} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
+              <Link key={item.id} to={item.detailPath} className="flex items-center justify-between rounded-xl p-4 transition-colors hover:bg-accent/30">
                 <div>
-                  <p className="text-sm font-medium leading-tight">{item.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{item.nextFollowUp ? `Próxima: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem ação'}</p>
+                  <p className="text-base font-semibold leading-tight">{item.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.nextFollowUp ? `Próxima ação: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem ação agendada'}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
                   <span className="text-xs text-muted-foreground">{item.idleHours >= 1 ? `${item.idleHours.toFixed(0)}h parado` : 'Recente'}</span>
-                  <span className={`rounded-md px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${item.overdue ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                  <span className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${item.overdue ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
                     {item.overdue ? 'Urgente' : 'Monitorar'}
                   </span>
                 </div>
@@ -192,37 +192,37 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 lg:col-span-5">
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-md">
-            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
-              <h2 className="text-sm font-semibold">Agenda do Dia</h2>
+        <div className="flex flex-col gap-6 lg:col-span-5">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Agenda do Dia</h2>
             </div>
-            <div className="divide-y divide-border/50">
-              {agenda.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">Sem ações pendentes hoje.</p> : agenda.map((item) => (
-                <Link key={item.id} to={item.path} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
-                  <p className="truncate text-sm font-medium">{item.label}</p>
-                  <span className="ml-2 whitespace-nowrap text-xs text-primary">{item.description}</span>
+            <div className="divide-y divide-border/50 p-2">
+              {agenda.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">Sem ações pendentes hoje.</p> : agenda.map((item) => (
+                <Link key={item.id} to={item.path} className="flex items-center justify-between rounded-xl p-4 transition-colors hover:bg-accent/30">
+                  <p className="truncate text-sm font-semibold">{item.label}</p>
+                  <span className="ml-3 whitespace-nowrap text-xs text-primary">{item.description}</span>
                 </Link>
               ))}
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-md">
-            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
-              <h2 className="text-sm font-semibold">Conversão de Funis</h2>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-5 py-4">
+              <h2 className="text-base font-serif font-bold">Conversão de Funis</h2>
             </div>
-            <div className="divide-y divide-border/50">
+            <div className="divide-y divide-border/50 p-2">
               {funnelHighlights.length === 0 ? (
-                <p className="py-6 text-center text-xs text-muted-foreground">Sem dados.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">Sem dados suficientes.</p>
               ) : funnelHighlights.map((item) => (
-                <Link key={item.id} to={`/leads?funnel=${item.id}&operation=${item.operation}`} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
+                <Link key={item.id} to={`/leads?funnel=${item.id}&operation=${item.operation}`} className="flex items-center justify-between rounded-xl p-4 transition-colors hover:bg-accent/30">
                   <div>
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.operation === 'prospecting' ? 'Prospecção' : 'Comercial'}</p>
+                    <p className="text-sm font-semibold">{item.name}</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">{item.operation === 'prospecting' ? 'Prospecção' : 'Comercial'}</p>
                   </div>
                   <div className="text-right">
-                    <span className="block text-sm font-bold">{item.total} leads</span>
-                    <span className="text-[10px] text-muted-foreground">{item.won} ganhos</span>
+                    <span className="block text-base font-serif font-bold">{item.total} leads</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-500">{item.won} ganhos</span>
                   </div>
                 </Link>
               ))}
@@ -236,13 +236,13 @@ export function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; label: string; value: string | number }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3 shadow-sm">
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="mt-1 text-xl font-serif font-bold leading-none">{value}</p>
+    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-md">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
+        <Icon className="h-6 w-6" />
       </div>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
-        <Icon className="h-4 w-4" />
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
+        <p className="mt-1.5 text-2xl font-serif font-bold leading-none">{value}</p>
       </div>
     </div>
   );
@@ -250,9 +250,9 @@ function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; 
 
 function QuickLink({ to, icon: Icon, title }: { to: string; icon: typeof LayoutDashboard; title: string }) {
   return (
-    <Link to={to} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:border-gold-500/40 hover:bg-accent/20">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
-        <Icon className="h-4 w-4" />
+    <Link to={to} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-gold-500/40 hover:bg-accent/20">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
+        <Icon className="h-5 w-5" />
       </div>
       <p className="text-sm font-semibold">{title}</p>
     </Link>
