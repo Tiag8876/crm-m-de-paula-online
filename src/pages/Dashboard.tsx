@@ -53,7 +53,6 @@ export function Dashboard() {
       ownerUserId: lead.ownerUserId,
       followUps: lead.followUps || [],
       tasks: lead.tasks || [],
-      logs: (lead.logs || []).map((log) => ({ ...log, label: lead.name })),
       idleHours: getLeadIdleHours(lead, now),
       closed: isClosedSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'commercial')),
       lost: isLostSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'commercial')),
@@ -70,7 +69,6 @@ export function Dashboard() {
       ownerUserId: lead.ownerUserId,
       followUps: lead.followUps || [],
       tasks: lead.tasks || [],
-      logs: (lead.logs || []).map((log) => ({ ...log, label: lead.clinicName })),
       idleHours: getProspectIdleHours(lead, now),
       closed: isClosedSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'prospecting')),
       lost: isLostSemantic(getStageSemantic(allFunnels.find((funnel) => funnel.id === lead.funnelId), lead.status, 'prospecting')),
@@ -103,7 +101,7 @@ export function Dashboard() {
           if (Boolean(a.nextFollowUp) !== Boolean(b.nextFollowUp)) return a.nextFollowUp ? -1 : 1;
           return b.idleHours - a.idleHours;
         })
-        .slice(0, 6),
+        .slice(0, 8),
     [now, records],
   );
 
@@ -114,7 +112,7 @@ export function Dashboard() {
           ...item.followUps.filter((followUp) => isToday(new Date(followUp.date)) && followUp.status === 'pendente').map((followUp) => ({
             id: `${item.id}-${followUp.id}`,
             label: item.name,
-            description: `Follow-up ${format(new Date(followUp.date), 'HH:mm')}`,
+            description: `Follow-up às ${format(new Date(followUp.date), 'HH:mm')}`,
             path: item.detailPath,
           })),
           ...item.tasks.filter((task) => isToday(new Date(task.date)) && task.status === 'pendente').map((task) => ({
@@ -124,7 +122,7 @@ export function Dashboard() {
             path: item.detailPath,
           })),
         ])
-        .slice(0, 8),
+        .slice(0, 6),
     [records],
   );
 
@@ -144,102 +142,87 @@ export function Dashboard() {
         })
         .filter((item) => item.total > 0)
         .sort((a, b) => b.total - a.total)
-        .slice(0, 6),
+        .slice(0, 4),
     [allFunnels, records],
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="space-y-3">
-        <div>
-          <h1 className="text-3xl font-serif font-bold tracking-tight gold-text-gradient md:text-4xl">Painel de Controle</h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-            A visão geral da operação foca-se apenas no essencial. Atalhos rápidos, prioridades para hoje e a saúde dos funis.
-          </p>
-        </div>
+    <div className="mx-auto max-w-[1400px] space-y-4 p-4 md:p-6">
+      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <h1 className="text-2xl font-serif font-bold tracking-tight gold-text-gradient">Painel de Controle</h1>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={LayoutDashboard} label="Registros na operação" value={metrics.total} />
+        <div className="grid w-full grid-cols-2 gap-3 md:w-auto md:grid-cols-4">
+          <StatCard icon={LayoutDashboard} label="Registros" value={metrics.total} />
           <StatCard icon={CheckCircle2} label="Fechados" value={metrics.won} />
-          <StatCard icon={AlertTriangle} label="Parados 24h+" value={metrics.stalled} />
-          <StatCard icon={CalendarClock} label="Ações para hoje" value={metrics.dueToday} />
+          <StatCard icon={AlertTriangle} label="Parados" value={metrics.stalled} />
+          <StatCard icon={CalendarClock} label="Ações Hoje" value={metrics.dueToday} />
         </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <QuickLink to="/leads" icon={KanbanSquare} title="Gestão de leads" description="Entrar no Kanban unificado e trabalhar os funis." />
-        <QuickLink to="/reports" icon={FileText} title="Relatórios" description="Analisar desempenho e conversão por funil." />
-        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" description="Ligar tráfego, origem e entrada de oportunidades." />
-        <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Operação do CRM" description="Ajustar funis, formulários e catálogo do sistema." />
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <QuickLink to="/leads" icon={KanbanSquare} title="Gestão de Leads" />
+        <QuickLink to="/reports" icon={FileText} title="Relatórios" />
+        <QuickLink to="/campaigns" icon={Megaphone} title="Campanhas" />
+        <QuickLink to="/settings?tab=operations" icon={Settings} title="Configurações" />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="flex flex-col">
-          <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-border bg-accent px-5 py-4">
-              <h2 className="text-base font-serif font-bold">Fila de prioridades</h2>
-              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{priorityQueue.length} item(ns)</span>
-            </div>
-            <div className="grid grid-cols-1 gap-4 p-4">
-              {priorityQueue.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">Nenhum registo crítico agora. Ótimo momento para trabalhar oportunidades novas.</p>
-              ) : priorityQueue.map((item) => (
-                <Link key={item.id} to={item.detailPath} className="rounded-2xl border border-border bg-background/30 p-4 transition-all hover:bg-accent/40">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{item.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{item.subtitle}</p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${item.overdue ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-300'}`}>
-                      {item.overdue ? 'Urgente' : 'Monitorar'}
-                    </span>
-                  </div>
-                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:justify-between">
-                    <p>{item.nextFollowUp ? `Próxima ação: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem follow-up agendado'}</p>
-                    <p>{item.idleHours >= 1 ? `${item.idleHours.toFixed(0)}h sem movimentação` : 'Movimentado recentemente'}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md lg:col-span-7">
+          <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
+            <h2 className="text-sm font-semibold">Fila de Prioridades</h2>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{priorityQueue.length} itens</span>
+          </div>
+          <div className="divide-y divide-border/50">
+            {priorityQueue.length === 0 ? (
+              <p className="py-8 text-center text-xs text-muted-foreground">Tudo limpo por aqui.</p>
+            ) : priorityQueue.map((item) => (
+              <Link key={item.id} to={item.detailPath} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
+                <div>
+                  <p className="text-sm font-medium leading-tight">{item.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{item.nextFollowUp ? `Próxima: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem ação'}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">{item.idleHours >= 1 ? `${item.idleHours.toFixed(0)}h parado` : 'Recente'}</span>
+                  <span className={`rounded-md px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${item.overdue ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                    {item.overdue ? 'Urgente' : 'Monitorar'}
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
 
-        <div className="flex flex-col space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
-              <h2 className="text-base font-serif font-bold">Agenda de hoje</h2>
-              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{metrics.dueToday} ações</span>
+        <div className="flex flex-col gap-4 lg:col-span-5">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-md">
+            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
+              <h2 className="text-sm font-semibold">Agenda do Dia</h2>
             </div>
-            <div className="space-y-3 p-4">
-              {agenda.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">Nada pendente para hoje.</p> : agenda.map((item) => (
-                <Link key={item.id} to={item.path} className="block rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
-                  <p className="font-semibold">{item.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+            <div className="divide-y divide-border/50">
+              {agenda.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">Sem ações pendentes hoje.</p> : agenda.map((item) => (
+                <Link key={item.id} to={item.path} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
+                  <p className="truncate text-sm font-medium">{item.label}</p>
+                  <span className="ml-2 whitespace-nowrap text-xs text-primary">{item.description}</span>
                 </Link>
               ))}
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
-              <h2 className="text-base font-serif font-bold">Funis em destaque</h2>
-              <span className="text-[10px] uppercase tracking-widest text-gold-500/70">Conversão geral {metrics.conversion.toFixed(1)}%</span>
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-md">
+            <div className="flex items-center justify-between border-b border-border bg-accent/40 px-4 py-2.5">
+              <h2 className="text-sm font-semibold">Conversão de Funis</h2>
             </div>
-            <div className="space-y-3 p-4">
+            <div className="divide-y divide-border/50">
               {funnelHighlights.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há dados suficientes para destacar funis.</p>
+                <p className="py-6 text-center text-xs text-muted-foreground">Sem dados.</p>
               ) : funnelHighlights.map((item) => (
-                <Link key={item.id} to={`/leads?funnel=${item.id}&operation=${item.operation}`} className="block rounded-xl border border-border p-4 text-left transition-all hover:bg-accent/40">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{item.name}</p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gold-500/70">{item.operation === 'prospecting' ? 'Prospecção' : 'Comercial'}</p>
-                    </div>
-                    <span className="text-lg font-serif font-bold">{item.total}</span>
+                <Link key={item.id} to={`/leads?funnel=${item.id}&operation=${item.operation}`} className="flex items-center justify-between p-3 transition-colors hover:bg-accent/20">
+                  <div>
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.operation === 'prospecting' ? 'Prospecção' : 'Comercial'}</p>
                   </div>
-                  <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-                    <span>{item.won} ganhos</span>
-                    <span>{item.stalled} parados</span>
+                  <div className="text-right">
+                    <span className="block text-sm font-bold">{item.total} leads</span>
+                    <span className="text-[10px] text-muted-foreground">{item.won} ganhos</span>
                   </div>
                 </Link>
               ))}
@@ -253,20 +236,25 @@ export function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: typeof LayoutDashboard; label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-xl">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-4 w-4" /></div>
-      <p className="text-[10px] uppercase tracking-[0.2em] text-gold-500/70">{label}</p>
-      <p className="mt-2 text-2xl font-serif font-bold">{value}</p>
+    <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="mt-1 text-xl font-serif font-bold leading-none">{value}</p>
+      </div>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
     </div>
   );
 }
 
-function QuickLink({ to, icon: Icon, title, description }: { to: string; icon: typeof LayoutDashboard; title: string; description: string }) {
+function QuickLink({ to, icon: Icon, title }: { to: string; icon: typeof LayoutDashboard; title: string }) {
   return (
-    <Link to={to} className="rounded-2xl border border-border bg-card p-4 shadow-xl transition-all hover:border-gold-500/40">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-accent text-primary"><Icon className="h-4 w-4" /></div>
-      <p className="text-base font-serif font-bold">{title}</p>
-      <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+    <Link to={to} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:border-gold-500/40 hover:bg-accent/20">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <p className="text-sm font-semibold">{title}</p>
     </Link>
   );
 }
