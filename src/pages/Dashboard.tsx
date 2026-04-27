@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, FileText, KanbanSquare, LayoutDashboard, Megaphone, Settings } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, FileText, KanbanSquare, LayoutDashboard, Megaphone, Settings } from 'lucide-react';
 import { isToday, format } from 'date-fns';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -128,21 +128,6 @@ export function Dashboard() {
     [records],
   );
 
-  const recentActivity = useMemo(
-    () =>
-      records
-        .flatMap((item) => item.logs.map((log) => ({
-          id: `${item.id}-${log.id}`,
-          path: item.detailPath,
-          label: log.label,
-          content: log.content,
-          timestamp: log.timestamp,
-        })))
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-        .slice(0, 8),
-    [records],
-  );
-
   const funnelHighlights = useMemo(
     () =>
       allFunnels
@@ -169,7 +154,7 @@ export function Dashboard() {
         <div>
           <h1 className="text-3xl font-serif font-bold tracking-tight gold-text-gradient md:text-4xl">Painel de Controle</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-            A visão geral da operação fica aqui. Atalhos, prioridades, agenda e saúde dos funis sem obrigar ninguém a trocar de contexto para entender o que fazer.
+            A visão geral da operação foca-se apenas no essencial. Atalhos rápidos, prioridades para hoje e a saúde dos funis.
           </p>
         </div>
 
@@ -188,16 +173,16 @@ export function Dashboard() {
         <QuickLink to="/settings?tab=operations&section=funnels" icon={Settings} title="Operação do CRM" description="Ajustar funis, formulários e catálogo do sistema." />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="flex flex-col">
+          <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-border bg-accent px-5 py-4">
               <h2 className="text-base font-serif font-bold">Fila de prioridades</h2>
               <span className="text-[10px] uppercase tracking-widest text-gold-500/70">{priorityQueue.length} item(ns)</span>
             </div>
-            <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 p-4">
               {priorityQueue.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhum registro crítico agora. Ótimo momento para trabalhar oportunidades novas.</p>
+                <p className="py-12 text-center text-sm text-muted-foreground">Nenhum registo crítico agora. Ótimo momento para trabalhar oportunidades novas.</p>
               ) : priorityQueue.map((item) => (
                 <Link key={item.id} to={item.detailPath} className="rounded-2xl border border-border bg-background/30 p-4 transition-all hover:bg-accent/40">
                   <div className="flex items-start justify-between gap-3">
@@ -209,7 +194,7 @@ export function Dashboard() {
                       {item.overdue ? 'Urgente' : 'Monitorar'}
                     </span>
                   </div>
-                  <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:justify-between">
                     <p>{item.nextFollowUp ? `Próxima ação: ${format(new Date(item.nextFollowUp.date), 'dd/MM HH:mm')}` : 'Sem follow-up agendado'}</p>
                     <p>{item.idleHours >= 1 ? `${item.idleHours.toFixed(0)}h sem movimentação` : 'Movimentado recentemente'}</p>
                   </div>
@@ -217,27 +202,9 @@ export function Dashboard() {
               ))}
             </div>
           </div>
-
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
-              <h2 className="text-base font-serif font-bold">Atividade recente</h2>
-              <Link to="/leads" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">Abrir operação <ArrowRight className="h-3 w-3" /></Link>
-            </div>
-            <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
-              {recentActivity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground md:col-span-2">Nenhuma atividade recente encontrada.</p> : recentActivity.map((item) => (
-                <Link key={item.id} to={item.path} className="rounded-xl border border-border p-4 transition-all hover:bg-accent/40">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate font-semibold">{item.label}</p>
-                    <span className="shrink-0 text-[10px] uppercase tracking-widest text-gold-500/70">{item.timestamp}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{item.content}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="flex flex-col space-y-6">
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border bg-accent px-5 py-4">
               <h2 className="text-base font-serif font-bold">Agenda de hoje</h2>
